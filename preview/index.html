@@ -1,0 +1,329 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Sakura Bot — Preview</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: #e5ddd5;
+    background-image: url("data:image/svg+xml,%3Csvg width='60' height='60' viewBox='0 0 60 60' xmlns='http://www.w3.org/2000/svg'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%23c8b9a8' fill-opacity='0.15'%3E%3Cpath d='M36 34v-4h-2v4h-4v2h4v4h2v-4h4v-2h-4zm0-30V0h-2v4h-4v2h4v4h2V6h4V4h-4zM6 34v-4H4v4H0v2h4v4h2v-4h4v-2H6zM6 4V0H4v4H0v2h4v4h2V6h4V4H6z'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E");
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  /* Header */
+  .header {
+    background: #075e54;
+    color: white;
+    padding: 10px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.3);
+    flex-shrink: 0;
+  }
+  .avatar {
+    width: 40px; height: 40px;
+    border-radius: 50%;
+    background: #128c7e;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 20px;
+  }
+  .header-info .name { font-weight: 600; font-size: 16px; }
+  .header-info .status { font-size: 12px; opacity: 0.85; }
+  .header-badge {
+    margin-left: auto;
+    background: #25d366;
+    color: #fff;
+    font-size: 11px;
+    font-weight: 600;
+    padding: 3px 10px;
+    border-radius: 12px;
+    letter-spacing: 0.3px;
+  }
+
+  /* Messages area */
+  #chat {
+    flex: 1;
+    overflow-y: auto;
+    padding: 12px 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .bubble-wrap {
+    display: flex;
+    flex-direction: column;
+    max-width: 72%;
+  }
+  .bubble-wrap.bot  { align-self: flex-start; }
+  .bubble-wrap.user { align-self: flex-end; }
+
+  .bubble {
+    padding: 7px 12px 18px;
+    border-radius: 8px;
+    font-size: 14px;
+    line-height: 1.45;
+    position: relative;
+    white-space: pre-wrap;
+    word-break: break-word;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.13);
+  }
+  .bubble-wrap.bot  .bubble { background: #fff;    border-top-left-radius: 2px; }
+  .bubble-wrap.user .bubble { background: #dcf8c6; border-top-right-radius: 2px; }
+
+  .bubble time {
+    position: absolute;
+    bottom: 4px; right: 9px;
+    font-size: 11px;
+    color: #999;
+    white-space: nowrap;
+  }
+  .bubble-wrap.user .bubble time { color: #6b9e6b; }
+
+  /* Bold/italic in bot messages */
+  .bubble b { font-weight: 700; }
+  .bubble i { font-style: italic; }
+
+  /* Typing indicator */
+  .typing { display: flex; align-self: flex-start; margin: 4px 0; }
+  .typing .bubble {
+    background: #fff;
+    padding: 10px 16px 10px;
+    display: flex; gap: 4px; align-items: center;
+  }
+  .typing .dot {
+    width: 8px; height: 8px;
+    border-radius: 50%;
+    background: #aaa;
+    animation: bounce 1.2s infinite;
+  }
+  .typing .dot:nth-child(2) { animation-delay: 0.2s; }
+  .typing .dot:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes bounce {
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-6px); }
+  }
+
+  /* Day separator */
+  .day-sep {
+    text-align: center;
+    margin: 8px 0;
+  }
+  .day-sep span {
+    background: rgba(225,245,254,0.92);
+    color: #555;
+    font-size: 12px;
+    padding: 4px 12px;
+    border-radius: 8px;
+    box-shadow: 0 1px 1px rgba(0,0,0,0.1);
+  }
+
+  /* Input bar */
+  .input-bar {
+    background: #f0f0f0;
+    padding: 8px 12px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-shrink: 0;
+    border-top: 1px solid #ddd;
+  }
+  #msg-input {
+    flex: 1;
+    background: #fff;
+    border: none;
+    border-radius: 22px;
+    padding: 10px 16px;
+    font-size: 15px;
+    outline: none;
+    resize: none;
+    max-height: 120px;
+    line-height: 1.4;
+    box-shadow: 0 1px 2px rgba(0,0,0,0.1);
+  }
+  #send-btn {
+    width: 46px; height: 46px;
+    border-radius: 50%;
+    border: none;
+    background: #128c7e;
+    color: white;
+    font-size: 20px;
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    transition: background 0.15s;
+    flex-shrink: 0;
+  }
+  #send-btn:hover { background: #075e54; }
+  #send-btn:disabled { background: #aaa; cursor: default; }
+
+  /* Reset button */
+  #reset-btn {
+    background: none; border: none;
+    color: rgba(255,255,255,0.7);
+    cursor: pointer; font-size: 13px;
+    padding: 4px 8px; border-radius: 4px;
+    transition: background 0.1s;
+  }
+  #reset-btn:hover { background: rgba(255,255,255,0.1); color: #fff; }
+
+  /* Error toast */
+  #error-toast {
+    display: none;
+    position: fixed; bottom: 80px; left: 50%; transform: translateX(-50%);
+    background: #c0392b; color: #fff;
+    padding: 8px 20px; border-radius: 20px;
+    font-size: 13px; z-index: 100;
+  }
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div class="avatar">🌸</div>
+  <div class="header-info">
+    <div class="name" id="bot-name">Sakura Bot</div>
+    <div class="status">simulação de conversa</div>
+  </div>
+  <button id="reset-btn" onclick="resetChat()" title="Limpar conversa">↺ Reiniciar</button>
+  <span class="header-badge">Preview</span>
+</div>
+
+<div id="chat"></div>
+<div id="error-toast"></div>
+
+<div class="input-bar">
+  <textarea id="msg-input" rows="1" placeholder="Digite uma mensagem..." autofocus></textarea>
+  <button id="send-btn" onclick="sendMessage()" title="Enviar">
+    <svg viewBox="0 0 24 24" width="22" height="22" fill="currentColor">
+      <path d="M1.101 21.757L23.8 12.028 1.101 2.3l.011 7.912 13.623 1.816-13.623 1.817z"/>
+    </svg>
+  </button>
+</div>
+
+<script>
+const N8N_PREVIEW_URL = 'http://localhost:5678/webhook/preview';
+let sessionId = 'preview-' + Date.now();
+
+const chat = document.getElementById('chat');
+const input = document.getElementById('msg-input');
+const sendBtn = document.getElementById('send-btn');
+
+// Auto-resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+
+input.addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+function now() {
+  return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
+}
+
+function addDaySep() {
+  const today = new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: 'numeric', month: 'long' });
+  const sep = document.createElement('div');
+  sep.className = 'day-sep';
+  sep.innerHTML = `<span>${today}</span>`;
+  chat.appendChild(sep);
+}
+
+function addBubble(text, side) {
+  const wrap = document.createElement('div');
+  wrap.className = `bubble-wrap ${side}`;
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  // Render *bold* and simple formatting
+  const safe = text
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/\*(.*?)\*/g, '<b>$1</b>')
+    .replace(/_(.*?)_/g, '<i>$1</i>');
+  bubble.innerHTML = safe + `<time>${now()}</time>`;
+  wrap.appendChild(bubble);
+  chat.appendChild(wrap);
+  chat.scrollTop = chat.scrollHeight;
+  return wrap;
+}
+
+function showTyping() {
+  const t = document.createElement('div');
+  t.className = 'typing bubble-wrap bot';
+  t.id = 'typing';
+  t.innerHTML = '<div class="bubble"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>';
+  chat.appendChild(t);
+  chat.scrollTop = chat.scrollHeight;
+}
+
+function hideTyping() {
+  document.getElementById('typing')?.remove();
+}
+
+function showError(msg) {
+  const el = document.getElementById('error-toast');
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 3500);
+}
+
+async function sendMessage() {
+  const text = input.value.trim();
+  if (!text || sendBtn.disabled) return;
+
+  addBubble(text, 'user');
+  input.value = '';
+  input.style.height = 'auto';
+  sendBtn.disabled = true;
+  showTyping();
+
+  try {
+    const res = await fetch(N8N_PREVIEW_URL, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ message: text, sessionId })
+    });
+
+    const data = await res.json();
+    hideTyping();
+
+    const resposta = data.resposta || data.text || data.message || JSON.stringify(data);
+    addBubble(resposta, 'bot');
+
+    // Update header with bot name if available
+    if (data.botNome) {
+      document.getElementById('bot-name').textContent = data.botNome + ' Bot';
+    }
+  } catch (err) {
+    hideTyping();
+    showError('n8n não respondeu. Verifique se o workflow de preview está ativo.');
+    console.error(err);
+  }
+
+  sendBtn.disabled = false;
+  input.focus();
+}
+
+function resetChat() {
+  chat.innerHTML = '';
+  sessionId = 'preview-' + Date.now();
+  addDaySep();
+  addBubble('Olá! Sou o assistente virtual. Como posso ajudar? 😊\n\nDigite *oi* para começar.', 'bot');
+}
+
+// Init
+addDaySep();
+addBubble('👋 Bem-vindo ao simulador!\n\nDigite qualquer mensagem para testar o fluxo do bot.', 'bot');
+</script>
+</body>
+</html>

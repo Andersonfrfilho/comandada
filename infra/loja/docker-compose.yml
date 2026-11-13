@@ -1,0 +1,133 @@
+# Servidor da loja: o ComandAdA inteiro rodando na rede local, sem depender da internet.
+#
+#   make loja-setup   # cria infra/loja/.env
+#   make loja-up      # sobe tudo
+#
+# Tablets, caixa e cozinha abrem http://comandada.local (ou http://IP-do-servidor).
+# Guia de instalação do mini PC, rede e nobreak: infra/loja/README.md
+
+name: ${COMPOSE_PROJECT_NAME:-comandada-loja}
+
+x-restart: &restart
+  restart: always
+
+services:
+
+  postgres:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB}
+      TZ: America/Sao_Paulo
+    # Durabilidade antes de velocidade: queda de energia não pode perder pedido confirmado.
+    command: ["postgres", "-c", "synchronous_commit=on", "-c", "fsync=on", "-c", "full_page_writes=on"]
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    <<: *restart
+    image: redis:7-alpine
+    # AOF: as filas (fiscal, estoque) sobrevivem a um desligamento brusco.
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  api:
+    <<: *restart
+    build:
+      context: ../../apps/api
+    environment:
+      PORT: 3333
+      NODE_ENV: production
+      TZ: America/Sao_Paulo
+      DATABASE_URL: postgres://${POSTGRES_USER}:${POSTGRES_PASSWORD}@postgres:5432/${POSTGRES_DB}
+      REDIS_URL: redis://redis:6379
+      JWT_SECRET: ${JWT_SECRET}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET}
+      APP_SECRET: ${APP_SECRET}
+      N8N_INTERNAL_API_TOKEN: ${N8N_INTERNAL_API_TOKEN}
+      # O painel chega pela mesma origem (nginx), então CORS só importa para acesso direto à porta 3333.
+      ALLOWED_ORIGINS: http://comandada.local,http://localhost
+      WEB_PUBLIC_URL: http://comandada.local
+      STOCK_WORKER_ENABLED: ${STOCK_WORKER_ENABLED:-true}
+      FISCAL_WORKER_ENABLED: ${FISCAL_WORKER_ENABLED:-true}
+      FINANCE_WORKER_ENABLED: ${FINANCE_WORKER_ENABLED:-true}
+      PRODUCT_AFFINITY_WORKER_ENABLED: ${PRODUCT_AFFINITY_WORKER_ENABLED:-false}
+      FISCAL_PRINTER_INTERFACE: ${FISCAL_PRINTER_INTERFACE:-}
+      # Biblioteca de documentos das conversas do WhatsApp fica na nuvem; a loja roda sem ela.
+      STORAGE_ENABLED: "false"
+      WHATSAPP_ACCESS_TOKEN: ${WHATSAPP_ACCESS_TOKEN:-}
+      WHATSAPP_PHONE_NUMBER_ID: ${WHATSAPP_PHONE_NUMBER_ID:-}
+      WHATSAPP_BUSINESS_ACCOUNT_ID: ${WHATSAPP_BUSINESS_ACCOUNT_ID:-}
+      WHATSAPP_WEBHOOK_VERIFY_TOKEN: ${WHATSAPP_WEBHOOK_VERIFY_TOKEN:-}
+      WHATSAPP_APP_SECRET: ${WHATSAPP_APP_SECRET:-}
+      WHATSAPP_API_VERSION: ${WHATSAPP_API_VERSION:-v21.0}
+      SYNC_ROLE: ${SYNC_ROLE:-}
+      SYNC_NODE_NAME: ${SYNC_NODE_NAME:-principal}
+      SYNC_PEER_URL: ${SYNC_PEER_URL:-}
+      SYNC_TOKEN: ${SYNC_TOKEN:-}
+      SYNC_INTERVAL_MS: ${SYNC_INTERVAL_MS:-5000}
+      SYNC_REQUEST_TIMEOUT_MS: ${SYNC_REQUEST_TIMEOUT_MS:-15000}
+      SYNC_BATCH_SIZE: ${SYNC_BATCH_SIZE:-200}
+    healthcheck:
+      test: ["CMD-SHELL", "bun -e \"fetch('http://localhost:3333/health').then(r=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))\""]
+      interval: 15s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+
+  web:
+    <<: *restart
+    build:
+      context: ../../apps/web
+      args:
+        VITE_API_URL: /api
+        VITE_API_WS_URL: /ws
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    ports:
+      - "${LOJA_HTTP_PORT:-80}:80"
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # Backup do banco no disco do servidor, de hora em hora. Os arquivos ficam em infra/loja/backups.
+  backup:
+    <<: *restart
+    image: postgres:16-alpine
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB}
+      BACKUP_INTERVAL_HOURS: ${BACKUP_INTERVAL_HOURS:-1}
+      BACKUP_KEEP: ${BACKUP_KEEP:-72}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./backups:/backups
+      - ./backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+volumes:
+  postgres_data:
+  redis_data:

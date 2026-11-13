@@ -1,0 +1,18 @@
+{
+  "name": "sakura-bot-oficial",
+  "version": "1.0.0",
+  "private": true,
+  "workspaces": ["apps/*"],
+  "scripts": {
+    "build": "node scripts/build-workflow.js",
+    "test": "node tests/flow.test.js",
+    "validate": "bash scripts/validate-workflows.sh",
+    "api:dev": "bun run --cwd apps/api dev",
+    "api:start": "bun run --cwd apps/api start",
+    "web:dev": "bun run --cwd apps/web dev",
+    "web:build": "bun run --cwd apps/web build"
+  },
+  "devDependencies": {
+    "typescript": "~5.7.3"
+  }
+}

@@ -1,0 +1,23 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  /* Escala da cor padrão do ComandAdA; a marca do restaurante sobrescreve em tempo de execução. */
+  :root {
+    --brand-50: 237 247 245;
+    --brand-100: 220 239 235;
+    --brand-200: 183 222 214;
+    --brand-300: 135 190 179;
+    --brand-400: 86 163 148;
+    --brand-500: 43 140 121;
+    --brand-600: 14 124 102;
+    --brand-700: 11 99 82;
+  }
+  html {
+    font-family: system-ui, -apple-system, sans-serif;
+  }
+  body {
+    @apply bg-gray-50 text-gray-900;
+  }
+}

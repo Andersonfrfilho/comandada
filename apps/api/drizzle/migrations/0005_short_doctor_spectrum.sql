@@ -1,0 +1,1 @@
+ALTER TABLE "fiscal_documents" ADD CONSTRAINT "fiscal_documents_order_id_unique" UNIQUE("order_id");

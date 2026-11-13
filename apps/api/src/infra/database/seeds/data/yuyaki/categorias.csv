@@ -1,0 +1,5 @@
+id,nome,emoji,descricao,ordem,ativa
+1,Combinados,🍱,Combos prontos com peças variadas,1,true
+2,Pratos,🍽️,Entradas e pratos à parte,2,true
+3,Sashimis,🐟,Fatias de peixe fresco (10 unidades),3,true
+4,Temakis,🌯,Cones de alga nos tamanhos médio e grande,4,true

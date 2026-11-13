@@ -1,0 +1,31 @@
+id,nome,descricao,categoria,preco,disponivel,imagem_url,atributos,observacoes
+1,Combo Salmão 8 Peças,8 niguiris de salmão fresco sobre arroz japonês temperado,Combinados,42.90,true,,"{""sem_gluten"":true,""porcao"":""8 peças"",""serve"":1}",
+2,Combo Misto 16 Peças,8 niguiris variados + 8 hot rolls de salmão empanado,Combinados,79.90,true,,"{""sem_gluten"":false,""porcao"":""16 peças"",""serve"":2}",
+3,Combo Família 30 Peças,10 niguiris + 12 uramakis + 8 hot rolls variados,Combinados,134.90,true,,"{""sem_gluten"":false,""porcao"":""30 peças"",""serve"":""3-4""}",Ideal para grupos
+4,Combo Vegetariano 10 Peças,Uramakis de pepino + abacate + cream cheese,Combinados,48.90,true,,"{""sem_gluten"":true,""porcao"":""10 peças"",""serve"":1,""vegetariano"":true}",
+5,Temaki Salmão,Cone crocante de alga com arroz e salmão fresco,Temaki,23.90,true,,"{""sem_gluten"":true,""porcao"":""1 unidade""}",
+6,Temaki Atum,Cone de alga com arroz e atum fresco do dia,Temaki,25.90,true,,"{""sem_gluten"":true,""porcao"":""1 unidade""}",
+7,Temaki Philadelphia,Cone de alga com salmão + cream cheese + pepino,Temaki,27.90,true,,"{""sem_gluten"":true,""porcao"":""1 unidade""}",
+8,Temaki Camarão Grelhado,Cone de alga com camarão grelhado + maionese especial,Temaki,28.90,true,,"{""sem_gluten"":true,""porcao"":""1 unidade""}",
+9,Hot Roll Salmão (8 un),Uramaki empanado e frito com salmão e cream cheese,Hot Roll,39.90,true,,"{""sem_gluten"":false,""porcao"":""8 peças""}",Contém glúten
+10,Hot Roll Camarão (8 un),Uramaki empanado e frito com camarão temperado,Hot Roll,43.90,true,,"{""sem_gluten"":false,""porcao"":""8 peças""}",Contém glúten
+11,Hot Roll Atum (8 un),Uramaki empanado e frito com atum e cebolinha,Hot Roll,41.90,true,,"{""sem_gluten"":false,""porcao"":""8 peças""}",Contém glúten
+12,Niguiri Salmão (2 un),2 fatias de salmão sobre arroz temperado,Avulsos,17.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",
+13,Niguiri Atum (2 un),2 fatias de atum fresco sobre arroz temperado,Avulsos,19.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",
+14,Niguiri Camarão (2 un),2 niguiris de camarão grelhado com gergelim,Avulsos,18.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",
+15,Niguiri Polvo (2 un),2 niguiris de polvo levemente grelhado,Avulsos,21.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",
+16,Edamame,Grão de soja cozido no vapor com flor de sal,Entradas,14.90,true,,"{""sem_gluten"":true,""vegano"":true,""porcao"":""200g""}",
+17,Gyoza (6 un),Pastel japonês grelhado recheado com carne suína e legumes,Entradas,29.90,true,,"{""sem_gluten"":false,""porcao"":""6 unidades""}",Contém glúten
+18,Missoshiro,Sopa de missô com tofu e cebolinha,Sopas,13.90,true,,"{""sem_gluten"":true,""vegetariano"":true,""porcao"":""300ml""}",
+19,Sunomono,Salada de pepino em conserva com molho de gergelim,Entradas,16.90,true,,"{""sem_gluten"":true,""vegano"":true,""porcao"":""150g""}",
+20,Sashimi Salmão (5 un),5 fatias generosas de salmão fresco premium,Sashimi,38.90,true,,"{""sem_gluten"":true,""porcao"":""5 fatias""}",
+21,Sashimi Atum (5 un),5 fatias de atum fresco do dia,Sashimi,42.90,true,,"{""sem_gluten"":true,""porcao"":""5 fatias""}",
+22,Sashimi Misto (10 un),5 fatias de salmão + 5 fatias de atum,Sashimi,72.90,true,,"{""sem_gluten"":true,""porcao"":""10 fatias""}",
+23,Refrigerante Lata,Coca-Cola / Guaraná / Sprite / Zero — informe a preferência,Bebidas,6.90,true,,"{""porcao"":""350ml""}",
+24,Suco de Maracujá,Suco natural de maracujá adoçado,Bebidas,12.90,true,,"{""porcao"":""300ml""}",
+25,Água Mineral,Com gás ou sem gás — informe a preferência,Bebidas,5.90,true,,"{""sem_gluten"":true,""vegano"":true,""porcao"":""500ml""}",
+26,Saquê Morno,Saquê tradicional japonês servido aquecido,Bebidas,19.90,true,,"{""porcao"":""180ml""}",Apenas maiores de 18 anos
+27,Saquê Gelado,Saquê servido bem gelado em copo de bambu,Bebidas,19.90,true,,"{""porcao"":""180ml""}",Apenas maiores de 18 anos
+28,Cerveja Sapporo,Cerveja japonesa premium long neck,Bebidas,18.90,true,,"{""porcao"":""330ml""}",Apenas maiores de 18 anos
+29,Mochi de Morango,Bolinho japonês de arroz recheado com sorvete de morango,Sobremesas,14.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",
+30,Mochi de Matcha,Bolinho de arroz recheado com sorvete de chá verde,Sobremesas,14.90,true,,"{""sem_gluten"":true,""porcao"":""2 unidades""}",

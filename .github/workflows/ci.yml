@@ -1,0 +1,83 @@
+name: CI
+
+# Roda em todo PR (qualquer base, inclusive PR empilhado) e em push na main.
+# O deploy de rotina NÃO passa por aqui: o Railway publica sozinho a cada push na branch ligada
+# aos serviços. Este workflow é o portão: o que quebra aqui não deveria chegar ao Railway.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  api:
+    name: API (typecheck e testes)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/api
+    steps:
+      - uses: actions/checkout@v4
+      # Mesma versão da imagem (oven/bun:1.3). Versão diferente aqui e lá já fez o lockfile
+      # passar no CI e quebrar o build no Railway.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun test
+
+  web:
+    name: Web (typecheck e build)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: apps/web
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: apps/web/package-lock.json
+      - run: npm ci
+      - run: npm run build
+
+  # As imagens são construídas em todo PR, e não só na main: os Dockerfiles instalam cada app
+  # sozinho, com o lockfile próprio, e é aí que um lockfile fora de sincronia ou um arquivo que
+  # não entra na imagem aparece. Antes isso só era descoberto no deploy.
+  docker:
+    name: Imagem ${{ matrix.app }}
+    runs-on: ubuntu-latest
+    needs: [api, web]
+    strategy:
+      fail-fast: false
+      matrix:
+        app: [api, web]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - uses: docker/build-push-action@v6
+        with:
+          context: apps/${{ matrix.app }}
+          push: false
+          load: ${{ matrix.app == 'api' }}
+          tags: comandada-${{ matrix.app }}:ci
+          cache-from: type=gha,scope=${{ matrix.app }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.app }}
+      # A api sobe sem banco só até a conexão: se morrer antes disso (arquivo faltando na imagem,
+      # import quebrado), o erro aparece aqui e não no healthcheck do Railway.
+      - name: Fumaça do boot da api
+        if: matrix.app == 'api'
+        run: |
+          set +e
+          docker run --rm -e DATABASE_URL=postgres://ci:ci@127.0.0.1:1/ci -e NODE_ENV=production \
+            comandada-api:ci timeout 15 bun run src/index.ts > boot.log 2>&1
+          cat boot.log
+          if grep -q "ENOENT\|Cannot find module\|SyntaxError\|_journal.json" boot.log; then
+            echo "::error::A api morreu no boot antes de chegar ao banco."
+            exit 1
+          fi

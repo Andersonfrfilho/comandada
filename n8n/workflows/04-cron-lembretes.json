@@ -1,0 +1,261 @@
+{
+  "name": "04 — Cron de Lembretes de Pedido",
+  "nodes": [
+    {
+      "id": "42c74b3a-3d27-4686-b9eb-68e813bedfd7",
+      "name": "Cron — Diário",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "5b5db767-eca4-45c9-90fa-6e8b0ea30f08",
+      "name": "Verificar Hora e Config",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT value FROM settings WHERE key = 'reminder_interval_days')::int  AS interval_days,\n  (SELECT value FROM settings WHERE key = 'reminder_min_gap_days')::int   AS min_gap_days,\n  (SELECT value FROM settings WHERE key = 'reminder_send_hour')::int      AS send_hour,\n  (SELECT value FROM settings WHERE key = 'reminder_message_template')    AS msg_template,\n  (SELECT value FROM settings WHERE key = 'establishment_name')           AS establishment_name,\n  EXTRACT(HOUR FROM now() AT TIME ZONE 'America/Sao_Paulo')::int          AS current_hour",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "8f7b96c6-102a-4ed9-962d-31d98cacaaa3",
+      "name": "Checar Janela de Envio",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $json;\nif (!cfg || cfg.interval_days <= 0) {\n  console.log('[lembretes] Desativado (interval_days=0)');\n  return [];\n}\nif (cfg.current_hour !== cfg.send_hour) {\n  console.log(`[lembretes] Fora da janela — hora atual: ${cfg.current_hour}, configurada: ${cfg.send_hour}`);\n  return [];\n}\nreturn [{ json: cfg }];"
+      }
+    },
+    {
+      "id": "52f7be59-828f-48bd-95fd-9fd755ec23b1",
+      "name": "Buscar Clientes para Lembrete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  c.phone,\n  COALESCE(c.name, 'cliente') AS name,\n  o.items,\n  o.total,\n  o.created_at AS last_order_at,\n  EXTRACT(DAY FROM now() - o.created_at)::int AS days_ago\nFROM customers c\nJOIN LATERAL (\n  SELECT items, total, created_at\n  FROM orders\n  WHERE customer_phone = c.phone\n    AND deleted_at IS NULL\n    AND status NOT IN ('cancelled')\n  ORDER BY created_at DESC\n  LIMIT 1\n) o ON true\nWHERE c.deleted_at IS NULL\n  AND c.marketing_opt_in = true\n  AND EXTRACT(DAY FROM now() - o.created_at)::int = {{ $json.interval_days }}\n  AND (c.last_promo_at IS NULL OR c.last_promo_at < now() - make_interval(days => {{ $json.min_gap_days }}))\nORDER BY o.created_at DESC\nLIMIT 200",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "05200d34-dc9d-4daf-98e0-daefe0996241",
+      "name": "Verificar se há clientes",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconsole.log(`[lembretes] ${rows.length} cliente(s) para lembrete hoje`);\nif (!rows || rows.length === 0) return [];\nreturn rows;"
+      }
+    },
+    {
+      "id": "e6eb4521-88bb-49c0-9c5b-a022f0d8b54b",
+      "name": "Loop por cliente",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "2bfb62c9-d6ce-4836-a750-e2de4fda910b",
+      "name": "Montar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { phone, name, items, total, days_ago } = $json;\nconst cfg = $('Checar Janela de Envio').first().json;\n\n// Pega o primeiro item do último pedido como referência\nconst itemList = Array.isArray(items) ? items : [];\nconst topItem = itemList.length > 0\n  ? itemList.sort((a, b) => b.qty - a.qty)[0].name\n  : 'seu pedido';\n\nconst firstName = name.split(' ')[0];\nconst template = cfg.msg_template ||\n  'Oi, *{name}*! 👋 Tudo bem?\\n\\nFaz *{days} dias* que você pediu _{last_item}_ e a gente já está com saudade! 🥹\\n\\nQue tal matar a vontade hoje? É só responder *oi* que eu monto seu pedido rapidinho 😋';\n\nconst msg = template\n  .replace('{name}', firstName)\n  .replace('{days}', days_ago)\n  .replace('{last_item}', topItem)\n  .replace('{establishment}', cfg.establishment_name || '');\n\nreturn [{ json: { phone, msg } }];"
+      }
+    },
+    {
+      "id": "463aa274-6c03-4da6-b13c-81550c61d77d",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { phone, msg } = $json;\nconst instancia = $env['EVOLUTION_INSTANCE'] || 'default';\nconst apiKey = $env['EVOLUTION_API_KEY'] || '';\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `http://evolution_api:8080/message/sendText/${instancia}`,\n    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },\n    body: JSON.stringify({ number: phone, text: msg })\n  });\n} catch(e) { /* non-critical */ }\nreturn [{ json: { phone, ok: true } }];"
+      }
+    },
+    {
+      "id": "09fbd29b-6785-4566-a606-627be3485fb3",
+      "name": "Atualizar last_promo_at",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        2000,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET last_promo_at = now(), updated_at = now() WHERE phone = '{{ $json.phone }}'",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron — Diário": {
+      "main": [
+        [
+          {
+            "node": "Verificar Hora e Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar Hora e Config": {
+      "main": [
+        [
+          {
+            "node": "Checar Janela de Envio",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checar Janela de Envio": {
+      "main": [
+        [
+          {
+            "node": "Buscar Clientes para Lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Clientes para Lembrete": {
+      "main": [
+        [
+          {
+            "node": "Verificar se há clientes",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se há clientes": {
+      "main": [
+        [
+          {
+            "node": "Loop por cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop por cliente": {
+      "main": [
+        [
+          {
+            "node": "Montar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        []
+      ]
+    },
+    "Montar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Atualizar last_promo_at",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar last_promo_at": {
+      "main": [
+        [
+          {
+            "node": "Loop por cliente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "e1f8bde5-11d1-4577-a9e4-7671b48559f6"
+}

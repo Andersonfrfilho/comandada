@@ -1,0 +1,155 @@
+{
+  "name": "00 - Preview Chat (Simulador)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "preview",
+        "responseMode": "responseNode",
+        "options": {
+          "allowedOrigins": "*"
+        }
+      },
+      "id": "webhook_preview",
+      "name": "Webhook Preview",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [
+        200,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const body = $json.body || $json;\nconst texto = (body.message || body.texto || '').trim().toLowerCase();\nconst sessionId = body.sessionId || 'preview-000';\n\nif (!texto) return [];\n\nreturn [{ json: { tel: sessionId, instancia: 'preview', texto, remoteJid: sessionId } }];"
+      },
+      "id": "extrair_preview",
+      "name": "Extrair Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        420,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "const now = new Date();\nconst optsTime = { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit', hour12: false };\nconst horaAtual = now.toLocaleTimeString('pt-BR', optsTime).substring(0, 5);\nconst diaBR = new Date(now.toLocaleString('en-US', { timeZone: 'America/Sao_Paulo' }));\nconst dias = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sab'];\nconst diaSemana = dias[diaBR.getDay()];\n\nreturn [{ json: { ...$json, horaAtual, diaSemana } }];"
+      },
+      "id": "hora_preview",
+      "name": "Calcular Hora",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        640,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT json_object_agg(chave, valor) FROM configuracoes) AS config,\n  (SELECT json_agg(json_build_object(\n    'id', p.id, 'nome', p.nome, 'preco', p.preco,\n    'categoria', c.nome, 'emoji', c.emoji\n  ) ORDER BY c.ordem, p.id)\n  FROM produtos p\n  JOIN categorias c ON c.id = p.categoria_id\n  WHERE p.disponivel = true AND c.ativa = true) AS produtos",
+        "options": {}
+      },
+      "id": "buscar_dados_preview",
+      "name": "Buscar Dados",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        860,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const fmtBRL = n => fmtBRL(n).replace('.', ',');\nconst msgData = $('Calcular Hora').first().json;\nconst { tel, instancia, texto, horaAtual, diaSemana } = msgData;\n\nconst config = $json.config || {};\nconst produtos = $json.produtos || [];\n\nconst horarioAbertura = config['horario_abertura'] || '18:00';\nconst horarioFechamento = config['horario_fechamento'] || '23:00';\nconst diasFuncionamento = (config['dias_funcionamento'] || 'ter,qua,qui,sex,sab,dom').split(',');\nconst msgForaHorario = (config['msg_fora_horario'] || 'Estamos fechados agora!').replace(/\\\\n/g, '\\n');\nconst msgBoasVindas = (config['msg_boas_vindas'] || 'Olá! Bem-vindo!').replace(/\\\\n/g, '\\n');\nconst botNome = config['nome_estabelecimento'] || 'Bot';\n\nconst aberto = diasFuncionamento.includes(diaSemana) &&\n               horaAtual >= horarioAbertura &&\n               horaAtual <= horarioFechamento;\n\nlet resposta = '';\n\nif (!aberto) {\n  return [{ json: { tel, instancia, resposta: msgForaHorario, aberto: false, botNome } }];\n}\n\nconst saudacoes = ['oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'inicio', 'menu', 'start', 'hello', 'hi'];\nif (saudacoes.includes(texto) || texto.includes('oi!') || texto.includes('ola!')) {\n  resposta = msgBoasVindas + '\\n\\nComo posso ajudar?\\n\\n1️⃣ Ver Cardápio\\n2️⃣ Fazer Pedido\\n3️⃣ Reservar Mesa\\n4️⃣ Falar com Atendente\\n\\nDigite o número da opção.';\n\n} else if (texto === '1' || texto.includes('cardapio') || texto.includes('cardápio') || texto.includes('menu')) {\n  if (!produtos || produtos.length === 0) {\n    resposta = 'Cardápio temporariamente indisponível. Tente em instantes.';\n  } else {\n    const porCategoria = {};\n    produtos.forEach((item, idx) => {\n      const cat = item.categoria || 'Outros';\n      if (!porCategoria[cat]) porCategoria[cat] = { emoji: item.emoji || '🍽️', itens: [] };\n      porCategoria[cat].itens.push((idx + 1) + '. ' + item.nome + ' — R$ ' + fmtBRL(item.preco));\n    });\n    let linhas = ['🍣 *Cardápio*\\n'];\n    for (const [cat, data] of Object.entries(porCategoria)) {\n      linhas.push(data.emoji + ' *' + cat + '*');\n      linhas.push(...data.itens);\n      linhas.push('');\n    }\n    linhas.push('Digite o *número* do item para escolher, ou *0* para voltar ao menu.');\n    resposta = linhas.join('\\n');\n  }\n\n} else if (texto === '2' || texto.includes('pedido') || texto.includes('pedir')) {\n  resposta = '🛒 Vamos montar seu pedido!\\n\\nDigite *cardápio* para ver os itens e escolha pelo número.';\n\n} else if (texto === '3' || texto.includes('reserva') || texto.includes('reservar') || texto.includes('mesa')) {\n  resposta = '📅 *Reserva de Mesa*\\n\\nPara reservar, informe:\\n• Data e horário desejado\\n• Número de pessoas\\n\\nEx: Sábado às 20h para 2 pessoas';\n\n} else if (texto === '4' || texto.includes('atendente') || texto.includes('humano')) {\n  resposta = '👤 Conectando com um atendente...\\n\\nAguarde um momento!';\n\n} else if (texto === '0' || texto === 'sair' || texto === 'cancelar' || texto === 'voltar') {\n  resposta = msgBoasVindas + '\\n\\nComo posso ajudar?\\n\\n1️⃣ Ver Cardápio\\n2️⃣ Fazer Pedido\\n3️⃣ Reservar Mesa\\n4️⃣ Falar com Atendente';\n\n} else {\n  const num = parseInt(texto);\n  if (!isNaN(num) && num >= 1 && produtos && num <= produtos.length) {\n    const item = produtos[num - 1];\n    const emoji = item.emoji || '🍽️';\n    resposta = emoji + ' *' + item.nome + '*\\nR$ ' + fmtBRL(item.preco) + '\\n\\nDigite outro número para mais itens, ou *finalizar* para concluir o pedido.';\n  } else {\n    resposta = 'Não entendi 😅\\n\\nDigite *menu* para ver as opções.';\n  }\n}\n\nreturn [{ json: { tel, instancia, resposta, aberto: true, botNome } }];"
+      },
+      "id": "rotear_preview",
+      "name": "Rotear e Responder",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1080,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={{ { resposta: $json.resposta, aberto: $json.aberto, botNome: $json.botNome } }}",
+        "options": {}
+      },
+      "id": "responder_webhook",
+      "name": "Responder ao Webhook",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        1300,
+        300
+      ]
+    }
+  ],
+  "connections": {
+    "Webhook Preview": {
+      "main": [
+        [
+          {
+            "node": "Extrair Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Calcular Hora",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Calcular Hora": {
+      "main": [
+        [
+          {
+            "node": "Buscar Dados",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Dados": {
+      "main": [
+        [
+          {
+            "node": "Rotear e Responder",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Rotear e Responder": {
+      "main": [
+        [
+          {
+            "node": "Responder ao Webhook",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

@@ -1,0 +1,160 @@
+{
+  "name": "01-whatsapp-receiver",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "GET",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-get",
+      "name": "Webhook GET (verificação Meta)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        200
+      ],
+      "webhookId": "whatsapp-get"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "={{ $json.query['hub.challenge'] }}",
+        "options": {}
+      },
+      "id": "respond-verification",
+      "name": "Responder hub.challenge",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "whatsapp",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "webhook-post",
+      "name": "Webhook POST (mensagens)",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [
+        240,
+        400
+      ],
+      "webhookId": "whatsapp-post"
+    },
+    {
+      "parameters": {
+        "respondWith": "text",
+        "responseBody": "OK",
+        "options": {}
+      },
+      "id": "respond-ok",
+      "name": "Responder OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1,
+      "position": [
+        480,
+        400
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\nconst entry = $json.body?.entry?.[0];\nconst change = entry?.changes?.[0];\nconst value = change?.value;\nconst message = value?.messages?.[0];\n\nif (!message) return [];\n\nconst tel = message.from || '';\nconst push_name = value?.contacts?.[0]?.profile?.name || '';\nconst phoneNumberId = value?.metadata?.phone_number_id || '';\n\nlet texto = '';\nlet location_lat = null;\nlet location_lng = null;\n\nif (message.type === 'text') {\n  texto = (message.text?.body || '').trim();\n} else if (message.type === 'interactive') {\n  const ia = message.interactive;\n  if (ia?.type === 'button_reply') {\n    texto = ia.button_reply?.id || ia.button_reply?.title || '';\n  } else if (ia?.type === 'list_reply') {\n    texto = ia.list_reply?.id || ia.list_reply?.title || '';\n  }\n} else if (message.type === 'location') {\n  location_lat = message.location?.latitude;\n  location_lng = message.location?.longitude;\n  texto = '__location__';\n} else if (message.type === 'image' || message.type === 'document') {\n  texto = message.caption || '';\n}\n\nif (!texto && message.type !== 'location') return [];\nif (!tel) return [];\n\nreturn [{ json: { tel, texto, push_name, phoneNumberId, location_lat, location_lng, messageId: message.id } }];\n"
+      },
+      "id": "extract-message",
+      "name": "Extrair dados da mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        720,
+        400
+      ]
+    },
+    {
+      "id": "call-routing",
+      "name": "Chamar Roteamento",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        960,
+        400
+      ],
+      "parameters": {
+        "method": "POST",
+        "url": "http://localhost:5678/webhook/routing",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json) }}",
+        "options": {
+          "timeout": 30000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-Internal-Token",
+              "value": "={{ $env.ORDER_HUB_N8N_INTERNAL_TOKEN }}"
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook GET (verificação Meta)": {
+      "main": [
+        [
+          {
+            "node": "Responder hub.challenge",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Webhook POST (mensagens)": {
+      "main": [
+        [
+          {
+            "node": "Responder OK",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Responder OK": {
+      "main": [
+        [
+          {
+            "node": "Extrair dados da mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Extrair dados da mensagem": {
+      "main": [
+        [
+          {
+            "node": "Chamar Roteamento",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}

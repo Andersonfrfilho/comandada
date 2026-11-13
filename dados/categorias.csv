@@ -1,0 +1,10 @@
+id,nome,emoji,descricao,ordem,ativa
+1,Combinados,🍱,Combos prontos para 1 ou mais pessoas,1,true
+2,Temaki,🌯,Cones de alga crocante recheados,2,true
+3,Hot Roll,🔥,Uramakis empanados e fritos,3,true
+4,Avulsos,🍣,Peças avulsas para montar seu pedido,4,true
+5,Sashimi,🐟,Fatias de peixe fresco premium,5,true
+6,Entradas,🥗,Acompanhamentos e entradas,6,true
+7,Sopas,🍜,Sopas quentes tradicionais,7,true
+8,Bebidas,🥤,Bebidas geladas e quentes,8,true
+9,Sobremesas,🍡,Doces e sobremesas japonesas,9,true

@@ -1,0 +1,18 @@
+infra/.env
+infra/.env.local
+apps/api/.env
+apps/web/.env
+apps/web/.env.local
+*.log
+__pycache__/
+*.pyc
+.DS_Store
+node_modules/
+/tmp/
+evolution/
+infra/.env.bak
+docs/BUDIBASE_ENV.md
+apps/*/dist
+# drizzle/migrations deve ser commitado — é fonte de verdade para o schema
+apps/api/drizzle/migrations/*.snap
+infra/loja/.env

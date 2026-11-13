@@ -1,0 +1,62 @@
+{
+  "name": "07 — Retry Documentos Fiscais",
+  "nodes": [
+    {
+      "id": "fiscal-retry-cron",
+      "name": "Cron — A cada 5 minutos",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [240, 300],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "fiscal-retry-http",
+      "name": "Chamar API de retry",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [460, 300],
+      "parameters": {
+        "method": "POST",
+        "url": "http://host.docker.internal:3333/fiscal-documents/retry-pending",
+        "authentication": "none",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "x-internal-token",
+              "value": "={{ $env.N8N_INTERNAL_API_TOKEN }}"
+            }
+          ]
+        },
+        "options": {
+          "timeout": 60000,
+          "redirect": {
+            "redirect": {}
+          }
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron — A cada 5 minutos": {
+      "main": [
+        [
+          {
+            "node": "Chamar API de retry",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

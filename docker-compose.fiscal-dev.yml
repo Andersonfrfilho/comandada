@@ -1,0 +1,28 @@
+# Ambiente local mínimo para testar o módulo fiscal (Postgres + Redis limpos).
+# Schema construído via drizzle migrations, não pelo database/schema.sql.
+# Uso: docker compose -f docker-compose.fiscal-dev.yml -p fiscal-dev up -d
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: fiscal
+      POSTGRES_PASSWORD: fiscal
+      POSTGRES_DB: fiscaldev
+    ports:
+      - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fiscal -d fiscaldev"]
+      interval: 3s
+      timeout: 3s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--maxmemory-policy", "noeviction"]
+    ports:
+      - "6380:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 3s
+      timeout: 3s
+      retries: 10

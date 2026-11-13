@@ -1,0 +1,272 @@
+{
+  "name": "03 — Cron de Promoções",
+  "nodes": [
+    {
+      "id": "63594b62-0887-41da-b567-6d4fdc86cc1c",
+      "name": "Cron — A cada 5 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "cf22002f-2a4a-4e7b-8571-9f7b527199a8",
+      "name": "Buscar Promoção Pendente",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT p.id, p.title, p.message, p.target\nFROM promotions p\nWHERE p.status = 'pending'\n  AND p.scheduled_at <= now()\n  AND p.deleted_at IS NULL\nORDER BY p.scheduled_at\nLIMIT 1",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "e5d9ab20-ca3d-47e1-b111-77bf4a8a69c9",
+      "name": "Verificar se há promoção",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nif (!rows || rows.length === 0 || !rows[0].json.id) return [];\nreturn rows;"
+      }
+    },
+    {
+      "id": "243a217d-9bec-4344-875b-2c31080a77e9",
+      "name": "Marcar como Enviando",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        900,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE promotions SET status = 'sending', updated_at = now()\nWHERE id = {{ $json.id }}\nRETURNING id, message, target",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "e50ffa4e-3825-4365-af53-f312aa4057a0",
+      "name": "Buscar Destinatários",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT c.phone, COALESCE(c.name, '') AS name\nFROM customers c\nWHERE c.deleted_at IS NULL\n  AND ('{{ $json.target }}' = 'all' OR c.marketing_opt_in = true)\n  AND (c.last_promo_at IS NULL OR c.last_promo_at < now() - make_interval(days => COALESCE((SELECT value::int FROM settings WHERE key = 'reminder_min_gap_days'), 7)))\nORDER BY c.last_session_at DESC\nLIMIT 500",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "0b54a04a-d6d9-4b02-98ff-410716376e92",
+      "name": "Loop por destinatário",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "e96620f3-23e8-4c5c-ba0e-d1338c487419",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { phone, name } = $json;\nconst promo = $('Marcar como Enviando').first().json;\nconst instancia = $env['EVOLUTION_INSTANCE'] || 'default';\nconst apiKey = $env['EVOLUTION_API_KEY'] || '';\nconst msg = promo.message.replace('{name}', name || 'cliente');\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `http://evolution_api:8080/message/sendText/${instancia}`,\n    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },\n    body: JSON.stringify({ number: phone, text: msg })\n  });\n} catch(e) { /* non-critical — continua para o próximo */ }\nreturn [{ json: { phone, ok: true } }];"
+      }
+    },
+    {
+      "id": "cd04beac-8e51-4ed0-9b5c-cdacb3cf2255",
+      "name": "Atualizar last_promo_at",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE customers SET last_promo_at = now(), updated_at = now() WHERE phone = '{{ $json.phone }}'",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "4417362c-6103-46ae-86ac-363497dde820",
+      "name": "Marcar Promoção como Enviada",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        1340,
+        480
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE promotions\nSET status = 'sent',\n    sent_at = now(),\n    sent_count = (SELECT COUNT(*) FROM customers WHERE deleted_at IS NULL AND ('{{ $('Marcar como Enviando').first().json.target }}' = 'all' OR marketing_opt_in = true)),\n    updated_at = now()\nWHERE id = {{ $('Marcar como Enviando').first().json.id }}",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Cron — A cada 5 min": {
+      "main": [
+        [
+          {
+            "node": "Buscar Promoção Pendente",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Promoção Pendente": {
+      "main": [
+        [
+          {
+            "node": "Verificar se há promoção",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se há promoção": {
+      "main": [
+        [
+          {
+            "node": "Marcar como Enviando",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar como Enviando": {
+      "main": [
+        [
+          {
+            "node": "Buscar Destinatários",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Destinatários": {
+      "main": [
+        [
+          {
+            "node": "Loop por destinatário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop por destinatário": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Marcar Promoção como Enviada",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Atualizar last_promo_at",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Atualizar last_promo_at": {
+      "main": [
+        [
+          {
+            "node": "Loop por destinatário",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "a122fdae-8fa1-4c03-9230-a232216cc64d"
+}

@@ -1,0 +1,88 @@
+{
+  "name": "02 — Limpeza de Sessões",
+  "nodes": [
+    {
+      "id": "497e050c-a049-42c3-862d-c6d94a180ee2",
+      "name": "Cron — A cada hora",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "051eab9a-a12b-4123-a33b-9f86f548b19a",
+      "name": "Limpar Sessões Antigas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2,
+      "position": [
+        460,
+        300
+      ],
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "DELETE FROM sessions WHERE last_activity_at < now() - INTERVAL '7 days' RETURNING phone",
+        "options": {}
+      },
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      }
+    },
+    {
+      "id": "cffb0eff-38e4-475f-899c-c2b809523a9a",
+      "name": "Log",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconsole.log('[limpeza-sessoes] Removidas:', rows.length, 'sessões');\nreturn rows;"
+      }
+    }
+  ],
+  "connections": {
+    "Cron — A cada hora": {
+      "main": [
+        [
+          {
+            "node": "Limpar Sessões Antigas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Limpar Sessões Antigas": {
+      "main": [
+        [
+          {
+            "node": "Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "id": "d712f9c0-ce70-4f30-9471-4ef95527b804"
+}

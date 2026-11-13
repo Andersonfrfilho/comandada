@@ -1,0 +1,23 @@
+id,nome,descricao,categoria_id,preco,disponivel,imagem_url,atributos,observacoes
+1,Combo Tradicional,"4 sashimi de salmão, 4 hakusai de salmão, 8 hot roll, 8 uramaki de salmão, 8 hossomaki de salmão",1,95.00,true,,"{""porcao"":""32 unidades"",""serve"":2}",
+2,Combo Executivo,"8 sashimi de salmão, 6 joe salmão, 4 hakusai camarão, 8 uramaki grelhado, 8 hot roll, 8 hot couve",1,125.00,true,,"{""porcao"":""42 unidades"",""serve"":2}",
+3,Combo Individual,"8 hot roll, 8 uramaki salmão, 4 joe geleia",1,47.00,true,,"{""porcao"":""20 unidades"",""serve"":1}",
+4,Combo Individual Hot,20 hot roll,1,43.00,true,,"{""porcao"":""20 unidades"",""serve"":1}",
+5,Combo Hot Top,"5 hot camarão, 5 hot poró, 5 hot temperado, 5 hot roll, 5 hot couve, 5 hot hakusai",1,70.00,true,,"{""porcao"":""30 unidades"",""serve"":2}",
+6,Combo Junior,"8 hot roll, 8 hot couve, 6 uramaki de camarão, 4 joe geleia, 4 hot camarão",1,70.00,true,,"{""porcao"":""30 unidades"",""serve"":2}",
+7,Combo Degustação,"1 tartar P, 1 ceviche P, 1 carpaccio P, 2 camarões recheados, 1 porção P de camarão empanado, 5 fusion, 5 joe geleia, 5 uramaki salmão, 5 hot roll, 4 churros",1,159.00,true,,"{""porcao"":""degustação"",""serve"":2,""novidade"":true}",
+8,Carpaccio de Salmão,"Fatias bem finas de salmão, gengibre, tarê, cebolinha e limão",2,60.00,true,,"{""serve"":1}",
+9,Ceviche Mix,"Mix de peixes em cubos, cebola roxa, cebolinha, limão, tarê e pimenta",2,60.00,true,,"{""serve"":1}",
+10,Camarão Empanado,Camarão empanado crocante e frito,2,75.00,true,,"{""porcao"":""300 g""}",
+11,Camarão Recheado,"Camarão recheado com requeijão cremoso, molho tarê",2,35.00,true,,"{""porcao"":""5 unidades""}",
+12,Tartar de Salmão,"Salmão batido com camarão, tarê, cream cheese, cebolinha e amêndoas laminadas",2,60.00,true,,"{""serve"":1}",
+13,Sashimi de Salmão,Fatias de salmão fresco,3,60.00,true,,"{""porcao"":""10 unidades""}",
+14,Sashimi Especial,"Sashimi de salmão, tarê, gengibre e raspa de limão",3,67.00,true,,"{""porcao"":""10 unidades""}",
+15,Temaki de Salmão (Médio),"Arroz, salmão (batido ou em cubos), cream cheese e cebolinha",4,37.00,true,,"{""tamanho"":""medio"",""grupo"":""temaki-salmao""}",Corte batido ou em cubos: perguntar ao cliente
+16,Temaki de Salmão (Grande),"Arroz, salmão (batido ou em cubos), cream cheese e cebolinha",4,49.00,true,,"{""tamanho"":""grande"",""grupo"":""temaki-salmao""}",Corte batido ou em cubos: perguntar ao cliente
+17,Temaki de Salmão Grelhado (Médio),"Arroz, salmão grelhado batido, cream cheese, tarê e cebolinha",4,37.00,true,,"{""tamanho"":""medio"",""grupo"":""temaki-salmao-grelhado""}",
+18,Temaki de Salmão Grelhado (Grande),"Arroz, salmão grelhado batido, cream cheese, tarê e cebolinha",4,49.00,true,,"{""tamanho"":""grande"",""grupo"":""temaki-salmao-grelhado""}",
+19,Temaki de Camarão (Médio),"Arroz, camarão empanado, cream cheese, tarê e cebolinha",4,37.00,true,,"{""tamanho"":""medio"",""grupo"":""temaki-camarao""}",
+20,Temaki de Camarão (Grande),"Arroz, camarão empanado, cream cheese, tarê e cebolinha",4,49.00,true,,"{""tamanho"":""grande"",""grupo"":""temaki-camarao""}",
+21,Temaki Hot (Médio),"Arroz, salmão grelhado batido, cream cheese, empanado e frito cortado ao meio, tarê e cebolinha",4,37.00,true,,"{""tamanho"":""medio"",""grupo"":""temaki-hot""}",
+22,Temaki Hot (Grande),"Arroz, salmão grelhado batido, cream cheese, empanado e frito cortado ao meio, tarê e cebolinha",4,49.00,true,,"{""tamanho"":""grande"",""grupo"":""temaki-hot""}",

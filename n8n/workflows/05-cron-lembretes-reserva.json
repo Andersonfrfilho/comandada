@@ -1,0 +1,256 @@
+{
+  "name": "05 — Cron de Lembretes de Reserva",
+  "nodes": [
+    {
+      "id": "cron_reserva",
+      "name": "Cron — Diário",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.2,
+      "position": [
+        240,
+        300
+      ],
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      }
+    },
+    {
+      "id": "buscar_config_reserva",
+      "name": "Buscar Config e Reservas",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        460,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  (SELECT value FROM settings WHERE key = 'reservation_reminder_hour')::int AS send_hour,\n  EXTRACT(HOUR FROM now() AT TIME ZONE (SELECT COALESCE(value,'America/Sao_Paulo') FROM settings WHERE key='timezone'))::int AS current_hour,\n  (SELECT value FROM settings WHERE key = 'establishment_name')  AS establishment_name,\n  (SELECT value FROM settings WHERE key = 'establishment_address') AS establishment_address"
+      }
+    },
+    {
+      "id": "checar_hora_reserva",
+      "name": "Checar Hora",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        680,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const cfg = $json;\nif (cfg.send_hour === null || cfg.send_hour === undefined) {\n  console.log('[lembretes-reserva] send_hour não configurado — usando 10h');\n  cfg.send_hour = 10;\n}\nif (cfg.current_hour !== cfg.send_hour) {\n  console.log(`[lembretes-reserva] Fora da janela (hora atual=${cfg.current_hour}, enviar=${cfg.send_hour})`);\n  return [];\n}\nreturn [{ json: cfg }];"
+      }
+    },
+    {
+      "id": "buscar_reservas",
+      "name": "Buscar Reservas para Lembrete",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        900,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "SELECT\n  r.id,\n  r.code,\n  r.customer_phone,\n  COALESCE(c.name, 'cliente') AS customer_name,\n  r.date,\n  r.time::text AS time,\n  r.party_size,\n  t.number AS table_number,\n  CASE\n    WHEN r.date = CURRENT_DATE + 1 THEN 'amanha'\n    WHEN r.date = CURRENT_DATE     THEN 'hoje'\n  END AS tipo_lembrete\nFROM reservations r\nJOIN customers c ON c.phone = r.customer_phone\nLEFT JOIN tables t ON t.id = r.table_id\nWHERE r.deleted_at IS NULL\n  AND r.status IN ('pending', 'confirmed')\n  AND (\n    (r.date = CURRENT_DATE + 1 AND r.reminder_1day_sent = false)\n    OR\n    (r.date = CURRENT_DATE     AND r.reminder_day_sent  = false)\n  )\nORDER BY r.date, r.time"
+      }
+    },
+    {
+      "id": "checar_reservas",
+      "name": "Verificar se há reservas",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1120,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const rows = $input.all();\nconsole.log(`[lembretes-reserva] ${rows.length} lembrete(s) para enviar`);\nif (!rows || rows.length === 0) return [];\nreturn rows;"
+      }
+    },
+    {
+      "id": "loop_reservas",
+      "name": "Loop por Reserva",
+      "type": "n8n-nodes-base.splitInBatches",
+      "typeVersion": 3,
+      "position": [
+        1340,
+        300
+      ],
+      "parameters": {
+        "batchSize": 1,
+        "options": {}
+      }
+    },
+    {
+      "id": "montar_msg_reserva",
+      "name": "Montar Mensagem",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1560,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const r = $json;\nconst cfg = $('Buscar Config e Reservas').first().json;\nconst nome = r.customer_name || 'cliente';\nconst nomeCapit = nome.charAt(0).toUpperCase() + nome.slice(1);\nconst addr = cfg.establishment_address || '';\nconst mapsLink = addr ? '\\n🗺️ https://maps.google.com/?q=' + encodeURIComponent(addr) : '';\nconst addrBlock = addr ? '\\n\\n📍 *Localização:* ' + addr + mapsLink : '';\n\n// Format date\nconst [y, m, d] = r.date.toString().split('T')[0].split('-');\nconst meses = ['','Janeiro','Fevereiro','Março','Abril','Maio','Junho','Julho','Agosto','Setembro','Outubro','Novembro','Dezembro'];\nconst dateStr = parseInt(d) + ' de ' + meses[parseInt(m)];\n\nconst time = r.time.substring(0, 5);\nconst mesa = r.table_number ? 'Mesa ' + r.table_number : '';\nconst party = r.party_size + (r.party_size === 1 ? ' pessoa' : ' pessoas');\n\nlet msg;\nif (r.tipo_lembrete === 'amanha') {\n  msg = '📅 *Oi, ' + nomeCapit + '! Passando para lembrar da sua reserva*\\n\\n'\n    + 'É *amanhã*, e a gente já está se preparando pra te receber! 🥰\\n\\n'\n    + '🗓️ ' + dateStr + ' às ' + time + '\\n'\n    + '👥 ' + party + '\\n'\n    + (mesa ? '🪑 ' + mesa + '\\n' : '')\n    + addrBlock + '\\n\\n'\n    + 'Até amanhã! 👋\\n\\n_Precisa mudar ou cancelar? É só responder esta mensagem._';\n} else {\n  msg = '🎉 *Hoje é o dia, ' + nomeCapit + '!*\\n\\n'\n    + 'Sua reserva é *hoje* e sua mesa já está te esperando 🍽️\\n\\n'\n    + '🗓️ ' + dateStr + ' às ' + time + '\\n'\n    + '👥 ' + party + '\\n'\n    + (mesa ? '🪑 ' + mesa + '\\n' : '')\n    + addrBlock + '\\n\\n'\n    + 'Te esperamos! 🧡\\n\\n_Algum imprevisto? É só responder esta mensagem._';\n}\n\nreturn [{ json: { ...r, msg, cfg } }];"
+      }
+    },
+    {
+      "id": "enviar_lembrete_reserva",
+      "name": "Enviar WhatsApp",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1780,
+        300
+      ],
+      "parameters": {
+        "jsCode": "const { customer_phone, msg, cfg } = $json;\nconst instancia = $env['EVOLUTION_INSTANCE'] || 'default';\nconst apiKey = cfg.evolution_api_key || $env['EVOLUTION_API_KEY'] || '';\ntry {\n  await this.helpers.httpRequest({\n    method: 'POST',\n    url: `http://evolution_api:8080/message/sendText/${instancia}`,\n    headers: { 'Content-Type': 'application/json', 'apikey': apiKey },\n    body: JSON.stringify({ number: customer_phone, text: msg })\n  });\n} catch(e) {\n  console.log('[lembretes-reserva] Erro ao enviar para', customer_phone, e.message);\n}\nreturn [{ json: $json }];"
+      }
+    },
+    {
+      "id": "marcar_enviado",
+      "name": "Marcar Lembrete Enviado",
+      "type": "n8n-nodes-base.postgres",
+      "typeVersion": 2.6,
+      "position": [
+        2000,
+        300
+      ],
+      "credentials": {
+        "postgres": {
+          "id": "k6K55CNkeEYnijTG",
+          "name": "Postgres account"
+        }
+      },
+      "parameters": {
+        "operation": "executeQuery",
+        "query": "UPDATE reservations SET\n  reminder_1day_sent = CASE WHEN '{{ $json.tipo_lembrete }}' = 'amanha' THEN true ELSE reminder_1day_sent END,\n  reminder_day_sent  = CASE WHEN '{{ $json.tipo_lembrete }}' = 'hoje'   THEN true ELSE reminder_day_sent  END,\n  updated_at = now()\nWHERE id = '{{ $json.id }}'"
+      }
+    }
+  ],
+  "connections": {
+    "Cron — Diário": {
+      "main": [
+        [
+          {
+            "node": "Buscar Config e Reservas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Config e Reservas": {
+      "main": [
+        [
+          {
+            "node": "Checar Hora",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Checar Hora": {
+      "main": [
+        [
+          {
+            "node": "Buscar Reservas para Lembrete",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Buscar Reservas para Lembrete": {
+      "main": [
+        [
+          {
+            "node": "Verificar se há reservas",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Verificar se há reservas": {
+      "main": [
+        [
+          {
+            "node": "Loop por Reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Loop por Reserva": {
+      "main": [
+        [
+          {
+            "node": "Montar Mensagem",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Montar Mensagem": {
+      "main": [
+        [
+          {
+            "node": "Enviar WhatsApp",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enviar WhatsApp": {
+      "main": [
+        [
+          {
+            "node": "Marcar Lembrete Enviado",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Marcar Lembrete Enviado": {
+      "main": [
+        [
+          {
+            "node": "Loop por Reserva",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "staticData": null
+}
