@@ -24,7 +24,7 @@ export function BrandIdentity({ size = 'small', tone = 'light', layout = 'inline
         <img
           src={branding.logo}
           alt={`Logo ${branding.name}`}
-          className={`${markSize} rounded-2xl object-cover flex-shrink-0`}
+          className={`${markSize} object-contain flex-shrink-0`}
         />
       ) : (
         <span
