@@ -639,6 +639,34 @@ async function runTests() {
   }));
   const rowsOf = (r) => (r?.[0]?.json?.respostas || []).flatMap((m) => (m?.sections || []).flatMap((section) => section.rows));
 
+  const YUYAKI_COMBOS = [
+    { id: 301, name: 'Combo Tradicional', category: 'Combinados', price: 95,
+      description: '32 unidades · 4 sashimi de salmão, 4 hakusai de salmão, 8 hot roll, 8 uramaki de salmão, 8 hossomaki de salmão' },
+    { id: 302, name: 'Combo Executivo', category: 'Combinados', price: 125,
+      description: '42 unidades · 8 sashimi de salmão, 6 joe salmão, 4 hakusai camarão, 8 uramaki grelhado, 8 hot roll, 8 hot couve' },
+    { id: 303, name: 'Ceviche Mix', category: 'Combinados', price: 60,
+      description: 'Mix de peixes em cubos, cebola roxa, cebolinha, limão, tarê, pimenta e mais um monte de coisa boa' },
+  ];
+
+  await test('cardápio: descrição longa não corta palavra; composição termina em "+N itens" com a porção', async () => {
+    const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', products: YUYAKI_COMBOS });
+    const rows = rowsOf(r);
+    const tradicional = rows.find((row) => row.title.includes('Combo Tradicional'));
+    assert(tradicional.description.startsWith('💰 R$ 95,00 · 32 unidades · 4 sashimi de salmão'), tradicional.description);
+    assert(/\+\d itens$/.test(tradicional.description), tradicional.description);
+    assert(Array.from(tradicional.description).length <= 72, 'acima de 72');
+    const ceviche = rows.find((row) => row.title.includes('Ceviche'));
+    assert(ceviche.description.endsWith('…') && !/\s…$/.test(ceviche.description), ceviche.description);
+    assert(rows.every((row) => !row.description || Array.from(row.description).length <= 72), 'linha fora do limite');
+  });
+
+  await test('tela do combo mostra a porção e cada peça numa linha, sem cortar', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Combinados', products: YUYAKI_COMBOS });
+    const screen = r[0].json.respostas.find((message) => message && message.type === 'buttons');
+    assert(screen.body.includes('📦 *32 unidades*'), screen.body);
+    assert(screen.body.includes('• 8 hossomaki de salmão') && screen.body.includes('• 4 sashimi de salmão'), screen.body);
+  });
+
   await test('oficial: itens viram lista interativa com ≤10 linhas, "Ver mais" e "Voltar"', async () => {
     const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', products: MANY_COMBOS });
     assertResponseType(r, 'list');

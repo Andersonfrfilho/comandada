@@ -99,7 +99,9 @@ function textOrderChoiceRows(choice: TextOrderChoice): ListRow[] {
       : {
         id: 'pick:' + product.id,
         title: product.name,
-        description: '💰 R$ ' + fmtBRL(product.price) + (product.description ? ' · ' + product.description : ''),
+        description: '💰 R$ ' + fmtBRL(product.price) + (product.description
+          ? ' · ' + compactDescription(String(product.description), MENU_ROW_DESCRIPTION_MAX - Array.from('💰 R$ ' + fmtBRL(product.price) + ' · ').length)
+          : ''),
       });
   }
   return rows.slice(0, FREE_TEXT_MAX_ROWS);

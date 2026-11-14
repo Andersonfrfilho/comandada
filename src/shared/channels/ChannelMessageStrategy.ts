@@ -12,6 +12,9 @@
 const WHATSAPP_LIST_MAX_ROWS = 10;
 const WHATSAPP_ROW_TITLE_MAX = 24;
 const WHATSAPP_ROW_DESCRIPTION_MAX = 72;
+// Descrição dos itens no cardápio: a linha da lista da Meta e a linha em texto da Evolution.
+const MENU_ROW_DESCRIPTION_MAX = WHATSAPP_ROW_DESCRIPTION_MAX;
+const MENU_TEXT_DESCRIPTION_MAX = 70;
 const WHATSAPP_LIST_BUTTON_MAX = 20;
 const WHATSAPP_BUTTON_TITLE_MAX = 20;
 const WHATSAPP_MAX_BUTTONS = 3;
@@ -152,7 +155,7 @@ class EvolutionTextChannelStrategy implements ChannelMessageStrategy {
         return;
       }
       lines.push(name + ' — *' + option.price + '*');
-      if (option.description) lines.push('      _' + truncateText(option.description, 70) + '_');
+      if (option.description) lines.push('      _' + truncateText(option.description, MENU_TEXT_DESCRIPTION_MAX) + '_');
     });
     const pageLabel = menuPageLabel(menu);
     if (pageLabel) lines.push('', pageLabel);

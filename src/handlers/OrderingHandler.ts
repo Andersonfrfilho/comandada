@@ -119,7 +119,7 @@ class OrderingHandler extends BaseHandler {
     newCart.pending_group = '';
     newCart.pending_item_note = '';
     newState = BotState.AWAITING_QTY;
-    const descriptionText = selectedProduct.description ? '\n\n_' + selectedProduct.description + '_' : '';
+    const descriptionText = selectedProduct.description ? detailDescription(String(selectedProduct.description)) : '';
     respostas.push({
       type: 'buttons',
       body: MessagesConstants.PRODUTO_DETALHE(productEmoji(selectedProduct, newCart.browse_category), selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText) + MessagesConstants.PRODUTO_VOLTAR_DICA,
