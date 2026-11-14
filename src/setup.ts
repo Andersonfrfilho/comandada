@@ -82,6 +82,7 @@ if (Array.isArray(rawCart)) {
     scheduled_time:     rawCart.scheduled_time || '',
     issue_order_code:   rawCart.issue_order_code || '',
     issue_category:     rawCart.issue_category || '',
+    text_order:         rawCart.text_order || null,
   };
 } else {
   currentCart = CartConstants.EMPTY();
@@ -106,6 +107,10 @@ const minOrderValue  = establishment.min_order_value != null ? establishment.min
 const brandSticker: StickerMessage | null = establishment.sticker_url
   ? { type: 'sticker', link: establishment.sticker_url }
   : null;
+// "📄 Ver cardápio completo": PDF que a API gera do cadastro. Sem URL pública a opção não aparece.
+const menuPdfUrl: string = establishment.menu_pdf_url || '';
+// Mensagem que chegou como áudio: o texto é a transcrição, e a resposta abre mostrando o que foi ouvido.
+const fromAudio: boolean = !!msgData.from_audio;
 const kitchenPhone   = establishment.kitchen_phone  || config['kitchen_phone']           || '';
 
 // ── Tipos de pedido / entrega ────────────────────────────────────────────────
@@ -440,14 +445,29 @@ function categoryEmoji(categoryName: string): string {
   return withEmoji?.emoji || menuEmojiFor(categoryName);
 }
 
+// Com o PDF do cardápio, cada página de categorias guarda uma linha para "📄 Ver cardápio completo".
+function categoryPageSize(): number {
+  return menuPdfUrl ? MENU_PAGE_SIZE - 1 : MENU_PAGE_SIZE;
+}
+
+function menuPdfMessage(): DocumentMessage {
+  return {
+    type: 'document',
+    link: menuPdfUrl,
+    filename: MessagesConstants.CARDAPIO_PDF_ARQUIVO(estName),
+    caption: MessagesConstants.CARDAPIO_PDF_LEGENDA(estName),
+  };
+}
+
 function categoryList(context: string, page?: number): ListMessage | TextMenuMessage | string {
   if (!products || products.length === 0) return MessagesConstants.CARDAPIO_INDISPONIVEL;
   const categories = menuCategories();
-  const totalPages = menuTotalPages(categories.length);
+  const pageSize = categoryPageSize();
+  const totalPages = Math.max(1, Math.ceil(categories.length / pageSize));
   const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
-  const start = currentPage * MENU_PAGE_SIZE;
+  const start = currentPage * pageSize;
   const prefix = context === 'order' ? 'order_cat:' : 'cat:';
-  const options: MenuOption[] = categories.slice(start, start + MENU_PAGE_SIZE).map((categoryName: string, index: number) => {
+  const options: MenuOption[] = categories.slice(start, start + pageSize).map((categoryName: string, index: number) => {
     const itemCount = menuEntries(categoryName).length;
     return {
       id: prefix + categoryName.toLowerCase(),
@@ -457,6 +477,15 @@ function categoryList(context: string, page?: number): ListMessage | TextMenuMes
       description: MessagesConstants.MENU_CATEGORIA_ITENS(itemCount),
     };
   });
+  if (menuPdfUrl) {
+    options.push({
+      id: 'menu:pdf',
+      number: options.length + 1,
+      emoji: '📄',
+      title: MessagesConstants.CARDAPIO_PDF_OPCAO,
+      description: MessagesConstants.CARDAPIO_PDF_OPCAO_DESCRICAO,
+    });
+  }
   const [heading, subtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
   return channelStrategy.renderMenu({
     heading,
@@ -466,7 +495,7 @@ function categoryList(context: string, page?: number): ListMessage | TextMenuMes
     options,
     page: currentPage,
     totalPages,
-    hasMore: categories.length > start + MENU_PAGE_SIZE,
+    hasMore: categories.length > start + pageSize,
     nextId: 'próxima',
     backId: '0',
     backLabel: MessagesConstants.MENU_VOLTAR_INICIO,
@@ -500,6 +529,16 @@ function menuEntries(categoryName: string): MenuEntry[] {
       entries.push(entry);
     });
   return entries;
+}
+
+// Exemplo de pedido escrito com itens do próprio cardápio: "2 combo tradicional e 1 carpaccio de salmão".
+function orderExample(): string {
+  const categories = menuCategories();
+  const firstEntries = categories.map((categoryName: string) => menuEntries(categoryName)[0]).filter(Boolean);
+  const picks = firstEntries.length >= 2 ? firstEntries.slice(0, 2) : menuEntries(categories[0] || '').slice(0, 2);
+  if (picks.length === 0) return '2 itens do cardápio';
+  const name = (entry: MenuEntry) => entry.title.toLowerCase();
+  return picks.length === 1 ? '2 ' + name(picks[0]) : '2 ' + name(picks[0]) + ' e 1 ' + name(picks[1]);
 }
 
 function entryPriceText(entry: MenuEntry): string {
@@ -618,6 +657,14 @@ function startCheckout(): void {
   }
 }
 
+// Depois de adicionar: mais itens, observação para o item que acabou de entrar, ou finalizar.
+function moreItemsButtons(body: string): ButtonMessage {
+  const buttons = [{ id: '__add_more__', title: '➕ Adicionar mais' }];
+  if (newCart.last_item_id) buttons.push({ id: '__item_note__', title: MessagesConstants.OBSERVACAO_BOTAO });
+  buttons.push({ id: 'finalizar', title: '✅ Finalizar' });
+  return { type: 'buttons', body, buttons };
+}
+
 function locationMsg(lat: number, lng: number, name: string, address: string): LocationMessage {
   return { type: 'location', latitude: lat, longitude: lng, name: name || MessagesConstants.ENDERECO_ENTREGA_TITULO, address: address || '' };
 }
@@ -680,6 +727,13 @@ function renderPayloadForChannel(payload: N8nResponsePayload): N8nResponsePayloa
   const rendered = channelStrategy.renderOutgoing(payload.respostas, numberedChoices);
   const cart: Cart = { ...payload.cart, menu_choices: rendered.choices };
   return { ...payload, respostas: rendered.messages, cart };
+}
+
+// Resposta a um áudio abre com o que foi entendido, para o cliente conferir antes de seguir.
+function withAudioEcho(payload: N8nResponsePayload): N8nResponsePayload {
+  const transcript = rawText.trim();
+  if (!fromAudio || incomingText === AUDIO_UNCLEAR_TEXT || !transcript || payload.respostas.length === 0) return payload;
+  return { ...payload, respostas: [MessagesConstants.AUDIO_OUVI(transcript), ...payload.respostas] };
 }
 
 function buildPayload(): N8nResponsePayload {

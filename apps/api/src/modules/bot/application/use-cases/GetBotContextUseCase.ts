@@ -8,6 +8,7 @@ import { NotFoundError } from '@/shared/errors/AppError'
 import type { EstablishmentLocationService } from '@/modules/settings/application/services/EstablishmentLocationService'
 import { brandStickerUrl } from '@/modules/settings/shared/brandSticker.constant'
 import { BRANDING_SETTING_KEYS } from '@/modules/settings/shared/branding.constant'
+import { menuContentVersion, menuPdfUrl } from '@/modules/menu/shared/menuPdf.constant'
 import type { ListScheduledOrderSlotsUseCase, ScheduledOrderDay } from '@/modules/agenda/application/use-cases/ListScheduledOrderSlotsUseCase'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import type { BotCustomerService } from '../services/BotCustomerService'
@@ -118,6 +119,22 @@ export class GetBotContextUseCase {
         sticker_url: this.publicApiUrl
           ? brandStickerUrl(this.publicApiUrl, establishmentId, config[BRANDING_SETTING_KEYS.logo])
           : null,
+        // "📄 Ver cardápio completo": PDF gerado do cadastro; a versão muda junto com cardápio, logo e cor.
+        menu_pdf_url: this.publicApiUrl && products.length > 0
+          ? menuPdfUrl(
+              this.publicApiUrl,
+              establishmentId,
+              menuContentVersion({
+                products,
+                name: establishment.name,
+                logo: config[BRANDING_SETTING_KEYS.logo] ?? null,
+                color: config[BRANDING_SETTING_KEYS.primaryColor] ?? null,
+                address: config['establishment_address'] ?? null,
+                city: config['establishment_city'] ?? null,
+                instagram: config['establishment_instagram'] ?? null,
+              })
+            )
+          : null,
       },
       config,
       products,
@@ -135,6 +152,12 @@ export class GetBotContextUseCase {
       conversation,
       partial_confirmation: partialConfirmation,
     }
+  }
+
+  /** Restaurante do número e os nomes do cardápio, do mesmo cache do contexto (pedido por áudio). */
+  async menuFor(instance?: string): Promise<{ establishmentId: string; productNames: string[] }> {
+    const { establishment, products } = await this.loadSharedContext(instance)
+    return { establishmentId: establishment.id, productNames: products.map((product) => product.name) }
   }
 
   private async loadSharedContext(instance?: string): Promise<BotSharedContext> {

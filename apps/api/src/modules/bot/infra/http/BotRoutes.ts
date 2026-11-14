@@ -9,5 +9,6 @@ export function registerBotRoutes(router: Router, controller: BotController): vo
   router.post('/internal/bot/:whatsapp/reservations', internalAuth, controller.createReservation)
   router.post('/internal/bot/:whatsapp/issues', internalAuth, controller.createIssue)
   router.post('/internal/bot/:whatsapp/partial-confirmation', internalAuth, controller.answerPartialConfirmation)
+  router.post('/internal/bot/:whatsapp/transcriptions', internalAuth, controller.transcribeAudio)
   router.put('/internal/bot/:whatsapp/customer', internalAuth, controller.updateCustomer)
 }

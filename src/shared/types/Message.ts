@@ -37,10 +37,19 @@ interface StickerMessage {
   link: string;
 }
 
+// Arquivo (PDF do cardápio): a Meta baixa pelo link.
+interface DocumentMessage {
+  type: 'document';
+  link: string;
+  filename: string;
+  caption?: string;
+}
+
 type OutgoingMessage =
   | string
   | ButtonMessage
   | ListMessage
   | TextMenuMessage
   | LocationMessage
-  | StickerMessage;
+  | StickerMessage
+  | DocumentMessage;

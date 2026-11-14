@@ -124,6 +124,8 @@ interface EstablishmentConfig {
   logo_url: string | null;
   /** Figurinha do logo (WebP 512x512) que a API serve; ausente quando o restaurante não tem logo. */
   sticker_url?: string | null;
+  /** PDF do cardápio completo que a API gera do cadastro; ausente sem URL pública em HTTPS. */
+  menu_pdf_url?: string | null;
   address: string | null;
   instagram?: string | null;
   website?: string | null;
@@ -208,4 +210,6 @@ interface MsgData {
   push_name?: string;
   // Provedor do WhatsApp que trouxe a mensagem: 'meta_cloud' (oficial) ou 'evolution'.
   provider?: string;
+  // Mensagem que chegou como nota de voz: texto é a transcrição (ou __audio_unclear__ se falhou).
+  from_audio?: boolean;
 }

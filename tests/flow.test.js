@@ -235,6 +235,7 @@ async function runTests() {
         location_lng: args.location_lng || null,
         push_name: args.customerName || '',
         ...(args.provider ? { provider: args.provider } : {}),
+        ...(args.from_audio ? { from_audio: true } : {}),
       };
 
       const mockHelpers = {
@@ -907,6 +908,207 @@ async function runTests() {
     assertState(r, 'awaiting_more');
     const item = r?.[0]?.json?.cart?.items?.[0];
     assert(item.note === 'Sem Cebolinha', 'nota: ' + item.note);
+  });
+
+
+  // ── PEDIDO POR TEXTO LIVRE, ÁUDIO E PDF DO CARDÁPIO ───────────────────────
+  console.log('\n✍️  Pedido escrito, por áudio e cardápio em PDF');
+
+  const baseCart = (extra) => ({
+    items: [], order_type: '', address: '', complement: '', delivery_fee: 0, payment_method: '', change_for: null,
+    split_count: 0, split_current: 0, split_payments: [], mixed_method: '', mixed_label: '', mixed_amount: 0,
+    address_street_temp: null, browse_category: '', browse_page: 0, pending_item_id: null, pending_item_name: '',
+    ...extra,
+  });
+  const cartOf = (r) => r?.[0]?.json?.cart || {};
+  const draftOf = (r) => cartOf(r).text_order || null;
+
+  await test('texto livre: "2 temaki salmão e 1 sashimi" anota os dois e pede confirmação', async () => {
+    const r = await exec({ texto: '2 temaki salmão e 1 sashimi' });
+    assertState(r, 'awaiting_text_order_confirm');
+    const items = draftOf(r).items;
+    assert(items.length === 2, 'itens: ' + JSON.stringify(items));
+    assert(items[0].id === 1 && items[0].qty === 2, 'temaki: ' + JSON.stringify(items[0]));
+    assert(items[1].id === 10 && items[1].qty === 1, 'sashimi: ' + JSON.stringify(items[1]));
+    assert(cartOf(r).items.length === 0, 'carrinho só muda depois de confirmar');
+    assertResponseContains(r, 'Anotei assim');
+    assertResponseContains(r, 'Confirmar');
+  });
+
+  await test('texto livre: aceita "quero", plural, número por extenso e erro de digitação', async () => {
+    const r = await exec({ texto: 'quero dois sashimis, 1 hot rol salmao e temakis de atum' });
+    assertState(r, 'awaiting_text_order_confirm');
+    const byId = Object.fromEntries(draftOf(r).items.map((item) => [item.id, item.qty]));
+    assert(byId[10] === 2 && byId[5] === 1 && byId[2] === 1, 'itens: ' + JSON.stringify(byId));
+  });
+
+  await test('texto livre: nome ambíguo vira lista com as opções e a quantidade', async () => {
+    const r = await exec({ texto: 'quero 2 hot roll' });
+    assertState(r, 'awaiting_text_order_choice');
+    assertResponseContains(r, 'Hot Roll Salmão');
+    assertResponseContains(r, 'Hot Roll Atum');
+    assertResponseContains(r, 'Nenhum desses');
+    const pending = draftOf(r).pending;
+    assert(pending.length === 1 && pending[0].qty === 2 && pending[0].option_ids.length === 3, JSON.stringify(pending));
+  });
+
+  const choiceCart = () => baseCart({ text_order: { items: [], pending: [{ query: '2 hot roll', qty: 2, option_ids: ['5', '6', '7'] }], unrecognized: [] } });
+
+  await test('texto livre: tocar na opção da lista resolve e vai para a confirmação', async () => {
+    const r = await exec({ texto: 'pick:6', state: 'awaiting_text_order_choice', cart: choiceCart() });
+    assertState(r, 'awaiting_text_order_confirm');
+    const item = draftOf(r).items[0];
+    assert(item.id === 6 && item.qty === 2, JSON.stringify(item));
+  });
+
+  await test('texto livre: escrever a opção ("o de atum") também resolve', async () => {
+    const r = await exec({ texto: 'o de atum', state: 'awaiting_text_order_choice', cart: choiceCart() });
+    assert(draftOf(r).items[0].id === 7, JSON.stringify(draftOf(r)));
+  });
+
+  await test('texto livre: "nenhum desses" sem outro item avisa e oferece o cardápio', async () => {
+    const r = await exec({ texto: 'pick:none', state: 'awaiting_text_order_choice', cart: choiceCart() });
+    assertState(r, 'start');
+    assertResponseContains(r, 'Não encontrei');
+    assertResponseContains(r, 'Ver cardápio');
+  });
+
+  await test('texto livre: item com tamanhos pergunta o tamanho e "grande" escolhe', async () => {
+    const first = await exec({ texto: '1 temaki hot' });
+    assertState(first, 'awaiting_text_order_choice');
+    assertResponseContains(first, 'Qual tamanho');
+    const second = await exec({ texto: 'grande', state: 'awaiting_text_order_choice', cart: cartOf(first) });
+    assert(draftOf(second).items[0].id === 9, JSON.stringify(draftOf(second)));
+  });
+
+  await test('texto livre: "temaki" lista cada item uma vez e o de tamanhos pergunta o tamanho depois', async () => {
+    const first = await exec({ texto: '2 temaki' });
+    assertState(first, 'awaiting_text_order_choice');
+    const rows = first[0].json.respostas[0].sections[0].rows.map((row) => row.id);
+    assert(rows.includes('pick:group:temaki-hot') && !rows.includes('pick:8') && rows.includes('pick:1'), JSON.stringify(rows));
+    const sizes = await exec({ texto: 'pick:group:temaki-hot', state: 'awaiting_text_order_choice', cart: cartOf(first) });
+    assertState(sizes, 'awaiting_text_order_choice');
+    assertResponseContains(sizes, 'Qual tamanho');
+    const done = await exec({ texto: 'pick:8', state: 'awaiting_text_order_choice', cart: cartOf(sizes) });
+    const item = draftOf(done).items[0];
+    assert(item.id === 8 && item.qty === 2, JSON.stringify(item));
+  });
+
+  await test('texto livre: escrever o item de tamanhos na lista também pergunta o tamanho', async () => {
+    const first = await exec({ texto: 'temaki' });
+    const sizes = await exec({ texto: 'o hot', state: 'awaiting_text_order_choice', cart: cartOf(first) });
+    assertResponseContains(sizes, 'Qual tamanho');
+  });
+
+  await test('texto livre: tamanho escrito junto já resolve ("temaki hot grande")', async () => {
+    const r = await exec({ texto: 'temaki hot grande' });
+    assertState(r, 'awaiting_text_order_confirm');
+    assert(draftOf(r).items[0].id === 9, JSON.stringify(draftOf(r)));
+  });
+
+  const confirmCart = (extra) => baseCart({
+    text_order: { items: [{ id: 10, name: 'Sashimi', qty: 2, price: 60, menuIdx: 10 }], pending: [], unrecognized: [] },
+    ...extra,
+  });
+
+  await test('texto livre: confirmar põe os itens no carrinho e segue para mais/finalizar', async () => {
+    const r = await exec({ texto: 'text:ok', state: 'awaiting_text_order_confirm', cart: confirmCart() });
+    assertState(r, 'awaiting_more');
+    const cart = cartOf(r);
+    assert(cart.items.length === 1 && cart.items[0].qty === 2, JSON.stringify(cart.items));
+    assert(!cart.text_order, 'rascunho deve sumir');
+    assertResponseContains(r, 'Finalizar');
+  });
+
+  await test('texto livre: soma ao que já estava no carrinho', async () => {
+    const r = await exec({ texto: 'sim', state: 'awaiting_text_order_confirm', cart: confirmCart({ items: [{ id: 10, name: 'Sashimi', qty: 1, price: 60 }] }) });
+    assert(cartOf(r).items[0].qty === 3, JSON.stringify(cartOf(r).items));
+  });
+
+  await test('texto livre: "finalizar" na confirmação já fecha o pedido', async () => {
+    const r = await exec({ texto: 'finalizar', state: 'awaiting_text_order_confirm', cart: confirmCart() });
+    assertState(r, 'confirming');
+    assertResponseContains(r, 'Sashimi');
+  });
+
+  await test('texto livre: corrigir descarta o rascunho', async () => {
+    const r = await exec({ texto: 'text:redo', state: 'awaiting_text_order_confirm', cart: confirmCart() });
+    assertState(r, 'start');
+    assert(!draftOf(r) && cartOf(r).items.length === 0, JSON.stringify(cartOf(r)));
+  });
+
+  await test('texto livre: escrever mais itens na confirmação soma ao rascunho', async () => {
+    const r = await exec({ texto: '1 temaki atum', state: 'awaiting_text_order_confirm', cart: confirmCart() });
+    assertState(r, 'awaiting_text_order_confirm');
+    assert(draftOf(r).items.length === 2, JSON.stringify(draftOf(r)));
+  });
+
+  await test('texto livre: item que não existe aparece como não encontrado', async () => {
+    const r = await exec({ texto: '1 sashimi e 2 pizza de calabresa' });
+    assertState(r, 'awaiting_text_order_confirm');
+    assertResponseContains(r, 'Não encontrei no cardápio');
+    assertResponseContains(r, 'pizza de calabresa');
+  });
+
+  await test('texto livre: frase sem item do cardápio segue o fluxo de antes', async () => {
+    const r = await exec({ texto: 'quero fazer um pedido' });
+    assertState(r, 'ordering_cat');
+  });
+
+  await test('texto livre: na lista de itens, número continua escolhendo o item', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temaki' });
+    assertState(r, 'awaiting_qty');
+  });
+
+  await test('texto livre: no Evolution as opções saem numeradas e o número escolhe', async () => {
+    const first = await exec({ texto: '2 hot roll', provider: 'evolution' });
+    const body = first[0].json.respostas.find((message) => typeof message === 'string' && message.includes('*1.*'));
+    assert(body, 'lista numerada: ' + JSON.stringify(first[0].json.respostas));
+    const second = await exec({ texto: '3', state: 'awaiting_text_order_choice', cart: cartOf(first), provider: 'evolution' });
+    assert(draftOf(second).items[0].id === 7, JSON.stringify(draftOf(second)));
+  });
+
+  await test('áudio: resposta abre com o que foi entendido', async () => {
+    const r = await exec({ texto: '2 sashimi', from_audio: true });
+    assertState(r, 'awaiting_text_order_confirm');
+    const first = r[0].json.respostas[0];
+    assert(typeof first === 'string' && first.includes('Ouvi') && first.includes('2 sashimi'), JSON.stringify(first));
+  });
+
+  await test('áudio: sem transcrição pede para repetir ou escrever', async () => {
+    const r = await exec({ texto: '__audio_unclear__', from_audio: true, state: 'ordering_cat' });
+    assertState(r, 'ordering_cat');
+    assertResponseContains(r, 'Não consegui entender o áudio');
+    assert(!JSON.stringify(r[0].json.respostas).includes('Ouvi'), 'não ecoa áudio vazio');
+  });
+
+  const pdfEstablishment = { menu_pdf_url: 'https://api.exemplo.com/public/menu/abc/cardapio.pdf?v=1' };
+
+  await test('PDF: lista de categorias ganha "Ver cardápio completo"', async () => {
+    const r = await exec({ texto: '2', establishment: pdfEstablishment });
+    assertState(r, 'ordering_cat');
+    assertResponseContains(r, 'Ver cardápio completo');
+  });
+
+  await test('PDF: tocar na opção manda o documento e ensina a pedir escrevendo ou por áudio', async () => {
+    const r = await exec({ texto: 'menu:pdf', state: 'ordering_cat', establishment: pdfEstablishment });
+    assertResponseType(r, 'document');
+    const document = r[0].json.respostas.find((message) => message?.type === 'document');
+    assert(document.link === pdfEstablishment.menu_pdf_url && document.filename.endsWith('.pdf'), JSON.stringify(document));
+    assertResponseContains(r, 'áudio');
+    assertState(r, 'start');
+  });
+
+  await test('PDF: pedir por escrito ("manda o cardápio completo") também manda', async () => {
+    const r = await exec({ texto: 'manda o cardápio completo', establishment: pdfEstablishment });
+    assertResponseType(r, 'document');
+  });
+
+  await test('PDF: sem a URL do PDF a opção leva às categorias', async () => {
+    const withoutPdf = await exec({ texto: '2' });
+    assert(!JSON.stringify(withoutPdf[0].json.respostas).includes('Ver cardápio completo'), 'sem PDF não oferece');
+    const r = await exec({ texto: 'menu:pdf' });
+    assertState(r, 'ordering_cat');
   });
 
   // ── RESULTADO ─────────────────────────────────────────────────────────────
