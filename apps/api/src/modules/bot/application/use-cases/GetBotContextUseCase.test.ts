@@ -28,7 +28,7 @@ function buildDatabase() {
   }
 }
 
-function buildUseCase(cacheValues: Map<string, string>, ttlSeconds: number) {
+function buildUseCase(cacheValues: Map<string, string>, ttlSeconds: number, audioOrdersEnabled = false) {
   const reads: string[] = []
   const cache = {
     get: async (key: string) => {
@@ -47,7 +47,8 @@ function buildUseCase(cacheValues: Map<string, string>, ttlSeconds: number) {
     undefined,
     undefined,
     undefined,
-    { cache, ttlSeconds }
+    { cache, ttlSeconds },
+    audioOrdersEnabled
   )
   return { useCase, reads }
 }
@@ -61,9 +62,18 @@ describe('GetBotContextUseCase — cache do contexto compartilhado', () => {
 
     expect(reads).toEqual([`${BOT_SHARED_CONTEXT_CACHE_PREFIX}5511999999999`])
     expect(context.products).toEqual(SHARED.products)
-    expect(context.config).toEqual(SHARED.config)
+    expect(context.config).toEqual({ ...SHARED.config, feature_audio_orders: 'false' })
     expect(context.establishment).toMatchObject({ id: ESTABLISHMENT_ID, name: 'Yuyaki', lat: -23.5, lng: -46.6 })
     expect(context.session).toEqual({})
+  })
+
+  it('avisa o bot pela config quando o pedido por áudio está ligado', async () => {
+    const values = new Map([[`${BOT_SHARED_CONTEXT_CACHE_PREFIX}5511999999999`, JSON.stringify(SHARED)]])
+    const { useCase } = buildUseCase(values, 30, true)
+
+    const context = await useCase.execute({ whatsappNumber: '5511988887777', instance: '5511999999999' })
+
+    expect((context.config as Record<string, string>)['feature_audio_orders']).toBe('true')
   })
 
   it('com TTL 0 nem olha o Redis', async () => {
