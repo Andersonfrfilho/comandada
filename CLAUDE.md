@@ -175,6 +175,10 @@ linha escolhida (`cart.edit_index`) tem 🗑️ Remover / 🔢 Mudar qtd / ↩�
 com 🔸 e preço e ↩️ Trocar item (até 2 tamanhos em botões, mais vira lista). Com carrinho, as listas de categorias e
 itens abrem com "🛒 Finalizar pedido" (id `finalizar`, quantos itens e total; Evolution: "digite *finalizar*") e a página
 perde uma linha (`itemsPageSize`). A dica de escrever/mandar áudio só aparece na primeira lista, sem carrinho.
+**Descrição do produto:** no cadastro, `porção · composição` ("32 unidades · 4 sashimi de salmão, 8 hot roll") ou texto com
+a porção no fim entre parênteses. Na lista (limite de 72 da Meta) a descrição nunca corta palavra: composição termina em
+"+N itens", texto em "…" (`compactDescription`). Na tela do produto vai inteira: 📦 porção em negrito e uma peça por linha
+(`detailDescription`).
 
 **Saudação** (`GreetingHandler`): na Meta vai **numa mensagem só**: logo no topo (cabeçalho de imagem), boas-vindas,
 cartão do restaurante (blocos em negrito separados por linha em branco: horário com "aberto agora", endereço + cidade

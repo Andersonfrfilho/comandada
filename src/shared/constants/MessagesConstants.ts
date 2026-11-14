@@ -207,6 +207,7 @@ const MessagesConstants = {
   ORDEM_MINIMO_ADDMORE:         (minimo: string, total: string) => `Quase lá! 😊 O pedido mínimo é *R$ ${minimo}* e você está com *R$ ${total}*.`,
   PRODUTO_DETALHE:              (emoji: string, nome: string, preco: string, descricao: string) => `${emoji} *${nome}*\n💰 *R$ ${preco}*${descricao}`,
   ESCOLHER_TAMANHO:             (emoji: string, name: string, description: string): string => `${emoji} *${name}*${description ? `\n_${description}_` : ''}\n\n📏 *Qual tamanho?*`,
+  DESCRICAO_MAIS_ITENS:         (quantidade: number) => `+${quantidade} ${quantidade === 1 ? 'item' : 'itens'}`,
   TAMANHO_BOTAO_LISTA:          'Ver tamanhos',
   TAMANHO_SECAO:                'Tamanhos',
   MENU_FINALIZAR:               '🛒 Finalizar pedido',

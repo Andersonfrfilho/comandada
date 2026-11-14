@@ -710,6 +710,73 @@ function entryPriceText(entry: MenuEntry): string {
     .join(' · ');
 }
 
+// Descrição no formato do cadastro: "32 unidades · 4 sashimi de salmão, 8 hot roll".
+// O trecho antes do " · " é a porção; o resto é a composição (ou um texto corrido).
+interface ProductDescriptionParts {
+  head: string;
+  parts: string[];
+}
+
+function splitDescription(description: string): ProductDescriptionParts {
+  const text = String(description || '').trim();
+  const separatorIndex = text.indexOf(' · ');
+  let head = separatorIndex >= 0 ? text.slice(0, separatorIndex).trim() : '';
+  let body = separatorIndex >= 0 ? text.slice(separatorIndex + 3).trim() : text;
+  // "Camarão recheado ... (5 unidades)": a porção no fim vira cabeçalho, para não se perder no corte.
+  const trailingPortion = !head ? body.match(/^(.*\S)\s*\(([^()]*\d[^()]*)\)\.?$/) : null;
+  if (trailingPortion) {
+    head = trailingPortion[2].trim();
+    body = trailingPortion[1].trim();
+  }
+  return { head, parts: body.split(/,\s*/).map((part: string) => part.trim()).filter(Boolean) };
+}
+
+// Composição = lista de peças com quantidade ("4 sashimi de salmão, 8 hot roll").
+function isComposition(parts: string[]): boolean {
+  return parts.length > 1 && parts.every((part: string) => /^\d/.test(part));
+}
+
+function joinDescription(head: string, body: string): string {
+  return [head, body].filter(Boolean).join(' · ');
+}
+
+// Linha de lista (limite da Meta): nunca corta no meio de uma palavra. Composição que não cabe
+// termina em "+3 itens"; texto corrido termina na última palavra inteira com "…".
+function compactDescription(description: string, maxLength: number): string {
+  const { head, parts } = splitDescription(description);
+  const full = joinDescription(head, parts.join(', '));
+  const length = (value: string) => Array.from(value).length;
+  if (length(full) <= maxLength) return full;
+  if (isComposition(parts)) {
+    for (let shown = parts.length - 1; shown >= 0; shown--) {
+      const hidden = parts.length - shown;
+      const rest = MessagesConstants.DESCRICAO_MAIS_ITENS(hidden);
+      const candidate = shown > 0 ? joinDescription(head, parts.slice(0, shown).join(', ') + ' ' + rest) : joinDescription(head, rest);
+      if (length(candidate) <= maxLength) return candidate;
+    }
+  }
+  let fitted = '';
+  for (const word of full.split(' ')) {
+    const next = fitted ? fitted + ' ' + word : word;
+    if (length(next) + 1 > maxLength) break;
+    fitted = next;
+  }
+  // Sem terminar em conectivo solto ("cebolinha e…").
+  const trimmed = fitted.replace(/[\s,·:;-]+$/, '').replace(/\s+(e|de|da|do|com|em|ou|a|o)$/i, '').replace(/[\s,·:;-]+$/, '');
+  return trimmed ? trimmed + '…' : truncateText(full, maxLength);
+}
+
+// Tela do produto: porção em negrito e cada peça da composição numa linha; texto corrido em itálico.
+function detailDescription(description: string): string {
+  const { head, parts } = splitDescription(description);
+  if (parts.length === 0 && !head) return '';
+  if (isComposition(parts)) {
+    return (head ? '\n\n📦 *' + head + '*' : '\n') + '\n' + parts.map((part: string) => '• ' + part).join('\n');
+  }
+  const prose = parts.join(', ');
+  return '\n\n' + (head ? '📦 *' + head + '*' : '') + (head && prose ? '\n' : '') + (prose ? '_' + prose + '_' : '');
+}
+
 // Emoji do item: o cadastrado no produto ou o sugerido pelo nome e pela categoria.
 function productEmoji(product: Product, categoryName?: string): string {
   return product.emoji || menuEmojiFor(product.name, categoryName || product.category || '');
@@ -739,6 +806,7 @@ function variantMenu(entry: MenuEntry, categoryName?: string): ButtonMessage | L
 
 function itemsList(categoryName: string, context: string, page: number): ListMessage | TextMenuMessage {
   const allEntries = menuEntries(categoryName);
+  const isText = channelProvider === WhatsAppProvider.EVOLUTION;
   const pageSize = itemsPageSize();
   const totalPages = Math.max(1, Math.ceil(allEntries.length / pageSize));
   const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
@@ -750,9 +818,12 @@ function itemsList(categoryName: string, context: string, page: number): ListMes
     emoji: entry.product.emoji || menuEmojiFor(entry.title, categoryName),
     title: entry.title,
     price: entryPriceText(entry),
-    description: entry.product.description ? String(entry.product.description) : undefined,
+    description: entry.product.description
+      ? compactDescription(String(entry.product.description), isText
+        ? MENU_TEXT_DESCRIPTION_MAX
+        : MENU_ROW_DESCRIPTION_MAX - Array.from('💰 ' + entryPriceText(entry) + ' · ').length)
+      : undefined,
   }));
-  const isText = channelProvider === WhatsAppProvider.EVOLUTION;
   return channelStrategy.renderMenu({
     heading: categoryEmoji(categoryName) + ' *' + categoryName + '*',
     subtitle: isText ? MessagesConstants.MENU_ITENS_SUBTITULO_TEXTO(allEntries.length) : MessagesConstants.MENU_ITENS_SUBTITULO(allEntries.length),
