@@ -10,12 +10,14 @@ Rodam no seu computador, a partir da raiz do repositório. Precisam da CLI do Ra
 | 3 | `03-meta-apontar-webhook.sh` | Aponta o webhook do app da Meta para o n8n (é a troca de verdade) |
 | 5 | `05-onde-esta-o-token-antigo.sh` | Varre todos os projetos e ambientes do Railway (produção incluída) e lista quem ainda usa o token antigo. Só lê |
 | 4 | `04-meta-trocar-token.sh` | Grava o token novo depois de revogar o antigo na Meta (passo manual no topo do script) |
+| 6 | `06-github-secrets-n8n.sh` | Grava no GitHub `N8N_URL` e `N8N_API_KEY` (da chave salva pelo 02) para a migration dos workflows rodar a cada push na main |
 
 ```bash
 bash scripts/ops/01-copiar-whatsapp-do-quickcart.sh
 N8N_OWNER_EMAIL=voce@exemplo.com bash scripts/ops/02-n8n-dono-e-workflows.sh
 META_APP_ID=123456 bash scripts/ops/03-meta-apontar-webhook.sh
 bash scripts/ops/04-meta-trocar-token.sh
+bash scripts/ops/06-github-secrets-n8n.sh
 ```
 
 Entrada pela API com worker (padrão dos outros bots, ver `docs/whatsapp-entrada-pela-api.md`): rode o 3 com
