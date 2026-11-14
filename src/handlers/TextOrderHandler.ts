@@ -44,10 +44,8 @@ function findProductById(productId: string): Product | undefined {
   return products.find((product: Product) => String(product.id) === String(productId));
 }
 
-function addToItems(items: CartItem[], product: Product, qty: number): void {
-  const existing = items.find((item: CartItem) => String(item.id) === String(product.id));
-  if (existing) { existing.qty += qty; return; }
-  items.push({ id: product.id, name: product.name, qty, price: Number(product.price), menuIdx: products.indexOf(product) + 1 });
+function addToItems(items: CartItem[], product: Product, qty: number): boolean {
+  return mergeCartItem(items, { id: product.id, name: product.name, qty, price: Number(product.price), menuIdx: products.indexOf(product) + 1 });
 }
 
 function absorbFreeTextOrder(draft: TextOrderDraft, parsed: FreeTextParseResult): void {
@@ -277,7 +275,7 @@ class TextOrderHandler extends BaseHandler {
   private _commit(draft: TextOrderDraft): void {
     for (const item of draft.items) {
       const product = findProductById(item.id);
-      if (product) addToItems(newCart.items, product, item.qty);
+      if (product && addToItems(newCart.items, product, item.qty)) respostas.push(MessagesConstants.QTD_LIMITE(product.name, MAX_ITEM_QTY));
     }
     const lastItem = draft.items[draft.items.length - 1];
     if (lastItem) newCart.last_item_id = lastItem.id;

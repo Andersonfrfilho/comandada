@@ -261,15 +261,57 @@ function capitalizeName(name: string): string {
   return name.trim().replace(/\b\p{L}/gu, (char: string) => char.toUpperCase());
 }
 
+/** Maior quantidade de um mesmo item no carrinho (a API recusa acima disso). */
+const MAX_ITEM_QTY = 99;
+/** Maior valor em dinheiro aceito do cliente (troco, parte do pagamento misto). */
+const MAX_MONEY_INPUT = 10000;
+
+/** Quantidade digitada: só número inteiro de 1 a 99 ("5abc", "0", "-2", "2.5" e vazio não valem). */
+function parseQuantityInput(text: string): number | null {
+  const trimmed = String(text ?? '').trim();
+  if (!/^\d{1,3}$/.test(trimmed)) return null;
+  const quantity = Number(trimmed);
+  return quantity >= 1 && quantity <= MAX_ITEM_QTY ? quantity : null;
+}
+
+/**
+ * Valor em reais digitado: "100", "100,50", "100.50", "1.000", "1.000,50", "R$ 50". Recusa
+ * zero, negativo, letra no meio, "Infinity", mais de 2 casas e acima de R$ 10.000.
+ */
+function parseMoneyInput(text: string): number | null {
+  let normalized = String(text ?? '').trim().toLowerCase().replace(/^r\$\s*/, '').replace(/\s+/g, '');
+  const withThousands = /^\d{1,3}(\.\d{3})+(,\d{1,2})?$/;
+  const plain = /^\d{1,7}([.,]\d{1,2})?$/;
+  if (withThousands.test(normalized)) normalized = normalized.replace(/\./g, '').replace(',', '.');
+  else if (plain.test(normalized)) normalized = normalized.replace(',', '.');
+  else return null;
+  const value = Number(normalized);
+  return Number.isFinite(value) && value > 0 && value <= MAX_MONEY_INPUT ? value : null;
+}
+
 function parseTrocoInput(texto: string, amountToPay: number): number | null {
-  const normalized = texto.trim().toLowerCase().replace(',', '.');
-  const trocoMatch = normalized.match(/^([\d.]+)\s*(?:de\s*)?troco$/) || normalized.match(/^troco\s*(?:de\s*)?([\d.]+)$/);
+  const normalized = String(texto ?? '').trim().toLowerCase();
+  const trocoMatch = normalized.match(/^(?:r\$\s*)?([\d.,]+)\s*(?:de\s*)?troco$/) || normalized.match(/^troco\s*(?:de\s*)?(?:r\$\s*)?([\d.,]+)$/);
   if (trocoMatch) {
-    const troco = parseFloat(trocoMatch[1]);
-    return isNaN(troco) ? null : amountToPay + troco;
+    const troco = parseMoneyInput(trocoMatch[1]);
+    return troco === null ? null : amountToPay + troco;
   }
-  const val = parseFloat(normalized);
-  return isNaN(val) ? null : val;
+  return parseMoneyInput(normalized);
+}
+
+/**
+ * Põe o item no carrinho somando com o que já existe, sem passar de 99 unidades.
+ * Devolve true quando precisou parar no limite, para o handler avisar o cliente.
+ */
+function mergeCartItem(items: CartItem[], item: CartItem): boolean {
+  const addedQty = Math.max(0, Math.floor(Number(item.qty) || 0));
+  if (addedQty < 1) return false;
+  const existing = items.find((cartItem: CartItem) => String(cartItem.id) === String(item.id));
+  const wanted = (existing ? existing.qty : 0) + addedQty;
+  const accepted = Math.min(wanted, MAX_ITEM_QTY);
+  if (existing) existing.qty = accepted;
+  else items.push({ ...item, qty: accepted });
+  return accepted < wanted;
 }
 
 /**
@@ -287,8 +329,9 @@ function orderItemLine(name: string, qty: number, unitPrice: number, note?: stri
 
 /** Largura da tabela do pedido em caracteres: cabe na tela de um celular pequeno sem quebrar linha. */
 const ORDER_TABLE_WIDTH = 30;
-const ORDER_TABLE_QTY_WIDTH = 4;
-const ORDER_TABLE_VALUE_WIDTH = 8;
+const ORDER_TABLE_INDENT = '  ';
+const ORDER_TABLE_QTY_WIDTH = 3;
+const ORDER_TABLE_UNIT_WIDTH = 6;
 
 function wrapWords(text: string, width: number): string[] {
   const wrapped: string[] = [];
@@ -310,34 +353,32 @@ function wrapWords(text: string, width: number): string[] {
 }
 
 /**
- * Itens do pedido como tabela em bloco monoespaçado do WhatsApp (```), que é o único jeito de
- * as colunas de quantidade, item e valor ficarem alinhadas em qualquer celular. Nome comprido
- * quebra dentro da coluna; preço de cada unidade e observação vão na linha de baixo.
+ * Itens do pedido como tabela em bloco monoespaçado do WhatsApp (```), o único jeito de as
+ * colunas ficarem alinhadas em qualquer celular. O nome ocupa a linha inteira (quebra se for
+ * comprido) e embaixo vem a conta do item: quantidade × valor unitário, com o total alinhado à
+ * direita. A observação fica na linha seguinte.
  */
 function orderTable(items: CartItem[]): string {
-  const nameWidth = ORDER_TABLE_WIDTH - ORDER_TABLE_QTY_WIDTH - 1 - ORDER_TABLE_VALUE_WIDTH;
-  const indent = ' '.repeat(ORDER_TABLE_QTY_WIDTH);
+  const calculation = (qty: string, unit: string, total: string, sign: string): string => {
+    const left = ORDER_TABLE_INDENT + qty.padStart(ORDER_TABLE_QTY_WIDTH) + ' x ' + unit.padStart(ORDER_TABLE_UNIT_WIDTH) + ' ' + sign;
+    return left + total.padStart(ORDER_TABLE_WIDTH - left.length);
+  };
   const rows: string[] = [
-    MessagesConstants.TABELA_QTD.padEnd(ORDER_TABLE_QTY_WIDTH)
-      + MessagesConstants.TABELA_ITEM.padEnd(nameWidth + 1)
-      + MessagesConstants.TABELA_VALOR.padStart(ORDER_TABLE_VALUE_WIDTH),
+    MessagesConstants.TABELA_ITEM,
+    calculation(MessagesConstants.TABELA_QTD, MessagesConstants.TABELA_UNITARIO, MessagesConstants.TABELA_TOTAL, ' '),
     '-'.repeat(ORDER_TABLE_WIDTH),
   ];
-  for (const item of items) {
-    const nameLines = wrapWords(item.name, nameWidth);
-    rows.push(
-      (item.qty + 'x').padStart(ORDER_TABLE_QTY_WIDTH - 1) + ' '
-        + nameLines[0].padEnd(nameWidth) + ' '
-        + fmtBRL(item.price * item.qty).padStart(ORDER_TABLE_VALUE_WIDTH)
-    );
-    for (const nameLine of nameLines.slice(1)) rows.push(indent + nameLine);
-    if (item.qty > 1) rows.push(indent + MessagesConstants.TABELA_CADA(fmtBRL(item.price)));
+  items.forEach((item: CartItem, index: number) => {
+    // Linha em branco entre os itens: cada item vira um bloco fácil de achar.
+    if (index > 0) rows.push('');
+    rows.push(...wrapWords(item.name, ORDER_TABLE_WIDTH));
+    rows.push(calculation(String(item.qty), fmtBRL(item.price), fmtBRL(item.price * item.qty), '='));
     if (item.note) {
-      for (const noteLine of wrapWords(MessagesConstants.TABELA_OBS(item.note), ORDER_TABLE_WIDTH - ORDER_TABLE_QTY_WIDTH)) {
-        rows.push(indent + noteLine);
+      for (const noteLine of wrapWords(MessagesConstants.TABELA_OBS(item.note), ORDER_TABLE_WIDTH - ORDER_TABLE_INDENT.length)) {
+        rows.push(ORDER_TABLE_INDENT + noteLine);
       }
     }
-  }
+  });
   return '```\n' + rows.join('\n') + '\n```';
 }
 
