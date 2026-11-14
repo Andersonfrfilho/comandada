@@ -102,3 +102,22 @@ export const IFOOD_POLLING_JOB = {
 } as const
 
 export type IfoodPollingJobName = (typeof IFOOD_POLLING_JOB)[keyof typeof IFOOD_POLLING_JOB]
+
+export const WHATSAPP_INBOUND_QUEUE = 'whatsapp-inbound' as const
+
+export const WHATSAPP_INBOUND_JOB = {
+  FORWARD_TO_BOT: 'forward-to-bot',
+} as const
+
+export type WhatsAppInboundJobName = (typeof WHATSAPP_INBOUND_JOB)[keyof typeof WHATSAPP_INBOUND_JOB]
+
+/**
+ * Corpo cru da Meta, byte a byte, com a assinatura original: o n8n confere de novo o
+ * `X-Hub-Signature-256` e extrai a mensagem como se a Meta tivesse chamado direto.
+ */
+export type WhatsAppInboundJobData = {
+  rawBody: string
+  signature: string
+  messageIds: string[]
+  receivedAt: number
+}

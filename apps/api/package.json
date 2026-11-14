@@ -4,7 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "bun --hot run src/index.ts",
+    "dev:worker": "bun --hot run src/worker.ts",
     "start": "bun run src/index.ts",
+    "start:worker": "bun run src/worker.ts",
     "typecheck": "tsc --noEmit",
     "test": "bun test",
     "db:generate": "drizzle-kit generate",
