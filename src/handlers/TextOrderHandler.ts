@@ -44,10 +44,8 @@ function findProductById(productId: string): Product | undefined {
   return products.find((product: Product) => String(product.id) === String(productId));
 }
 
-function addToItems(items: CartItem[], product: Product, qty: number): void {
-  const existing = items.find((item: CartItem) => String(item.id) === String(product.id));
-  if (existing) { existing.qty += qty; return; }
-  items.push({ id: product.id, name: product.name, qty, price: Number(product.price), menuIdx: products.indexOf(product) + 1 });
+function addToItems(items: CartItem[], product: Product, qty: number): boolean {
+  return mergeCartItem(items, { id: product.id, name: product.name, qty, price: Number(product.price), menuIdx: products.indexOf(product) + 1 });
 }
 
 function absorbFreeTextOrder(draft: TextOrderDraft, parsed: FreeTextParseResult): void {
@@ -123,7 +121,7 @@ function textOrderChoiceMessage(choice: TextOrderChoice, retry?: boolean): ListM
 }
 
 function textOrderConfirmMessage(draft: TextOrderDraft): ButtonMessage {
-  const lines = draft.items.map((item: CartItem) => '• *' + item.qty + '×* ' + item.name + ' — R$ ' + fmtBRL(item.price * item.qty));
+  const lines = [orderTable(draft.items)];
   const draftTotal = draft.items.reduce((sum: number, item: CartItem) => sum + item.price * item.qty, 0);
   let body = MessagesConstants.TEXTO_ANOTEI + lines.join('\n') + MessagesConstants.TEXTO_SUBTOTAL(fmtBRL(draftTotal));
   if (newCart.items.length > 0) body += MessagesConstants.TEXTO_SOMA_CARRINHO(fmtBRL(cartSummary(newCart.items).total + draftTotal));
@@ -277,7 +275,7 @@ class TextOrderHandler extends BaseHandler {
   private _commit(draft: TextOrderDraft): void {
     for (const item of draft.items) {
       const product = findProductById(item.id);
-      if (product) addToItems(newCart.items, product, item.qty);
+      if (product && addToItems(newCart.items, product, item.qty)) respostas.push(MessagesConstants.QTD_LIMITE(product.name, MAX_ITEM_QTY));
     }
     const lastItem = draft.items[draft.items.length - 1];
     if (lastItem) newCart.last_item_id = lastItem.id;

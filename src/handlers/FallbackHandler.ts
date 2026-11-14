@@ -8,8 +8,8 @@ class FallbackHandler extends BaseHandler {
       const indexQtyMatch = line.match(/^(\d+)\s*[xX×]\s*(\d+)$/);
       if (indexQtyMatch) {
         const productIndex = parseInt(indexQtyMatch[1]) - 1;
-        const quantity = parseInt(indexQtyMatch[2]);
-        if (quantity < 1) { unrecognizedLines.push(line); continue; }
+        const quantity = parseQuantityInput(indexQtyMatch[2]);
+        if (quantity === null) { unrecognizedLines.push(line); continue; }
         if (productIndex >= 0 && products && productIndex < products.length) {
           const product = products[productIndex];
           parsedItems.push({ id: product.id, name: product.name, qty: quantity, price: Number(product.price), menuIdx: productIndex + 1 });
@@ -21,7 +21,7 @@ class FallbackHandler extends BaseHandler {
       if (nameQtyMatch) {
         const normalize = (source: string) => source.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g, '');
         const searchTerm = normalize(nameQtyMatch[1].trim());
-        const quantity = parseInt(nameQtyMatch[2]);
+        const quantity = parseQuantityInput(nameQtyMatch[2]) ?? 0;
         const foundProduct = products && products.find((product: Product) => normalize(product.name).includes(searchTerm));
         if (foundProduct && quantity >= 1) {
           parsedItems.push({ id: foundProduct.id, name: foundProduct.name, qty: quantity, price: Number(foundProduct.price), menuIdx: products.indexOf(foundProduct) + 1 });
@@ -44,13 +44,12 @@ class FallbackHandler extends BaseHandler {
       const dedupedItems: CartItem[] = [];
       for (const parsedItem of parsedItems) {
         const existingInDeduped = dedupedItems.find((deduped: CartItem) => deduped.id === parsedItem.id);
-        if (existingInDeduped) { existingInDeduped.qty += parsedItem.qty; } else { dedupedItems.push({ ...parsedItem }); }
+        mergeCartItem(dedupedItems, parsedItem);
       }
       // Mergear com carrinho existente
       const hadItemsBefore = newCart.items.length > 0;
       for (const dedupedItem of dedupedItems) {
-        const existingInCart = newCart.items.find((cartItem: CartItem) => cartItem.id === dedupedItem.id);
-        if (existingInCart) { existingInCart.qty += dedupedItem.qty; } else { newCart.items.push(dedupedItem); }
+        if (mergeCartItem(newCart.items, dedupedItem)) respostas.push(MessagesConstants.QTD_LIMITE(dedupedItem.name, MAX_ITEM_QTY));
       }
       newState = BotState.ORDERING;
 

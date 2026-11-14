@@ -533,6 +533,31 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
+  await test('resumo da confirmação: nome numa linha, quantidade × unitário ..... total embaixo', async () => {
+    const cart = { ...cartWithItem, items: [
+      { id: 1, name: 'Combo Individual Hot', qty: 13, price: 43, menuIdx: 1 },
+      { id: 2, name: 'Combo Hot Top', qty: 1, price: 70, menuIdx: 2, note: 'sem cebolinha' },
+    ] };
+    const r = await exec({ texto: 'finalizar', state: 'ordering', cart });
+    assertState(r, 'confirming');
+    const table = [
+      '```',
+      'Item',
+      '  Qtd x  Unit.           Total',
+      '------------------------------',
+      'Combo Individual Hot',
+      '   13 x  43,00 ........ 559,00',
+      '',
+      'Combo Hot Top',
+      '    1 x  70,00 ......... 70,00',
+      '  obs: sem cebolinha',
+      '```',
+    ];
+    table.slice(1, -1).forEach((row) => assert(row.length <= 30, 'linha passa de 30 caracteres: ' + row));
+    assertResponseContains(r, table.join('\n'));
+    assertResponseContains(r, '🧾 14 itens\n💰 *Total: R$ 629,00*');
+  });
+
   await test('confirmar → pede tipo de entrega', async () => {
     const r = await exec({ texto: 'sim', state: 'confirming', cart: cartWithItem });
     assertState(r, 'awaiting_type');
@@ -964,6 +989,53 @@ async function runTests() {
   });
   const cartOf = (r) => r?.[0]?.json?.cart || {};
   const draftOf = (r) => cartOf(r).text_order || null;
+
+  // ── Entrada estranha do cliente: quantidade e valores ──
+  for (const typed of ['-2', '5abc', '2.5', '100', '', 'null', '1e3', 'qty:-5', 'qty:500', 'qty:abc']) {
+    await test(`quantidade inválida "${typed}" não entra no carrinho`, async () => {
+      const r = await exec({ texto: typed, state: 'awaiting_qty', pending_item_id: 1, pending_item_name: 'Temaki Salmão' });
+      assertState(r, 'awaiting_qty');
+      assert((cartOf(r).items || []).length === 0, 'carrinho: ' + JSON.stringify(cartOf(r).items));
+    });
+  }
+
+  await test('quantidade somada passa de 99: fica em 99 e o cliente é avisado', async () => {
+    const r = await exec({ texto: '20', state: 'awaiting_qty',
+      cart: baseCart({ items: [{ id: 1, name: 'Temaki Salmão', qty: 90, price: 23.9, menuIdx: 1 }], pending_item_id: 1, pending_item_name: 'Temaki Salmão' }) });
+    assert(cartOf(r).items[0].qty === 99, 'qtd: ' + cartOf(r).items[0].qty);
+    assertResponseContains(r, 'O limite é *99 unidades*');
+  });
+
+  const changeCart = () => baseCart({ items: [{ id: 1, name: 'Temaki Salmão', qty: 2, price: 25, menuIdx: 1 }], payment_method: 'dinheiro', order_type: 'retirada' });
+  for (const typed of ['abc', '-50', '0', 'Infinity', 'NaN', '100abc', '50.000,00', '1,234']) {
+    await test(`troco inválido "${typed}" pede de novo`, async () => {
+      const r = await exec({ texto: typed, state: 'awaiting_change', cart: changeCart() });
+      assertState(r, 'awaiting_change');
+    });
+  }
+  for (const [typed, expected] of [['R$ 100', 100], ['100,50', 100.5], ['1.000', 1000], ['troco 50', 100]]) {
+    await test(`troco "${typed}" vira ${expected}`, async () => {
+      const r = await exec({ texto: typed, state: 'awaiting_change', cart: changeCart() });
+      assertResponseContains(r, 'R$ ' + expected.toFixed(2).replace('.', ','));
+      assert(r?.[0]?.json?.save_order === true, 'pedido não foi fechado');
+    });
+  }
+
+  for (const typed of ['0', '-10', 'abc', 'Infinity']) {
+    await test(`parte do misto inválida "${typed}" pede de novo`, async () => {
+      const r = await exec({ texto: typed, state: 'awaiting_mixed_amount',
+        cart: baseCart({ items: [{ id: 1, name: 'Temaki Salmão', qty: 2, price: 25, menuIdx: 1 }], mixed_method: 'cartao', mixed_label: 'cartão' }) });
+      assertState(r, 'awaiting_mixed_amount');
+    });
+  }
+
+  for (const typed of ['1', '0', '-3', '31', '3abc']) {
+    await test(`divisão em "${typed}" pessoas é recusada`, async () => {
+      const r = await exec({ texto: typed, state: 'awaiting_split_count',
+        cart: baseCart({ items: [{ id: 1, name: 'Temaki Salmão', qty: 2, price: 25, menuIdx: 1 }] }) });
+      assertState(r, 'awaiting_split_count');
+    });
+  }
 
   await test('texto livre: "2 temaki salmão e 1 sashimi" anota os dois e pede confirmação', async () => {
     const r = await exec({ texto: '2 temaki salmão e 1 sashimi' });

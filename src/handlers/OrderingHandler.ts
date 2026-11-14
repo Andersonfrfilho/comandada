@@ -164,13 +164,7 @@ class OrderingHandler extends BaseHandler {
       return true;
     }
 
-    let quantity: number | null = null;
-    if (texto.startsWith('qty:')) {
-      quantity = parseInt(texto.replace('qty:', ''));
-    } else {
-      const parsed = parseInt(texto);
-      if (!isNaN(parsed) && parsed >= 1 && parsed <= 99) quantity = parsed;
-    }
+    const quantity = parseQuantityInput(texto.startsWith('qty:') ? texto.slice('qty:'.length) : texto);
 
     if (!quantity || quantity < 1) {
       respostas.push({
@@ -188,12 +182,8 @@ class OrderingHandler extends BaseHandler {
       return true;
     }
 
-    const existingItem = newCart.items.find((cartItem: CartItem) => cartItem.id === foundProduct.id);
-    if (existingItem) {
-      existingItem.qty += quantity;
-    } else {
-      newCart.items.push({ id: foundProduct.id, name: foundProduct.name, qty: quantity, price: Number(foundProduct.price), menuIdx: products.indexOf(foundProduct) + 1 });
-    }
+    const capped = mergeCartItem(newCart.items, { id: foundProduct.id, name: foundProduct.name, qty: quantity, price: Number(foundProduct.price), menuIdx: products.indexOf(foundProduct) + 1 });
+    if (capped) respostas.push(MessagesConstants.QTD_LIMITE(foundProduct.name, MAX_ITEM_QTY));
     newCart.pending_item_id = null;
     newCart.pending_item_name = '';
     newCart.last_item_id = foundProduct.id;
@@ -249,7 +239,7 @@ class OrderingHandler extends BaseHandler {
     }
 
     if (texto === 'finalizar') {
-      const { lines, total } = cartSummary(newCart.items);
+      const { lines, total, itemCount } = cartSummary(newCart.items);
       const minOrder = minOrderValue;
       if (minOrder > 0 && total < minOrder) {
         respostas.push(MessagesConstants.ORDEM_MINIMO_ADDMORE(fmtBRL(minOrder), fmtBRL(total)));
@@ -257,7 +247,7 @@ class OrderingHandler extends BaseHandler {
         respostas.push({ type: 'buttons', body: MessagesConstants.ADICIONAR_MAIS_MINIMO, buttons: [{ id: '__add_more__', title: '➕ Adicionar mais' }] });
       } else {
         newState = BotState.CONFIRMING;
-        respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total))));
+        respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total), itemCount)));
       }
       return true;
     }

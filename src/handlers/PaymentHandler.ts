@@ -104,10 +104,10 @@ class PaymentHandler extends BaseHandler {
   }
 
   private _handleMixedAmount(): boolean {
-    const entered = parseFloat(texto.replace(',', '.'));
+    const entered = parseMoneyInput(texto);
     const { total: subtotal } = cartSummary(newCart.items);
     const total = subtotal + newCart.delivery_fee;
-    if (isNaN(entered) || entered <= 0) {
+    if (entered === null) {
       respostas.push(MessagesConstants.MISTO_VALOR_INVALIDO(newCart.mixed_label || 'cartão'));
     } else if (entered >= total) {
       respostas.push(MessagesConstants.MISTO_VALOR_EXCEDE(newCart.mixed_label || 'cartão', fmtBRL(entered), fmtBRL(total)));
@@ -121,7 +121,7 @@ class PaymentHandler extends BaseHandler {
   }
 
   private _handleSplitCount(): boolean {
-    const splitCount = parseInt(texto);
+    const splitCount = /^\d{1,2}$/.test(texto.trim()) ? Number(texto.trim()) : 0;
     if (!splitCount || splitCount < 2 || splitCount > 30) {
       respostas.push(MessagesConstants.DIVIDIR_INVALIDO);
     } else {
