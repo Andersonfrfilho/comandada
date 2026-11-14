@@ -15,6 +15,8 @@ const MessagesConstants = {
   MENU_FAZER_PEDIDO:            '🛒 Fazer pedido',
   MENU_RESERVAR_MESA:           '📋 Reservar mesa',
   MENU_ATENDENTE:               '👤 Atendente',
+  MENU_AGENDAR_PEDIDO:          '📅 Agendar pedido',
+  MENU_RESERVAR_DICA:           '\n\n_Para reservar mesa, escreva *reservar*._',
 
   // Sessão / Sistema
   SESSION_EXPIRED:              '⏱️ _Faz um tempinho que a gente não se fala, então recomecei a conversa pra você._',
@@ -219,10 +221,6 @@ const MessagesConstants = {
   AGENDAR_SEM_HORARIOS_LISTA:   '😕 Não temos horários livres para agendar nos próximos dias. Dá para pedir para agora 👇',
   AGENDAR_VER_DIAS:             'Ver dias',
   AGENDAR_SECAO_DIAS:           'Dias',
-  AGENDAR_OPCAO:                'Agendar pedido',
-  AGENDAR_OPCAO_DESCRICAO:      'Escolha dia e horário para receber ou retirar',
-  AGENDAR_OPCAO_AGENDADO:       (dia: string, hora: string) => `Agendado ${dia} ${hora}`,
-  AGENDAR_OPCAO_MUDAR:          'Toque para mudar o horário ou pedir para agora',
   AGENDAR_PARA_AGORA:           '⚡ Pedir para agora',
   AGENDAR_PARA_AGORA_DESCRICAO: 'Tira o agendamento',
   AGENDAR_AGORA_OK:             '⚡ Combinado, o pedido é *para agora*.',
@@ -234,6 +232,7 @@ const MessagesConstants = {
   AGENDAR_HORA_INDISPONIVEL:    (hora: string) => `😕 Ih, *${hora}* não está disponível. Escolhe outro horário?`,
   AGENDAR_SEM_HORARIOS:         '😕 Não temos horários livres para agendar nos próximos dias, então seguimos com o pedido para agora, tá?',
   AGENDADO_PARA:                (dia: string, hora: string) => `📅 *Agendado para ${dia} às ${hora}* ✅`,
+  AGENDADO_MUDAR_DICA:          '\n_Para mudar o horário, escreva *agendar*._',
   OBSERVACAO_PERGUNTA:          (nome: string) => `📝 *Alguma observação para o ${nome}?*\n\nMe conta como você prefere (ex: _sem cebola_, _molho à parte_, _bem passado_).\nSe mudou de ideia, responda *pular*.`,
   OBSERVACAO_ANOTADA:           (nome: string, nota: string) => `📝 Anotado! *${nome}*: _${nota}_\n\nA cozinha vai ver direitinho 👨‍🍳`,
   OBSERVACAO_PULADA:            'Tudo bem, sem observação 😊',

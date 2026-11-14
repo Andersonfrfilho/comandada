@@ -264,9 +264,10 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 A API espelha o restaurante no SDK sozinha: 3 linhas de produção (até 3 encomendas por faixa de 15 min)
 e uma agenda por mesa, com o horário de `opening_time`/`closing_time`/`working_days` no momento da criação.
 Encomenda ocupa a faixa antes de o pedido existir (e libera se o pedido falhar); reserva escolhe a menor mesa livre.
-No bot, o cliente agenda **antes** de escolher os itens: a lista de categorias traz "📅 Agendar pedido" (`schedule:start`,
-só com horários livres) → dia → horário → volta às categorias com "📅 Agendado para…"; agendado, a linha vira "Agendado
-15/11 20:00" e o menu de dias ganha "⚡ Pedir para agora". Confirmar o pedido não pergunta mais "agora ou agendar".
+No bot, o cliente agenda **antes** de escolher os itens: com horários livres, o menu da saudação troca
+"Reservar mesa" por "📅 Agendar pedido" (`schedule:start`; reservar segue por escrito) → dia → horário → categorias com
+"📅 Agendado para…" (escrever *agendar* muda; o menu de dias ganha "⚡ Pedir para agora"). Voltar dos dias volta ao menu.
+Confirmar o pedido não pergunta mais "agora ou agendar".
 Voltar (id `0`) nos dias, horários, forma de receber (→ resumo), pagamento (→ forma de receber) e "voltar" no endereço.
 Painel: página **Agenda** (`GET /agenda?date=`). Cardápio com tamanhos: `products.variant_group`/`variant_label`.
 Seed do Yuyaki: `bun run --cwd apps/api db:seed:yuyaki`.

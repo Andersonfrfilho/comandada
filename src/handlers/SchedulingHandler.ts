@@ -1,5 +1,5 @@
-// Encomenda: o cliente agenda pela lista de categorias ("📅 Agendar pedido"), antes de escolher os itens.
-// Dia → horário → volta às categorias com o horário marcado. No fim do pedido não há mais pergunta
+// Encomenda: o cliente agenda pelo menu principal da saudação ("📅 Agendar pedido") ou escrevendo "agendar",
+// antes de escolher os itens. Dia → horário → categorias com o horário marcado. No fim do pedido não há mais pergunta
 // "agora ou agendar": sem agendamento, o pedido é para agora.
 const SCHEDULE_TYPED_COMMANDS: ReadonlyArray<string> = ['agendar', 'agendar pedido', 'agendar encomenda', 'encomenda'];
 
@@ -8,13 +8,14 @@ class SchedulingHandler extends BaseHandler {
     if (currentState === BotState.AWAITING_WHEN) return this._handleWhen();
     if (currentState === BotState.AWAITING_SCHEDULE_DAY) return this._handleDay();
     if (currentState === BotState.AWAITING_SCHEDULE_TIME) return this._handleTime();
-    if (texto === SCHEDULE_START_ID || (currentState === BotState.ORDERING_CAT && SCHEDULE_TYPED_COMMANDS.includes(texto.trim()))) {
+    if (texto === SCHEDULE_START_ID || ((currentState === BotState.ORDERING_CAT || !expectingRawInput) && SCHEDULE_TYPED_COMMANDS.includes(texto.trim()))) {
       return this._start();
     }
     return false;
   }
 
   private _start(): boolean {
+    newCart.schedule_from_menu = currentState !== BotState.ORDERING_CAT;
     if (scheduleSlots.length === 0) {
       respostas.push(MessagesConstants.AGENDAR_SEM_HORARIOS_LISTA);
       this._backToCategories();
@@ -25,7 +26,18 @@ class SchedulingHandler extends BaseHandler {
     return true;
   }
 
+  private _backFromDays(): void {
+    if (newCart.schedule_from_menu) {
+      newCart.schedule_from_menu = false;
+      newState = BotState.START;
+      respostas.push(mainMenu());
+      return;
+    }
+    this._backToCategories();
+  }
+
   private _backToCategories(): void {
+    newCart.schedule_from_menu = false;
     newState = BotState.ORDERING_CAT;
     newCart.browse_cat_page = 0;
     respostas.push(categoryList('order', 0, true));
@@ -40,7 +52,7 @@ class SchedulingHandler extends BaseHandler {
 
   private _handleDay(): boolean {
     if (texto === MENU_BACK_ID || texto === 'voltar') {
-      this._backToCategories();
+      this._backFromDays();
       return true;
     }
     if (texto === SCHEDULE_NOW_ID || texto.includes('agora')) {
