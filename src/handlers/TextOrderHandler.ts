@@ -256,11 +256,11 @@ class TextOrderHandler extends BaseHandler {
     if (TEXT_ORDER_REDO_WORDS.includes(answer)) {
       newCart.text_order = null;
       newState = BotState.START;
-      respostas.push(MessagesConstants.TEXTO_CORRIGIR);
+      respostas.push(MessagesConstants.TEXTO_CORRIGIR(audioOrdersEnabled));
       return true;
     }
     if (answer === 'text:add') {
-      respostas.push(MessagesConstants.TEXTO_ESCREVA_MAIS(orderExample()));
+      respostas.push(MessagesConstants.TEXTO_ESCREVA_MAIS(orderExample(), audioOrdersEnabled));
       return true;
     }
     // Escreveu mais itens em vez de confirmar: somam ao que já foi anotado.
@@ -330,7 +330,7 @@ class MenuPdfHandler extends BaseHandler {
     newState = BotState.START;
     const buttons: Array<{ id: string; title: string }> = [{ id: '2', title: MessagesConstants.CARDAPIO_PDF_BOTAO_CATEGORIAS }];
     if (newCart.items.length > 0) buttons.push({ id: 'finalizar', title: '✅ Finalizar' });
-    respostas.push({ type: 'buttons', body: MessagesConstants.CARDAPIO_PDF_DICA(orderExample()), buttons });
+    respostas.push({ type: 'buttons', body: MessagesConstants.CARDAPIO_PDF_DICA(orderExample(), audioOrdersEnabled), buttons });
     return true;
   }
 }
@@ -339,7 +339,7 @@ class MenuPdfHandler extends BaseHandler {
 class UnclearAudioHandler extends BaseHandler {
   async handle(): Promise<boolean> {
     if (texto !== AUDIO_UNCLEAR_TEXT) return false;
-    respostas.push(MessagesConstants.AUDIO_NAO_ENTENDI(orderExample()));
+    respostas.push(audioOrdersEnabled ? MessagesConstants.AUDIO_NAO_ENTENDI(orderExample()) : MessagesConstants.AUDIO_DESLIGADO(orderExample()));
     return true;
   }
 }

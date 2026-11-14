@@ -1,4 +1,5 @@
 import { db } from '@/infra/database/connection'
+import { isAudioOrdersEnabled } from '@/shared/constants/featureFlags.constant'
 import { RedisProvider } from '@/infra/redis/RedisProvider'
 
 // Auth
@@ -478,6 +479,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   )
   const expireStaleCharges = new ExpireStaleChargesUseCase(db, paymentAccountService, orderPaymentTransitions)
 
+  const audioOrdersEnabled = isAudioOrdersEnabled()
   const getBotContextUseCase = new GetBotContextUseCase(
     db,
     botConfigRepository,
@@ -487,10 +489,12 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
     publicApiUrl.startsWith('https://') ? publicApiUrl : undefined,
     new EstablishmentLocationService(db, new NominatimProvider()),
-    { cache, ttlSeconds: botContextCacheTtlSeconds() }
+    { cache, ttlSeconds: botContextCacheTtlSeconds() },
+    audioOrdersEnabled
   )
-  // Pedido por áudio: Whisper na Groq. Sem GROQ_API_KEY a rota responde 503 e o bot pede para escrever.
-  const groqApiKey = process.env.GROQ_API_KEY?.trim() ?? ''
+  // Pedido por áudio: Whisper na Groq. Desligado (FEATURE_AUDIO_ORDERS) ou sem GROQ_API_KEY, a rota
+  // responde 503 sem chamar a Groq e o bot pede para escrever.
+  const groqApiKey = audioOrdersEnabled ? (process.env.GROQ_API_KEY?.trim() ?? '') : ''
   const transcribeBotAudioUseCase = new TranscribeBotAudioUseCase({
     menuFor: (instance) => getBotContextUseCase.menuFor(instance),
     fetchMedia: (establishmentId, mediaId) =>

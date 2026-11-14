@@ -223,6 +223,9 @@ cardápio segue os atalhos de sempre.
 (API baixa pelo canal do restaurante e transcreve com o Whisper da Groq, nomes do cardápio de dica; `GROQ_API_KEY` na
 API, `AUDIO_TRANSCRIPTION_MODEL` opcional) e o texto segue como mensagem digitada, com `from_audio`; a resposta abre com
 "🎤 Ouvi: …". Falhou ou sem chave → `__audio_unclear__` e o bot pede para repetir ou escrever.
+**Flag:** só funciona com `FEATURE_AUDIO_ORDERS=true` na API (padrão desligado). Desligada, a transcrição responde 503
+sem chamar a Groq, o contexto manda `config.feature_audio_orders = 'false'` e o bot tira toda menção a áudio das
+mensagens; nota de voz recebe "Por enquanto não consigo ouvir áudios" (`AUDIO_DESLIGADO`).
 
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o

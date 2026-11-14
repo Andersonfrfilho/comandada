@@ -198,7 +198,7 @@ async function runTests() {
   const exec = (args) => {
     return new Promise((resolve) => {
       const jsonData = {
-        config: CONFIG,
+        config: { ...CONFIG, ...(args.config || {}) },
         products: args.products || PRODUCTS,
         payment_types: PAYMENT_TYPES,
         order_types: ORDER_TYPES,
@@ -1286,12 +1286,22 @@ async function runTests() {
   }
 
   await test('"Fazer pedido" abre com a dica de escrever ou mandar áudio antes das categorias', async () => {
-    const r = await exec({ texto: '2', state: 'start' });
+    const r = await exec({ texto: '2', state: 'start', config: { feature_audio_orders: 'true' } });
     const body = JSON.stringify(r);
     const hint = body.indexOf('Já sabe o que quer? É só escrever');
     const audio = body.indexOf('mande um *áudio*');
     const pick = body.indexOf('Prefere ver as opções? Escolha uma categoria');
     assert(hint > -1 && audio > hint && pick > audio, 'ordem da mensagem: ' + body.slice(0, 600));
+  });
+
+  await test('flag de áudio desligada (padrão): nenhuma mensagem fala em áudio', async () => {
+    const start = JSON.stringify(await exec({ texto: '2', state: 'start' }));
+    assert(start.includes('Já sabe o que quer') && !start.includes('áudio'), start.slice(0, 400));
+    const pdf = JSON.stringify(await exec({ texto: 'menu:pdf', state: 'ordering_cat', establishment: { menu_pdf_url: 'https://api.exemplo.com/c.pdf' } }));
+    assert(!pdf.includes('áudio'), pdf.slice(0, 400));
+    const audio = await exec({ texto: '__audio_unclear__', from_audio: true, state: 'ordering_cat' });
+    assertResponseContains(audio, 'Por enquanto não consigo ouvir áudios');
+    assertState(audio, 'ordering_cat');
   });
 
   await test('texto livre: "2 temaki salmão e 1 sashimi" anota os dois e pede confirmação', async () => {
@@ -1447,7 +1457,7 @@ async function runTests() {
   });
 
   await test('áudio: sem transcrição pede para repetir ou escrever', async () => {
-    const r = await exec({ texto: '__audio_unclear__', from_audio: true, state: 'ordering_cat' });
+    const r = await exec({ texto: '__audio_unclear__', from_audio: true, state: 'ordering_cat', config: { feature_audio_orders: 'true' } });
     assertState(r, 'ordering_cat');
     assertResponseContains(r, 'Não consegui entender o áudio');
     assert(!JSON.stringify(r[0].json.respostas).includes('Ouvi'), 'não ecoa áudio vazio');
@@ -1462,7 +1472,7 @@ async function runTests() {
   });
 
   await test('PDF: tocar na opção manda o documento e ensina a pedir escrevendo ou por áudio', async () => {
-    const r = await exec({ texto: 'menu:pdf', state: 'ordering_cat', establishment: pdfEstablishment });
+    const r = await exec({ texto: 'menu:pdf', state: 'ordering_cat', establishment: pdfEstablishment, config: { feature_audio_orders: 'true' } });
     assertResponseType(r, 'document');
     const document = r[0].json.respostas.find((message) => message?.type === 'document');
     assert(document.link === pdfEstablishment.menu_pdf_url && document.filename.endsWith('.pdf'), JSON.stringify(document));
