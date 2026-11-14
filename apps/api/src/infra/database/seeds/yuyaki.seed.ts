@@ -16,7 +16,7 @@ const YUYAKI_DATA_DIRECTORY = path.resolve(import.meta.dir, 'data/yuyaki')
 
 const YUYAKI_ADMIN_EMAIL = 'admin@yuyaki.demo'
 
-// Marca do Yuyaki no painel: laranja do fundo do logo e o logo (dados/yuyaki/marca, reduzido).
+// Marca do Yuyaki no painel: laranja do fundo do logo e o logo (dados/yuyaki/marca, sem o fundo preto e reduzido).
 // O domínio da demonstração faz a tela de login já abrir com a marca dele.
 const YUYAKI_PRIMARY_COLOR = '#C04607'
 const YUYAKI_DEMO_DOMAIN = 'comandada-yuyaki.up.railway.app'
@@ -30,6 +30,7 @@ const YUYAKI_DEFAULT_BOT_HOURS: Readonly<Record<string, string | boolean>> = {
   ignore_hours: false,
   // Endereço do material do cliente (dados/yuyaki/estabelecimento.md); aparece na saudação do bot.
   establishment_address: 'Av. Presidente Vargas, 1343 — Cidade Nova',
+  establishment_city: 'Franca - SP',
 }
 
 const VARIANT_LABEL_BY_SIZE: Readonly<Record<string, string>> = { medio: 'Médio', grande: 'Grande' }
@@ -76,7 +77,7 @@ function toProduct(row: Record<string, string>, catalogNameById: Map<string, str
 }
 
 async function ensureBranding(establishmentId: string): Promise<void> {
-  const logo = 'data:image/jpeg;base64,' + readFileSync(path.join(YUYAKI_DATA_DIRECTORY, 'logo.jpg')).toString('base64')
+  const logo = 'data:image/png;base64,' + readFileSync(path.join(YUYAKI_DATA_DIRECTORY, 'logo.png')).toString('base64')
   const branding: Record<string, string> = {
     [BRANDING_SETTING_KEYS.name]: YUYAKI_NAME,
     [BRANDING_SETTING_KEYS.logo]: logo,

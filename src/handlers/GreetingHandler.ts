@@ -7,25 +7,32 @@ class GreetingHandler extends BaseHandler {
     // A saudação abre com a figurinha do logo do restaurante, quando ele tem logo.
     if (brandSticker) respostas.push(brandSticker);
 
-    const companyInfo = buildCompanyInfo();
-    const welcomeWithInfo = companyInfo ? msgWelcome + '\n\n' + companyInfo : msgWelcome;
+    // Boas-vindas curta, o cartão com os dados do restaurante e o pin no mapa, cada um numa mensagem.
+    const companyCard = buildCompanyInfo();
+    const locationCard = establishmentLocationCard();
+    const pushCompanyCard = (): void => {
+      respostas.push(companyCard);
+      if (locationCard) respostas.push(locationCard);
+    };
 
     if (!customerName) {
       newState = BotState.AWAITING_NAME;
-      respostas.push(MessagesConstants.BOAS_VINDAS_NOME(estName, companyInfo));
+      respostas.push(MessagesConstants.BOAS_VINDAS_NOVO(estName));
+      pushCompanyCard();
+      respostas.push(MessagesConstants.PEDIR_NOME);
     } else {
       if (!customerNameFromDB && pushNameFormatted) {
         customerNameToSave = pushNameFormatted;
         save_customer_name = true;
       }
+      respostas.push(msgWelcome);
+      pushCompanyCard();
       if (lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
         const lines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) });
         newState = BotState.REPEAT_ORDER;
-        respostas.push(welcomeWithInfo);
         respostas.push(lines.join('\n'));
         respostas.push(yesNo(MessagesConstants.SAUDACAO_REPEAT_PERGUNTA));
       } else {
-        respostas.push(welcomeWithInfo);
         respostas.push(mainMenu());
       }
     }

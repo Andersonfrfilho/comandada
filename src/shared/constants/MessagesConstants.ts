@@ -1,5 +1,9 @@
 // Textos que o cliente lê no WhatsApp. Tom: conversa de balcão, próxima e leve, sem soar robótico.
 // Formatação do WhatsApp: *negrito*, _itálico_. Emojis para guiar o olho, não para enfeitar cada linha.
+function capitalize(text: string): string {
+  return text ? text.charAt(0).toUpperCase() + text.slice(1) : text;
+}
+
 const MessagesConstants = {
   // Horário / Boas-vindas
   FECHADO:                      (estName: string, dias: string, abre: string, fecha: string) => `Oi! 👋 Que bom receber sua mensagem!\n\nNo momento o *${estName}* está fechado 🌙\n\n🕒 *Nosso horário:* ${dias}, das *${abre}* às *${fecha}*.\n\nAssim que abrirmos é só mandar um *oi* que a gente te atende rapidinho! 😉`,
@@ -11,21 +15,26 @@ const MessagesConstants = {
   ATENDIMENTO_ENCERRADO:        '✅ Prontinho, conversa encerrada!\n\nObrigado pelo contato e até a próxima! 👋😊',
 
   // Saudação / Nome
-  BOAS_VINDAS_NOME:             (estName: string, companyInfo: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!\n\n${companyInfo ? companyInfo + '\n\n' : ''}Antes de começar: como posso te chamar? Me diz seu *nome* 😊`,
-  // Cartão de visita da saudação: cada linha só aparece quando o restaurante tem o dado cadastrado.
+  BOAS_VINDAS_NOVO:             (estName: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!`,
+  PEDIR_NOME:                   'Antes de começar: como posso te chamar? Me diz seu *nome* 😊',
+  // Cartão de visita da saudação: mensagem própria, um bloco por assunto (título em negrito e o valor
+  // na linha de baixo) com linha em branco entre eles. Cada bloco só entra quando o dado existe.
+  INFO_TITULO:                  (estName: string) => `📋 *Sobre o ${estName}*`,
   INFO_ABERTO_AGORA:            (fecha: string) => `🟢 *Aberto agora* · até as ${fecha}`,
   INFO_ABERTO_AGORA_24H:        '🟢 *Aberto agora*',
-  INFO_HORARIO:                 (dias: string, abre: string, fecha: string) => `🕒 *Horário:* ${dias}, das ${abre} às ${fecha}`,
-  INFO_HORARIO_24H:             (dias: string) => `🕒 *Horário:* ${dias}, 24 horas`,
-  INFO_ENDERECO:                (endereco: string) => `📍 *Endereço:* ${endereco}`,
-  INFO_ENTREGA_E_RETIRADA:      (taxa: string) => `🛵 *Entrega e retirada* · ${taxa}`,
-  INFO_SO_ENTREGA:              (taxa: string) => `🛵 *Entrega* · ${taxa}`,
-  INFO_SO_RETIRADA:             '🛍️ *Retirada* no local',
+  INFO_HORARIO:                 (dias: string, abre: string, fecha: string) => `🕒 *Horário*\n${capitalize(dias)}, das ${abre} às ${fecha}`,
+  INFO_HORARIO_24H:             (dias: string) => `🕒 *Horário*\n${capitalize(dias)}, 24 horas`,
+  INFO_ENDERECO:                (endereco: string) => `📍 *Endereço*\n${endereco}`,
+  INFO_ENTREGA_E_RETIRADA:      (taxa: string) => `🛵 *Entrega e retirada*\n${capitalize(taxa)}`,
+  INFO_SO_ENTREGA:              (taxa: string) => `🛵 *Entrega*\n${capitalize(taxa)}`,
+  INFO_SO_RETIRADA:             '🛍️ *Retirada*\nNo local',
   INFO_TAXA_FIXA:               (valor: string) => `taxa de entrega *R$ ${valor}*`,
   INFO_TAXA_GRATIS:             'entrega *grátis*',
   INFO_TAXA_DISTANCIA:          'taxa de entrega conforme a distância',
   INFO_FRETE_GRATIS_ACIMA:      (valor: string) => ` (*grátis* acima de R$ ${valor})`,
-  INFO_PAGAMENTO:               (formas: string) => `💳 *Pagamento:* ${formas}`,
+  INFO_PAGAMENTO:               (formas: string) => `💳 *Pagamento*\n${formas}`,
+  INFO_INSTAGRAM:               (link: string) => `📸 *Instagram*\n${link}`,
+  INFO_SITE:                    (link: string) => `🌐 *Site*\n${link}`,
   NOME_INVALIDO_GENERICO:       'Hmm, não consegui entender 😅\n\nPode me dizer seu *nome*? Só o primeiro já está ótimo!',
   NOME_INVALIDO_PALAVRAO:       'Haha, entendo 😄 Mas pra gente te atender direitinho, qual é o seu *nome*?',
   SAUDACAO_REPEAT:              (customerName: string) => `Que bom te ver de novo, *${customerName}*! 🥰\n\n🔄 Seu último pedido foi:`,

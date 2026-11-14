@@ -274,25 +274,42 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
-  await test('saudação com logo → figurinha primeiro, depois boas-vindas com dados do restaurante', async () => {
+  await test('saudação com logo → figurinha, boas-vindas, cartão do restaurante, pin e menu', async () => {
     const stickerUrl = 'https://api.exemplo.com/public/branding/abc/sticker.webp?v=123';
-    const r = await exec({ texto: 'oi', establishment: { sticker_url: stickerUrl, address: 'Rua das Flores, 100' } });
+    const r = await exec({ texto: 'oi', establishment: {
+      sticker_url: stickerUrl, address: 'Rua das Flores, 100', instagram: '@sakura.sushi', website: 'sakura.com.br',
+    } });
     const resps = r?.[0]?.json?.respostas || [];
     assert(resps[0] && resps[0].type === 'sticker' && resps[0].link === stickerUrl, 'primeira resposta deve ser a figurinha');
-    const welcome = String(resps[1]);
-    assert(welcome.includes('🕒 *Horário:* todos os dias, das 18h às 23h'), 'deve trazer o horário: ' + welcome);
-    assert(welcome.includes('Ribeirão Preto'), 'deve trazer a cidade');
-    assert(welcome.includes('🛵 *Entrega e retirada* · taxa de entrega *R$ 5,00*'), 'deve trazer entrega e taxa');
-    assert(welcome.includes('💳 *Pagamento:* PIX, Cartão Crédito e Dinheiro'), 'deve trazer as formas de pagamento');
-    assert(welcome.includes('📍 *Endereço:* Rua das Flores, 100 · Ribeirão Preto, SP'), 'deve trazer o endereço: ' + welcome);
+    assert(resps[1] === 'Olá! Bem-vindo ao Sakura 🌸', 'segunda é a boas-vindas sozinha: ' + resps[1]);
+    const card = String(resps[2]);
+    const expectedBlocks = [
+      '📋 *Sobre o Sakura*',
+      '🕒 *Horário*\nTodos os dias, das 18h às 23h',
+      '📍 *Endereço*\nRua das Flores, 100 · Ribeirão Preto, SP',
+      '🛵 *Entrega e retirada*\nTaxa de entrega *R$ 5,00*',
+      '💳 *Pagamento*\nPIX, Cartão Crédito e Dinheiro',
+      '📸 *Instagram*\nhttps://instagram.com/sakura.sushi',
+      '🌐 *Site*\nhttps://sakura.com.br',
+    ];
+    for (const block of expectedBlocks) assert(card.includes(block), 'cartão sem o bloco ' + JSON.stringify(block) + ':\n' + card);
+    assert(card.includes('\n\n🕒'), 'blocos separados por linha em branco');
+    assert(resps[3] && resps[3].type === 'location' && resps[3].latitude === -21.8 && resps[3].name === 'Sakura', 'quarta é o pin do restaurante');
+    assert(resps[4] && resps[4].type === 'buttons', 'menu por último');
     assertNoObjectObject(r);
   });
 
   await test('saudação 24h → "24 horas" em vez de "das 0h às 23h59"', async () => {
     const r = await exec({ texto: 'oi', establishment: { opening_time: '00:00', closing_time: '23:59' } });
-    const welcome = String((r?.[0]?.json?.respostas || [])[0]);
-    assert(welcome.includes('🕒 *Horário:* todos os dias, 24 horas'), 'deve dizer 24 horas: ' + welcome);
-    assert(!welcome.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
+    const card = String((r?.[0]?.json?.respostas || [])[1]);
+    assert(card.includes('🕒 *Horário*\nTodos os dias, 24 horas'), 'deve dizer 24 horas: ' + card);
+    assert(!card.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
+  });
+
+  await test('saudação sem coordenadas → sem pin', async () => {
+    const r = await exec({ texto: 'oi', establishment: { lat: 0, lng: 0 } });
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(!resps.some((resp) => resp && resp.type === 'location'), 'não deve mandar pin');
   });
 
   await test('saudação sem logo → nenhuma figurinha', async () => {

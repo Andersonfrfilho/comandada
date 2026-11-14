@@ -25,7 +25,12 @@ const KNOWN_SETTINGS: SettingDef[] = [
   { key: BRANDING_SETTING_KEYS.domains, label: 'Domínios do painel', type: 'text', description: 'Separados por vírgula. Quem abrir o painel por um destes endereços já vê a sua marca no login', section: 'marca' },
   { key: 'establishment_name', label: 'Nome do estabelecimento', type: 'text', section: 'estabelecimento' },
   { key: 'whatsapp_number', label: 'Número WhatsApp', type: 'text', description: 'Formato: 5511999999999', section: 'estabelecimento' },
-  { key: 'establishment_address', label: 'Endereço completo', type: 'text', section: 'estabelecimento' },
+  { key: 'establishment_address', label: 'Endereço completo', type: 'text', description: 'Rua, número e bairro. Aparece na saudação do WhatsApp com o pin no mapa', section: 'estabelecimento' },
+  { key: 'establishment_city', label: 'Cidade', type: 'text', description: 'Ex.: Franca - SP. Ajuda a achar o ponto certo no mapa', section: 'estabelecimento' },
+  { key: 'establishment_lat', label: 'Latitude (opcional)', type: 'text', description: 'Só se o pin calculado pelo endereço sair no lugar errado. Ex.: -20.5386', section: 'estabelecimento' },
+  { key: 'establishment_lng', label: 'Longitude (opcional)', type: 'text', description: 'Ex.: -47.4008', section: 'estabelecimento' },
+  { key: 'establishment_instagram', label: 'Instagram', type: 'text', description: '@ do restaurante. Vira link na saudação do WhatsApp', section: 'estabelecimento' },
+  { key: 'establishment_website', label: 'Site ou cardápio online', type: 'text', description: 'Endereço do site. Vira link na saudação do WhatsApp', section: 'estabelecimento' },
 
   { key: 'opening_time', label: 'Abre às', type: 'text', description: 'Formato HH:MM, ex.: 18:00', section: 'operacao' },
   { key: 'closing_time', label: 'Fecha às', type: 'text', description: 'Formato HH:MM, ex.: 23:00', section: 'operacao' },
@@ -336,7 +341,7 @@ export function SettingsPage() {
                       )}
                     </div>
                     <p className="text-xs text-gray-400">
-                      PNG, JPG ou GIF. Aparece no login, no menu e como ícone da aba.
+                      PNG, JPG ou GIF. O fundo liso (preto, branco...) sai sozinho. Aparece no login, no menu, na aba e na figurinha do WhatsApp.
                     </p>
                     {logoColorNote && (
                       <p className="mt-1 text-xs text-gray-500">{logoColorNote}</p>
