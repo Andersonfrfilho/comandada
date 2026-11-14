@@ -28,6 +28,8 @@ const YUYAKI_DEFAULT_BOT_HOURS: Readonly<Record<string, string | boolean>> = {
   closing_time: '23:00',
   working_days: 'ter,qua,qui,sex,sab,dom',
   ignore_hours: false,
+  // Endereço do material do cliente (dados/yuyaki/estabelecimento.md); aparece na saudação do bot.
+  establishment_address: 'Av. Presidente Vargas, 1343 — Cidade Nova',
 }
 
 const VARIANT_LABEL_BY_SIZE: Readonly<Record<string, string>> = { medio: 'Médio', grande: 'Grande' }

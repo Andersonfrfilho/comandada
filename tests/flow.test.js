@@ -276,15 +276,23 @@ async function runTests() {
 
   await test('saudação com logo → figurinha primeiro, depois boas-vindas com dados do restaurante', async () => {
     const stickerUrl = 'https://api.exemplo.com/public/branding/abc/sticker.webp?v=123';
-    const r = await exec({ texto: 'oi', establishment: { sticker_url: stickerUrl } });
+    const r = await exec({ texto: 'oi', establishment: { sticker_url: stickerUrl, address: 'Rua das Flores, 100' } });
     const resps = r?.[0]?.json?.respostas || [];
     assert(resps[0] && resps[0].type === 'sticker' && resps[0].link === stickerUrl, 'primeira resposta deve ser a figurinha');
     const welcome = String(resps[1]);
-    assert(welcome.includes('🕒 Todos os dias, das 18h às 23h'), 'deve trazer o horário: ' + welcome);
+    assert(welcome.includes('🕒 *Horário:* todos os dias, das 18h às 23h'), 'deve trazer o horário: ' + welcome);
     assert(welcome.includes('Ribeirão Preto'), 'deve trazer a cidade');
-    assert(welcome.includes('Entrega (taxa R$ 5,00) e retirada'), 'deve trazer entrega e taxa');
-    assert(welcome.includes('PIX, Cartão Crédito e Dinheiro'), 'deve trazer as formas de pagamento');
+    assert(welcome.includes('🛵 *Entrega e retirada* · taxa de entrega *R$ 5,00*'), 'deve trazer entrega e taxa');
+    assert(welcome.includes('💳 *Pagamento:* PIX, Cartão Crédito e Dinheiro'), 'deve trazer as formas de pagamento');
+    assert(welcome.includes('📍 *Endereço:* Rua das Flores, 100 · Ribeirão Preto, SP'), 'deve trazer o endereço: ' + welcome);
     assertNoObjectObject(r);
+  });
+
+  await test('saudação 24h → "24 horas" em vez de "das 0h às 23h59"', async () => {
+    const r = await exec({ texto: 'oi', establishment: { opening_time: '00:00', closing_time: '23:59' } });
+    const welcome = String((r?.[0]?.json?.respostas || [])[0]);
+    assert(welcome.includes('🕒 *Horário:* todos os dias, 24 horas'), 'deve dizer 24 horas: ' + welcome);
+    assert(!welcome.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
   });
 
   await test('saudação sem logo → nenhuma figurinha', async () => {

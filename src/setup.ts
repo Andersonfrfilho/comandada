@@ -637,8 +637,14 @@ function buildPayload(): N8nResponsePayload {
 // Informações do restaurante na saudação, tudo do cadastro dele: só entra a linha cujo dado existe.
 function buildCompanyInfo(): string {
   const lines: string[] = [];
-  if (isOpen && !ignoreHours) lines.push(MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
-  lines.push(MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
+  // 00:00 às 23:59 é "o dia todo": vira "24 horas" em vez de "das 0h às 23h59".
+  const opensAllDay = openingTime <= '00:00' && closingTime >= '23:59';
+  if (isOpen && !ignoreHours) {
+    lines.push(opensAllDay ? MessagesConstants.INFO_ABERTO_AGORA_24H : MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
+  }
+  lines.push(opensAllDay
+    ? MessagesConstants.INFO_HORARIO_24H(formatWorkingDays(workingDays))
+    : MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
   const fullAddress = [estAddress, estCity].filter((part: string) => part && part.trim()).join(' · ');
   if (fullAddress) lines.push(MessagesConstants.INFO_ENDERECO(fullAddress));
   const feeText = describeDeliveryFee();
@@ -661,7 +667,7 @@ function describeDeliveryFee(): string {
     feeText = MessagesConstants.INFO_TAXA_DISTANCIA;
   }
   if (freeDeliveryAbove > 0 && feeText !== MessagesConstants.INFO_TAXA_GRATIS) {
-    feeText = feeText.replace(/\)$/, MessagesConstants.INFO_FRETE_GRATIS_ACIMA(fmtBRL(freeDeliveryAbove)) + ')');
+    feeText += MessagesConstants.INFO_FRETE_GRATIS_ACIMA(fmtBRL(freeDeliveryAbove));
   }
   return feeText;
 }
