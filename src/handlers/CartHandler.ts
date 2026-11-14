@@ -49,13 +49,12 @@ class CartHandler extends BaseHandler {
       if (newCart.items.length === 0) {
         respostas.push(MessagesConstants.CARRINHO_VAZIO);
       } else {
-        const { lines, total, itemCount } = cartSummary(newCart.items);
+        const { total } = cartSummary(newCart.items);
         const minOrder = minOrderValue;
         if (minOrder > 0 && total < minOrder) {
           respostas.push(MessagesConstants.VALOR_MINIMO(fmtBRL(minOrder), fmtBRL(total)));
         } else {
-          newState = BotState.CONFIRMING;
-          respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total), itemCount)));
+          showOrderConfirmation();
         }
       }
       return true;
@@ -63,14 +62,8 @@ class CartHandler extends BaseHandler {
 
     // Confirmar pedido
     if ((texto === 'confirmar' || texto === 'sim') && currentState === BotState.CONFIRMING) {
-      newCart.scheduled_date = '';
-      newCart.scheduled_time = '';
-      if (scheduleSlots.length > 0) {
-        newState = BotState.AWAITING_WHEN;
-        respostas.push(whenBtn());
-      } else {
-        startCheckout();
-      }
+      // Agendamento já foi escolhido na lista de categorias; sem ele, o pedido é para agora.
+      startCheckout();
       return true;
     }
 

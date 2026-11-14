@@ -305,6 +305,21 @@ class PaymentHandler extends BaseHandler {
   }
 
   private _handlePayment(): boolean {
+    // Voltar: escolhe de novo a forma de receber (ou o resumo, se só há uma).
+    if (texto === MENU_BACK_ID || texto === 'voltar') {
+      newCart.payment_method = '';
+      newCart.order_type = '';
+      newCart.address = '';
+      newCart.complement = '';
+      newCart.delivery_fee = 0;
+      if (orderTypes.length > 1) {
+        newState = BotState.AWAITING_TYPE;
+        respostas.push(orderTypeBtn());
+      } else {
+        showOrderConfirmation();
+      }
+      return true;
+    }
     let choiceIndex = parseInt(texto) - 1;
     if (isNaN(choiceIndex) || choiceIndex < 0)
       choiceIndex = paymentTypes.findIndex((paymentType: PaymentType) => paymentType.name === texto);

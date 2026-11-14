@@ -307,15 +307,14 @@ class OrderingHandler extends BaseHandler {
     }
 
     if (texto === 'finalizar') {
-      const { lines, total, itemCount } = cartSummary(newCart.items);
+      const { total } = cartSummary(newCart.items);
       const minOrder = minOrderValue;
       if (minOrder > 0 && total < minOrder) {
         respostas.push(MessagesConstants.ORDEM_MINIMO_ADDMORE(fmtBRL(minOrder), fmtBRL(total)));
         newState = BotState.AWAITING_MORE;
         respostas.push({ type: 'buttons', body: MessagesConstants.ADICIONAR_MAIS_MINIMO, buttons: [{ id: '__add_more__', title: '➕ Adicionar mais' }] });
       } else {
-        newState = BotState.CONFIRMING;
-        respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total), itemCount)));
+        showOrderConfirmation();
       }
       return true;
     }
