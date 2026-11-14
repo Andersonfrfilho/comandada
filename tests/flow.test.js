@@ -943,21 +943,82 @@ async function runTests() {
     assertState(r, 'awaiting_type');
   });
 
-  await test('com horários livres, pergunta se é para agora ou agendar', async () => {
+  await test('com horários livres, confirmar não pergunta mais "agora ou agendar": vai direto para a forma de receber', async () => {
     const r = await exec({ texto: 'sim', state: 'confirming', cart: filledCart, schedule_slots: SLOTS });
-    assertState(r, 'awaiting_when');
-    assertResponseContains(r, 'Agendar');
+    assertState(r, 'awaiting_type');
+    const text = JSON.stringify(r[0].json.respostas);
+    assert(!text.includes('agora ou quer agendar'), text);
+  });
+
+  await test('lista de categorias traz "📅 Agendar pedido" quando há horários livres', async () => {
+    const r = await exec({ texto: '2', state: 'start', schedule_slots: SLOTS });
+    const rows = (r[0].json.respostas.find((m) => m && m.type === 'list') || { sections: [] }).sections.flatMap((sec) => sec.rows);
+    assert(rows.some((row) => row.id === 'schedule:start' && row.title === '📅 Agendar pedido'), JSON.stringify(rows));
+    const noSlots = await exec({ texto: '2', state: 'start' });
+    const rowsNoSlots = noSlots[0].json.respostas.find((m) => m && m.type === 'list').sections.flatMap((sec) => sec.rows);
+    assert(!rowsNoSlots.some((row) => row.id === 'schedule:start'), 'sem horários não oferece agendar');
   });
 
   await test('agendar mostra os dias e depois os horários livres', async () => {
-    const days = await exec({ texto: 'when:schedule', state: 'awaiting_when', cart: filledCart, schedule_slots: SLOTS });
+    const days = await exec({ texto: 'schedule:start', state: 'ordering_cat', cart: filledCart, schedule_slots: SLOTS });
     assertState(days, 'awaiting_schedule_day');
     assertResponseContains(days, 'sáb 14/11');
+    const typed = await exec({ texto: 'agendar', state: 'ordering_cat', cart: filledCart, schedule_slots: SLOTS });
+    assertState(typed, 'awaiting_schedule_day');
+    const dayRows = days[0].json.respostas[0].sections[0].rows;
+    assert(dayRows[dayRows.length - 1].id === '0', 'dias sem Voltar');
     const times = await exec({ texto: 'day:2026-11-14', state: 'awaiting_schedule_day', cart: filledCart, schedule_slots: SLOTS });
     assertState(times, 'awaiting_schedule_time');
     assertResponseContains(times, '18:30');
     const rows = times?.[0]?.json?.respostas?.[0]?.sections?.[0]?.rows || [];
-    assert(!rows.some((row) => row.title === '18:15'), 'Lista prioriza horas cheias e meias');
+    assert(!rows.some((row) => row.title.includes('18:15')), 'Lista prioriza horas cheias e meias');
+    assert(rows[rows.length - 1].id === '0' && rows.length <= 10, 'horários sem Voltar ou acima de 10');
+  });
+
+  await test('Voltar no agendamento: horário → dias → categorias', async () => {
+    const toDays = await exec({ texto: '0', state: 'awaiting_schedule_time', cart: { ...filledCart, scheduled_date: '2026-11-14' }, schedule_slots: SLOTS });
+    assertState(toDays, 'awaiting_schedule_day');
+    const toCats = await exec({ texto: '0', state: 'awaiting_schedule_day', cart: filledCart, schedule_slots: SLOTS });
+    assertState(toCats, 'ordering_cat');
+  });
+
+  await test('agendado: categorias mostram o horário e "Pedir para agora" desfaz', async () => {
+    const cart = { ...filledCart, scheduled_date: '2026-11-14', scheduled_time: '18:30' };
+    const cats = await exec({ texto: '0', state: 'ordering_items', cart, schedule_slots: SLOTS });
+    const list = cats[0].json.respostas.find((m) => m && m.type === 'list');
+    assert(list.body.includes('Agendado para sáb 14/11 às 18:30'), list.body);
+    assert(list.sections[0].rows.some((row) => row.id === 'schedule:start' && row.title.includes('14/11 18:30')), JSON.stringify(list.sections[0].rows));
+    const days = await exec({ texto: 'schedule:start', state: 'ordering_cat', cart, schedule_slots: SLOTS });
+    assert(days[0].json.respostas[0].sections[0].rows.some((row) => row.id === 'schedule:now'), 'sem "para agora"');
+    const now = await exec({ texto: 'schedule:now', state: 'awaiting_schedule_day', cart, schedule_slots: SLOTS });
+    assertState(now, 'ordering_cat');
+    assert(!now[0].json.cart.scheduled_date && !now[0].json.cart.scheduled_time, 'agendamento deveria sair');
+  });
+
+  await test('confirmação do pedido agendado mostra o horário e segue sem perguntar de novo', async () => {
+    const cart = { ...filledCart, scheduled_date: '2026-11-14', scheduled_time: '18:30' };
+    const summary = await exec({ texto: 'finalizar', state: 'awaiting_more', cart, schedule_slots: SLOTS });
+    assertState(summary, 'confirming');
+    assertResponseContains(summary, 'Agendado para sáb 14/11 às 18:30');
+    const confirmed = await exec({ texto: 'sim', state: 'confirming', cart, schedule_slots: SLOTS });
+    assertState(confirmed, 'awaiting_type');
+    assert(confirmed[0].json.cart.scheduled_time === '18:30', 'confirmar não pode apagar o agendamento');
+  });
+
+  await test('Voltar no checkout: forma de receber → resumo; pagamento → forma de receber; endereço → forma de receber', async () => {
+    const typeScreen = await exec({ texto: 'sim', state: 'confirming', cart: filledCart });
+    const typeButtons = typeScreen[0].json.respostas.find((m) => m && m.type === 'buttons').buttons;
+    assert(typeButtons[typeButtons.length - 1].id === '0' && typeButtons.length <= 3, JSON.stringify(typeButtons));
+    const backToSummary = await exec({ texto: '0', state: 'awaiting_type', cart: filledCart });
+    assertState(backToSummary, 'confirming');
+    const payment = await exec({ texto: 'retirada', state: 'awaiting_type', cart: filledCart });
+    const payRows = payment[0].json.respostas.find((m) => m && m.type === 'list').sections[0].rows;
+    assert(payRows[payRows.length - 1].id === '0', JSON.stringify(payRows));
+    const backToType = await exec({ texto: '0', state: 'awaiting_payment', cart: { ...filledCart, order_type: 'retirada' } });
+    assertState(backToType, 'awaiting_type');
+    assert(backToType[0].json.cart.order_type === '', 'forma de receber deveria ser limpa');
+    const fromAddress = await exec({ texto: 'voltar', state: 'awaiting_address', cart: { ...filledCart, order_type: 'delivery' } });
+    assertState(fromAddress, 'awaiting_type');
   });
 
   await test('horário digitado fora da agenda é recusado', async () => {
@@ -970,7 +1031,7 @@ async function runTests() {
   await test('horário válido guarda a encomenda e o pedido sai com scheduled_for', async () => {
     const cart = { ...filledCart, scheduled_date: '2026-11-14' };
     const chosen = await exec({ texto: '18:15', state: 'awaiting_schedule_time', cart, schedule_slots: SLOTS });
-    assertState(chosen, 'awaiting_type');
+    assertState(chosen, 'ordering_cat');
     assertResponseContains(chosen, 'Agendado para sáb 14/11 às 18:15');
     const paid = await exec({
       texto: 'pix', state: 'awaiting_payment',

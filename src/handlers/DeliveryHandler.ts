@@ -1,6 +1,10 @@
 class DeliveryHandler extends BaseHandler {
   async handle(): Promise<boolean> {
     if (currentState === BotState.AWAITING_TYPE) {
+      if (texto === MENU_BACK_ID || texto === 'voltar') {
+        showOrderConfirmation();
+        return true;
+      }
       let choiceIndex = parseInt(texto) - 1;
       if (isNaN(choiceIndex) || choiceIndex < 0)
         choiceIndex = orderTypes.findIndex((orderType: OrderType) => orderType.name === texto || orderType.label.toLowerCase() === texto.toLowerCase());
@@ -19,6 +23,11 @@ class DeliveryHandler extends BaseHandler {
       } else {
         respostas.push(orderTypeBtn());
       }
+      return true;
+    }
+
+    if (currentState === BotState.AWAITING_ADDRESS && texto === 'voltar') {
+      this._backToOrderType();
       return true;
     }
 
@@ -47,6 +56,19 @@ class DeliveryHandler extends BaseHandler {
     }
 
     return false;
+  }
+
+  private _backToOrderType(): void {
+    newCart.order_type = '';
+    newCart.address = '';
+    newCart.complement = '';
+    newCart.delivery_fee = 0;
+    if (orderTypes.length > 1) {
+      newState = BotState.AWAITING_TYPE;
+      respostas.push(orderTypeBtn());
+      return;
+    }
+    showOrderConfirmation();
   }
 
   private _coordsConfigured(): boolean {
