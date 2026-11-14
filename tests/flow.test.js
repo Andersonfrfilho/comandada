@@ -533,17 +533,27 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
-  await test('resumo da confirmação: quantidade na frente, valores embaixo, total separado', async () => {
+  await test('resumo da confirmação: itens numa tabela alinhada, total embaixo', async () => {
     const cart = { ...cartWithItem, items: [
       { id: 1, name: 'Combo Individual Hot', qty: 13, price: 43, menuIdx: 1 },
-      { id: 2, name: 'Combo Hot Top', qty: 1, price: 70, menuIdx: 2 },
+      { id: 2, name: 'Combo Hot Top', qty: 1, price: 70, menuIdx: 2, note: 'sem cebolinha' },
     ] };
     const r = await exec({ texto: 'finalizar', state: 'ordering', cart });
     assertState(r, 'confirming');
-    assertResponseContains(r, '🔸 *13x Combo Individual Hot*\n      R$ 43,00 cada  →  *R$ 559,00*');
-    assertResponseContains(r, '🔸 *1x Combo Hot Top*\n      *R$ 70,00*');
-    assertResponseContains(r, '━━━━━━━━━━━━━━━\n🧾 14 itens\n💰 *Total: R$ 629,00*');
-    if (process.env.SHOW_SUMMARY) console.log(JSON.stringify(r.responses ?? r, null, 2));
+    const table = [
+      '```',
+      'Qtd Item                 Valor',
+      '------------------------------',
+      '13x Combo Individual    559,00',
+      '    Hot',
+      '    R$ 43,00 cada',
+      ' 1x Combo Hot Top        70,00',
+      '    obs: sem cebolinha',
+      '```',
+    ];
+    table.slice(1, -1).forEach((row) => assert(row.length <= 30, 'linha passa de 30 caracteres: ' + row));
+    assertResponseContains(r, table.join('\n'));
+    assertResponseContains(r, '🧾 14 itens\n💰 *Total: R$ 629,00*');
   });
 
   await test('confirmar → pede tipo de entrega', async () => {

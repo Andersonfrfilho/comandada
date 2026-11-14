@@ -123,7 +123,7 @@ function textOrderChoiceMessage(choice: TextOrderChoice, retry?: boolean): ListM
 }
 
 function textOrderConfirmMessage(draft: TextOrderDraft): ButtonMessage {
-  const lines = draft.items.map((item: CartItem) => orderItemLine(item.name, item.qty, item.price, item.note));
+  const lines = [orderTable(draft.items)];
   const draftTotal = draft.items.reduce((sum: number, item: CartItem) => sum + item.price * item.qty, 0);
   let body = MessagesConstants.TEXTO_ANOTEI + lines.join('\n') + MessagesConstants.TEXTO_SUBTOTAL(fmtBRL(draftTotal));
   if (newCart.items.length > 0) body += MessagesConstants.TEXTO_SOMA_CARRINHO(fmtBRL(cartSummary(newCart.items).total + draftTotal));

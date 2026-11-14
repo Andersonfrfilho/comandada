@@ -285,16 +285,71 @@ function orderItemLine(name: string, qty: number, unitPrice: number, note?: stri
   return MessagesConstants.ITEM_LINHA(qty, name) + '\n' + values + (note ? '\n' + MessagesConstants.ITEM_OBSERVACAO(note) : '');
 }
 
+/** Largura da tabela do pedido em caracteres: cabe na tela de um celular pequeno sem quebrar linha. */
+const ORDER_TABLE_WIDTH = 30;
+const ORDER_TABLE_QTY_WIDTH = 4;
+const ORDER_TABLE_VALUE_WIDTH = 8;
+
+function wrapWords(text: string, width: number): string[] {
+  const wrapped: string[] = [];
+  let current = '';
+  for (const word of text.split(/\s+/).filter(Boolean)) {
+    let remaining = word;
+    while (remaining.length > width) {
+      if (current) { wrapped.push(current); current = ''; }
+      wrapped.push(remaining.slice(0, width));
+      remaining = remaining.slice(width);
+    }
+    if (!remaining) continue;
+    if (!current) current = remaining;
+    else if (current.length + 1 + remaining.length <= width) current += ' ' + remaining;
+    else { wrapped.push(current); current = remaining; }
+  }
+  if (current) wrapped.push(current);
+  return wrapped.length > 0 ? wrapped : [''];
+}
+
+/**
+ * Itens do pedido como tabela em bloco monoespaçado do WhatsApp (```), que é o único jeito de
+ * as colunas de quantidade, item e valor ficarem alinhadas em qualquer celular. Nome comprido
+ * quebra dentro da coluna; preço de cada unidade e observação vão na linha de baixo.
+ */
+function orderTable(items: CartItem[]): string {
+  const nameWidth = ORDER_TABLE_WIDTH - ORDER_TABLE_QTY_WIDTH - 1 - ORDER_TABLE_VALUE_WIDTH;
+  const indent = ' '.repeat(ORDER_TABLE_QTY_WIDTH);
+  const rows: string[] = [
+    MessagesConstants.TABELA_QTD.padEnd(ORDER_TABLE_QTY_WIDTH)
+      + MessagesConstants.TABELA_ITEM.padEnd(nameWidth + 1)
+      + MessagesConstants.TABELA_VALOR.padStart(ORDER_TABLE_VALUE_WIDTH),
+    '-'.repeat(ORDER_TABLE_WIDTH),
+  ];
+  for (const item of items) {
+    const nameLines = wrapWords(item.name, nameWidth);
+    rows.push(
+      (item.qty + 'x').padStart(ORDER_TABLE_QTY_WIDTH - 1) + ' '
+        + nameLines[0].padEnd(nameWidth) + ' '
+        + fmtBRL(item.price * item.qty).padStart(ORDER_TABLE_VALUE_WIDTH)
+    );
+    for (const nameLine of nameLines.slice(1)) rows.push(indent + nameLine);
+    if (item.qty > 1) rows.push(indent + MessagesConstants.TABELA_CADA(fmtBRL(item.price)));
+    if (item.note) {
+      for (const noteLine of wrapWords(MessagesConstants.TABELA_OBS(item.note), ORDER_TABLE_WIDTH - ORDER_TABLE_QTY_WIDTH)) {
+        rows.push(indent + noteLine);
+      }
+    }
+  }
+  return '```\n' + rows.join('\n') + '\n```';
+}
+
+/** `lines` traz a tabela inteira num item só: quem junta com '\n' recebe a tabela pronta. */
 function cartSummary(items: CartItem[]): CartSummarioResult {
   let total = 0;
   let itemCount = 0;
-  const lines: string[] = [];
   for (const item of items) {
     total += item.price * item.qty;
     itemCount += item.qty;
-    lines.push(orderItemLine(item.name, item.qty, item.price, item.note));
   }
-  return { lines, total, itemCount };
+  return { lines: items.length > 0 ? [orderTable(items)] : [], total, itemCount };
 }
 
 function calcDeliveryFee(km: number, min: number, subtotal: number): number {
