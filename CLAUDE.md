@@ -161,11 +161,17 @@ traz `partial_confirmation` e o `PartialConfirmationHandler` lê SIM/NÃO (antes
 e ajusta total e partes do pagamento; NÃO cancela. **Observação por item:** botão 📝 depois de adicionar, vai em
 `order_items.notes` (cozinha e painel).
 
-**Saudação** (`GreetingHandler`): abre com a figurinha do logo do restaurante (Configurações → Marca) e a boas-vindas
-traz horário, aberto agora, endereço, entrega/retirada com taxa e formas de pagamento, cada linha só quando o dado existe.
+**Saudação** (`GreetingHandler`), em mensagens separadas: figurinha do logo → boas-vindas → cartão do restaurante
+(blocos com título em negrito e linha em branco entre eles: aberto agora, horário ou "24 horas", endereço + cidade,
+entrega/retirada com taxa, pagamento, Instagram, site; cada bloco só com o dado cadastrado) → pin no mapa (card de
+localização) → menu. Dados em Configurações → Estabelecimento (`establishment_address`, `establishment_city`,
+`establishment_instagram`, `establishment_website`, lat/lng opcionais). Sem lat/lng digitadas, a API geocodifica
+endereço + cidade uma vez (`EstablishmentLocationService`, Nominatim) e salva com `establishment_geocoded_for`.
 A figurinha é o logo em WebP 512x512 (≤100 KB, fundo transparente) em `GET /public/branding/:establishmentId/sticker.webp`
 (`BrandStickerService`, cache em memória por versão do logo); o contexto do bot traz `establishment.sticker_url` só com
 logo e `API_PUBLIC_URL` em HTTPS. O nó Enviar Resposta manda `{ type: 'sticker' }` como figurinha da Graph API.
+**Logo sem fundo:** ao salvar `brand_logo` a API tira o fundo liso ligado à borda (`removeLogoBackground`, tolerância
+baixa para não comer detalhe escuro) e guarda PNG; a figurinha aplica o mesmo em logo antigo.
 
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
