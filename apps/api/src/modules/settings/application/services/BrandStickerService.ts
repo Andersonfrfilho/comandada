@@ -1,5 +1,6 @@
 import sharp from 'sharp'
 import { BRAND_STICKER, brandLogoVersion } from '../../shared/brandSticker.constant'
+import { removeLogoBackground } from './removeLogoBackground'
 
 export interface BrandSticker {
   version: string
@@ -46,7 +47,9 @@ export class BrandStickerService {
  * Logo centralizado num quadrado transparente de 512 px, comprimido até caber em 100 KB.
  * Logo cheio de detalhe que não cabe nem na menor qualidade perde nitidez (desenhado menor e ampliado).
  */
-export async function toStickerWebp(image: Buffer): Promise<Buffer> {
+export async function toStickerWebp(logo: Buffer): Promise<Buffer> {
+  // Logo salvo antes da remoção automática ainda pode ter fundo liso: some aqui também.
+  const image = await removeLogoBackground(logo)
   let detailSize: number = BRAND_STICKER.size
   while (detailSize >= BRAND_STICKER.minDetailSize) {
     const square = await sharp(image)

@@ -163,6 +163,7 @@ import { SettingsController } from '@/modules/settings/infra/http/SettingsContro
 import { BrandingController } from '@/modules/settings/infra/http/BrandingController'
 import { GetBrandingUseCase } from '@/modules/settings/application/use-cases/GetBrandingUseCase'
 import { BrandStickerService } from '@/modules/settings/application/services/BrandStickerService'
+import { EstablishmentLocationService } from '@/modules/settings/application/services/EstablishmentLocationService'
 import { DeliveryFeeController } from '@/modules/settings/infra/http/DeliveryFeeController'
 
 // Audit
@@ -466,7 +467,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
       new ListScheduledOrderSlotsUseCase(scheduling, agendaSetupService),
       paymentAccountService,
       // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
-      publicApiUrl.startsWith('https://') ? publicApiUrl : undefined
+      publicApiUrl.startsWith('https://') ? publicApiUrl : undefined,
+      new EstablishmentLocationService(db, new NominatimProvider())
     ),
     new SaveBotSessionUseCase(db),
     new CreateBotOrderUseCase(
