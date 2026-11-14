@@ -549,7 +549,7 @@ async function runTests() {
       '   13 x  43,00 ........ 559,00',
       '',
       'Combo Hot Top',
-      '    1 x  70,00 .......... 70,00',
+      '    1 x  70,00 ......... 70,00',
       '  obs: sem cebolinha',
       '```',
     ];
