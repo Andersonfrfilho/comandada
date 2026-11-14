@@ -93,7 +93,8 @@ class MetaCloudChannelStrategy implements ChannelMessageStrategy {
         ? { id: menu.nextId, title: MessagesConstants.MENU_VER_MAIS, description: MessagesConstants.MENU_VER_MAIS_DESCRICAO(menu.page + 2, menu.totalPages) }
         : { id: menu.nextId, title: MessagesConstants.MENU_DO_INICIO, description: MessagesConstants.MENU_DO_INICIO_DESCRICAO });
     }
-    if (menu.checkout) rows.unshift({ id: menu.checkout.id, title: menu.checkout.title, description: menu.checkout.description });
+    // Finalizar fica no fim, logo acima do Voltar.
+    if (menu.checkout) rows.push({ id: menu.checkout.id, title: menu.checkout.title, description: menu.checkout.description });
     rows.push({ id: menu.backId, title: menu.backLabel });
 
     const body = [menu.heading, [menu.subtitle, menuPageLabel(menu)].filter(Boolean).join('\n')].filter(Boolean).join('\n\n');

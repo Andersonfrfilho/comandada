@@ -173,7 +173,7 @@ maior é digitada); a da observação tem ⏭️ Sem observação / ↩️ Troca
 linha escolhida (`cart.edit_index`) tem 🗑️ Remover / 🔢 Mudar qtd / ↩️ Voltar; 0 tira; carrinho vazio volta às categorias.
 **Tamanho e finalizar pelas listas:** a tela do tamanho traz emoji + nome em negrito, descrição em itálico, cada tamanho
 com 🔸 e preço e ↩️ Trocar item (até 2 tamanhos em botões, mais vira lista). Com carrinho, as listas de categorias e
-itens abrem com "🛒 Finalizar pedido" (id `finalizar`, quantos itens e total; Evolution: "digite *finalizar*") e a página
+itens terminam com "🛒 Finalizar pedido" (logo acima do Voltar) (id `finalizar`, quantos itens e total; Evolution: "digite *finalizar*") e a página
 perde uma linha (`itemsPageSize`). A dica de escrever/mandar áudio só aparece na primeira lista, sem carrinho.
 **Descrição do produto:** no cadastro, `porção · composição` ("32 unidades · 4 sashimi de salmão, 8 hot roll") ou texto com
 a porção no fim entre parênteses. Na lista (limite de 72 da Meta) a descrição nunca corta palavra: composição termina em
