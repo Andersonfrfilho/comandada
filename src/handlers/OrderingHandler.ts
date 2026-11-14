@@ -65,7 +65,7 @@ class OrderingHandler extends BaseHandler {
       newState = BotState.ORDERING_CAT;
       newCart.browse_page = 0;
       newCart.browse_cat_page = 0;
-      respostas.push(categoryList('order', 0));
+      respostas.push(categoryList('order', 0, true));
       return true;
     }
 
@@ -82,10 +82,11 @@ class OrderingHandler extends BaseHandler {
 
     const allEntries = menuEntries(currentCategory);
     const currentPage = newCart.browse_page || 0;
-    const pageStart = currentPage * MENU_PAGE_SIZE;
+    const pageSize = itemsPageSize();
+    const pageStart = currentPage * pageSize;
 
     if (isNextPageCommand(texto)) {
-      if (allEntries.length > pageStart + MENU_PAGE_SIZE) {
+      if (allEntries.length > pageStart + pageSize) {
         newCart.browse_page = currentPage + 1;
         respostas.push(itemsList(currentCategory, 'order', currentPage + 1));
       } else {
@@ -121,7 +122,7 @@ class OrderingHandler extends BaseHandler {
     const descriptionText = selectedProduct.description ? '\n\n_' + selectedProduct.description + '_' : '';
     respostas.push({
       type: 'buttons',
-      body: MessagesConstants.PRODUTO_DETALHE(selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText) + MessagesConstants.PRODUTO_VOLTAR_DICA,
+      body: MessagesConstants.PRODUTO_DETALHE(productEmoji(selectedProduct, newCart.browse_category), selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText) + MessagesConstants.PRODUTO_VOLTAR_DICA,
       buttons: [
         { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
         { id: 'qty:note', title: MessagesConstants.OBSERVACAO_BOTAO },
@@ -158,7 +159,7 @@ class OrderingHandler extends BaseHandler {
       || variants.find((variant: Product) => !!variant.variant_label && normalize(texto).includes(normalize(variant.variant_label)));
     if (!chosen) {
       respostas.push(MessagesConstants.TAMANHO_INVALIDO);
-      respostas.push(variantMenu({ product: variants[0], variants, title: variantBaseName(variants[0]) }));
+      respostas.push(variantMenu({ product: variants[0], variants, title: variantBaseName(variants[0]) }, newCart.browse_category));
       return true;
     }
     this._askQuantity(chosen);

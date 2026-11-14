@@ -171,6 +171,10 @@ diferente é outra linha. No resumo, a observação aparece embaixo do nome, ant
 maior é digitada); a da observação tem ⏭️ Sem observação / ↩️ Trocar item. `CartEditHandler`: "✏️ Editar carrinho"
 (depois de adicionar) e "✏️ Editar" (na confirmação) abrem a lista das linhas do carrinho (`awaiting_cart_edit`), e a
 linha escolhida (`cart.edit_index`) tem 🗑️ Remover / 🔢 Mudar qtd / ↩️ Voltar; 0 tira; carrinho vazio volta às categorias.
+**Tamanho e finalizar pelas listas:** a tela do tamanho traz emoji + nome em negrito, descrição em itálico, cada tamanho
+com 🔸 e preço e ↩️ Trocar item (até 2 tamanhos em botões, mais vira lista). Com carrinho, as listas de categorias e
+itens abrem com "🛒 Finalizar pedido" (id `finalizar`, quantos itens e total; Evolution: "digite *finalizar*") e a página
+perde uma linha (`itemsPageSize`). A dica de escrever/mandar áudio só aparece na primeira lista, sem carrinho.
 
 **Saudação** (`GreetingHandler`): na Meta vai **numa mensagem só**: logo no topo (cabeçalho de imagem), boas-vindas,
 cartão do restaurante (blocos em negrito separados por linha em branco: horário com "aberto agora", endereço + cidade

@@ -46,6 +46,13 @@ interface MenuPage {
   nextId: string;        // texto/id que avança a página
   backId: string;        // texto/id que volta
   backLabel: string;
+  checkout?: MenuCheckout; // com carrinho: atalho para fechar o pedido
+}
+
+interface MenuCheckout {
+  id: string;
+  title: string;
+  description: string;
 }
 
 interface ChannelRenderResult {
@@ -83,6 +90,7 @@ class MetaCloudChannelStrategy implements ChannelMessageStrategy {
         ? { id: menu.nextId, title: MessagesConstants.MENU_VER_MAIS, description: MessagesConstants.MENU_VER_MAIS_DESCRICAO(menu.page + 2, menu.totalPages) }
         : { id: menu.nextId, title: MessagesConstants.MENU_DO_INICIO, description: MessagesConstants.MENU_DO_INICIO_DESCRICAO });
     }
+    if (menu.checkout) rows.unshift({ id: menu.checkout.id, title: menu.checkout.title, description: menu.checkout.description });
     rows.push({ id: menu.backId, title: menu.backLabel });
 
     const body = [menu.heading, [menu.subtitle, menuPageLabel(menu)].filter(Boolean).join('\n')].filter(Boolean).join('\n\n');
@@ -149,6 +157,7 @@ class EvolutionTextChannelStrategy implements ChannelMessageStrategy {
     const pageLabel = menuPageLabel(menu);
     if (pageLabel) lines.push('', pageLabel);
     if (menu.hasMore) lines.push(MessagesConstants.PROXIMA_PAGINA(menu.page + 2));
+    if (menu.checkout) lines.push('', MessagesConstants.MENU_FINALIZAR_TEXTO(menu.checkout.description));
     lines.push(MessagesConstants.MENU_INSTRUCAO_TEXTO(menu.backLabel));
     return { type: 'text_menu', body: lines.join('\n'), choices };
   }
