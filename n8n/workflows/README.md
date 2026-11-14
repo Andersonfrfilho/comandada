@@ -1,8 +1,21 @@
 # Workflows n8n
 
-Importe os arquivos `.json` desta pasta diretamente no n8n (Menu → Import Workflow).
+## Como chegam ao n8n (migration)
 
-Ative somente os workflows correspondentes às features habilitadas no `.env`.
+Não importe à mão. A cada push na `main` que mexe no bot, o GitHub Actions (`Sync n8n Workflows`) roda
+`scripts/n8n-migrate.sh`, que aplica estes arquivos pela API do n8n como uma migration:
+
+- workflow novo é criado; workflow igual ao do n8n não é tocado; workflow que mudou é desativado,
+  atualizado e reativado;
+- quem fica ligado ou desligado está em [`../manifest.json`](../manifest.json) (`true`, `false` ou `"keep"`);
+- precisa dos secrets `N8N_URL` e `N8N_API_KEY` no repositório (Settings → Secrets and variables → Actions).
+
+À mão (mesmo resultado; `DRY_RUN=1` só mostra o que mudaria):
+
+```bash
+N8N_URL=https://n8n-comandada-yuyaki.up.railway.app N8N_API_KEY=$(cat ~/.config/comandada/n8n-api-key) \
+  bash scripts/n8n-migrate.sh
+```
 
 > **Importante — n8n 2.x:** Code nodes rodam em sandbox isolado onde `process.env` não está disponível. Todas as variáveis de runtime (API keys, flags de feature, configurações de horário) são lidas da tabela `configuracoes` no banco de dados. Para alterar qualquer configuração, use o Directus (`http://localhost:8055`) ou Adminer (`http://localhost:8181`) — a mudança entra na próxima mensagem, sem restart.
 
