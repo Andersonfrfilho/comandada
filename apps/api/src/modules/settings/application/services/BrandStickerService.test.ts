@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import sharp from 'sharp'
-import { BrandStickerService, toStickerWebp } from './BrandStickerService'
-import { BRAND_STICKER, brandStickerUrl } from '../../shared/brandSticker.constant'
+import { BrandStickerService, toHeaderJpeg, toStickerWebp } from './BrandStickerService'
+import { BRAND_HEADER, BRAND_STICKER, brandHeaderUrl, brandStickerUrl } from '../../shared/brandSticker.constant'
 
 async function wideLogoPng(): Promise<Buffer> {
   return sharp({ create: { width: 900, height: 300, channels: 4, background: { r: 200, g: 30, b: 60, alpha: 1 } } })
@@ -49,5 +49,35 @@ describe('BrandStickerService', () => {
     expect(first).not.toBe(second)
     expect(brandStickerUrl('https://api.exemplo.com', 'abc', '')).toBeNull()
     expect(brandStickerUrl('https://api.exemplo.com', 'abc', null)).toBeNull()
+  })
+
+  test('cabeçalho da saudação: JPEG 1200x628 com o fundo na cor da marca', async () => {
+    const jpeg = await toHeaderJpeg(await wideLogoPng(), '#bb4400')
+    const metadata = await sharp(jpeg).metadata()
+    expect(metadata.format).toBe('jpeg')
+    expect(metadata.width).toBe(BRAND_HEADER.width)
+    expect(metadata.height).toBe(BRAND_HEADER.height)
+    const { data } = await sharp(jpeg).extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true })
+    expect(Math.abs((data[0] ?? 0) - 0xbb)).toBeLessThan(8)
+    expect(Math.abs((data[2] ?? 0) - 0x00)).toBeLessThan(8)
+  })
+
+  test('cabeçalho sem cor válida fica com fundo branco e é refeito quando a cor muda', async () => {
+    let primaryColor: string | null = 'laranja'
+    const logo = `data:image/png;base64,${(await wideLogoPng()).toString('base64')}`
+    const service = new BrandStickerService({ forEstablishment: async () => ({ logo, primaryColor }) })
+    const first = await service.headerForEstablishment('est-1')
+    const { data } = await sharp(first!.jpeg).extract({ left: 0, top: 0, width: 1, height: 1 }).raw().toBuffer({ resolveWithObject: true })
+    expect(data[0]).toBeGreaterThan(245)
+    expect(await service.headerForEstablishment('est-1')).toBe(first)
+    primaryColor = '#123456'
+    expect((await service.headerForEstablishment('est-1'))?.version).not.toBe(first?.version)
+  })
+
+  test('URL do cabeçalho muda com logo ou cor e some sem logo', () => {
+    const first = brandHeaderUrl('https://api.exemplo.com/', 'abc', 'data:image/png;base64,AAA', '#ff0000')
+    expect(first).toStartWith('https://api.exemplo.com/public/branding/abc/cabecalho.jpg?v=')
+    expect(brandHeaderUrl('https://api.exemplo.com', 'abc', 'data:image/png;base64,AAA', '#00ff00')).not.toBe(first)
+    expect(brandHeaderUrl('https://api.exemplo.com', 'abc', null, '#00ff00')).toBeNull()
   })
 })

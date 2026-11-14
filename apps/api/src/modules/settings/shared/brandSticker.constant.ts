@@ -21,3 +21,30 @@ export function brandStickerUrl(publicApiUrl: string, establishmentId: string, l
   const baseUrl = publicApiUrl.replace(/\/$/, '')
   return `${baseUrl}/public/branding/${establishmentId}/${BRAND_STICKER.fileName}?v=${brandLogoVersion(logo.trim())}`
 }
+
+// Imagem de cabeçalho da saudação do bot: logo sem fundo no centro de uma faixa na cor da marca
+// (proporção 1,91:1, a que o WhatsApp mostra inteira no topo da mensagem). JPEG, porque o cabeçalho
+// de mensagem interativa só aceita JPEG ou PNG e transparência ali fica preta em alguns aparelhos.
+export const BRAND_HEADER = {
+  width: 1200,
+  height: 628,
+  logoMaxWidth: 760,
+  logoMaxHeight: 500,
+  defaultBackground: '#ffffff',
+  quality: 85,
+  contentType: 'image/jpeg',
+  fileName: 'cabecalho.jpg',
+} as const
+
+/** URL pública do cabeçalho da saudação; a versão muda com o logo e com a cor. Null sem logo. */
+export function brandHeaderUrl(
+  publicApiUrl: string,
+  establishmentId: string,
+  logo: string | null | undefined,
+  primaryColor: string | null | undefined
+): string | null {
+  if (typeof logo !== 'string' || logo.trim() === '') return null
+  const baseUrl = publicApiUrl.replace(/\/$/, '')
+  const version = brandLogoVersion(logo.trim() + '|' + (primaryColor ?? '').trim())
+  return `${baseUrl}/public/branding/${establishmentId}/${BRAND_HEADER.fileName}?v=${version}`
+}

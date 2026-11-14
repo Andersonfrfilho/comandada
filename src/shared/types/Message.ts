@@ -2,6 +2,8 @@ interface ButtonMessage {
   type: 'buttons';
   body: string;
   buttons: Array<{ id: string; title: string }>;
+  // Imagem no topo da mensagem (cabeçalho interativo da Meta): a saudação leva o logo aqui.
+  headerImage?: string;
 }
 
 interface ListRow {
@@ -37,6 +39,13 @@ interface StickerMessage {
   link: string;
 }
 
+// Foto com legenda: a saudação de quem ainda não disse o nome (logo + texto, sem botões).
+interface ImageMessage {
+  type: 'image';
+  link: string;
+  caption?: string;
+}
+
 // Arquivo (PDF do cardápio): a Meta baixa pelo link.
 interface DocumentMessage {
   type: 'document';
@@ -52,4 +61,5 @@ type OutgoingMessage =
   | TextMenuMessage
   | LocationMessage
   | StickerMessage
+  | ImageMessage
   | DocumentMessage;
