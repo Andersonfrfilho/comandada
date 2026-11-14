@@ -24,3 +24,9 @@ export const API_ORDER_STATUS_TO_BOT: Readonly<Record<OrderStatus, string>> = {
 }
 
 export const RECENT_ORDERS_LIMIT = 5
+
+/** Chave no Redis da parte do contexto do bot que é igual para todos os clientes (+ instance). */
+export const BOT_SHARED_CONTEXT_CACHE_PREFIX = 'bot:context:shared:'
+
+/** Segundos que o cardápio/configurações do bot ficam no Redis (BOT_CONTEXT_CACHE_TTL_SECONDS; 0 desliga). */
+export const BOT_SHARED_CONTEXT_CACHE_TTL_SECONDS = 30
