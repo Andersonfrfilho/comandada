@@ -124,6 +124,8 @@ interface EstablishmentConfig {
   logo_url: string | null;
   /** Figurinha do logo (WebP 512x512) que a API serve; ausente quando o restaurante não tem logo. */
   sticker_url?: string | null;
+  // Logo na faixa da cor da marca, no topo da mensagem única da saudação (Meta).
+  header_image_url?: string | null;
   /** PDF do cardápio completo que a API gera do cadastro; ausente sem URL pública em HTTPS. */
   menu_pdf_url?: string | null;
   address: string | null;

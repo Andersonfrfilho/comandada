@@ -277,60 +277,89 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
-  await test('saudação com logo → figurinha, boas-vindas, cartão do restaurante, pin e menu', async () => {
-    const stickerUrl = 'https://api.exemplo.com/public/branding/abc/sticker.webp?v=123';
-    const r = await exec({ texto: 'oi', establishment: {
-      sticker_url: stickerUrl, address: 'Rua das Flores, 100', instagram: '@sakura.sushi', website: 'sakura.com.br',
-    } });
+  const HEADER_URL = 'https://api.exemplo.com/public/branding/abc/cabecalho.jpg?v=123';
+  const STICKER_URL = 'https://api.exemplo.com/public/branding/abc/sticker.webp?v=123';
+  const ESTABLISHMENT_WITH_LOGO = {
+    sticker_url: STICKER_URL, header_image_url: HEADER_URL,
+    address: 'Rua das Flores, 100', instagram: '@sakura.sushi', website: 'sakura.com.br',
+  };
+
+  await test('saudação na Meta → uma mensagem só: logo no topo, boas-vindas, cartão e menu em botões', async () => {
+    const r = await exec({ texto: 'oi', establishment: ESTABLISHMENT_WITH_LOGO });
     const resps = r?.[0]?.json?.respostas || [];
-    assert(resps[0] && resps[0].type === 'sticker' && resps[0].link === stickerUrl, 'primeira resposta deve ser a figurinha');
-    assert(resps[1] === 'Olá! Bem-vindo ao Sakura 🌸', 'segunda é a boas-vindas sozinha: ' + resps[1]);
-    const card = String(resps[2]);
+    assert(resps.length === 1, 'uma mensagem só: ' + JSON.stringify(resps));
+    const message = resps[0];
+    assert(message.type === 'buttons' && message.headerImage === HEADER_URL, 'botões com o logo no topo: ' + JSON.stringify(message));
     const expectedBlocks = [
-      '📋 *Sobre o Sakura*',
+      'Olá! Bem-vindo ao Sakura 🌸',
       '🕒 *Horário*\nTodos os dias, das 18h às 23h',
+      '📍 *Endereço*\nRua das Flores, 100 · Ribeirão Preto, SP\nhttps://maps.google.com/?q=-21.8,-47.8',
       '🛵 *Entrega e retirada*\nTaxa de entrega *R$ 5,00*',
       '💳 *Pagamento*\nPIX, Cartão Crédito e Dinheiro',
       '📸 *Instagram*\nhttps://instagram.com/sakura.sushi',
       '🌐 *Site*\nhttps://sakura.com.br',
+      'O que vai ser hoje? 😋',
     ];
-    for (const block of expectedBlocks) assert(card.includes(block), 'cartão sem o bloco ' + JSON.stringify(block) + ':\n' + card);
-    assert(card.includes('\n\n🕒'), 'blocos separados por linha em branco');
-    assert(!card.includes('Endereço'), 'endereço não se repete no cartão quando vai o pin: ' + card);
-    assert(resps[3] && resps[3].type === 'location' && resps[3].latitude === -21.8 && resps[3].name === 'Sakura'
-      && resps[3].address === 'Rua das Flores, 100 · Ribeirão Preto, SP', 'quarta é o pin do restaurante com o endereço');
-    const menu = resps[4];
-    assert(menu && menu.type === 'buttons', 'menu por último');
-    assert(menu.body === 'O que vai ser hoje? 😋', 'menu sem instruções de digitar: ' + menu.body);
-    assert(!menu.buttons.some((button) => button.id === 'meu pedido' || button.id === 'ajuda'), 'sem pedido em andamento não mostra meu pedido/ajuda');
+    for (const block of expectedBlocks) assert(message.body.includes(block), 'sem o bloco ' + JSON.stringify(block) + ':\n' + message.body);
+    assert(message.body.endsWith('O que vai ser hoje? 😋'), 'pergunta do menu por último');
+    assert(!message.body.includes('Sobre o'), 'sem título repetindo o nome');
+    assert(!message.body.includes('digite'), 'sem instruções de digitar');
+    assert(message.body.split('Rua das Flores').length === 2, 'endereço uma vez só');
+    const ids = message.buttons.map((button) => button.id);
+    assert(ids.join(',') === '2,3,4', 'sem pedido em andamento: fazer pedido, reservar, atendente: ' + ids);
     assertNoObjectObject(r);
   });
 
   await test('saudação 24h → "24 horas" em vez de "das 0h às 23h59"', async () => {
     const r = await exec({ texto: 'oi', establishment: { opening_time: '00:00', closing_time: '23:59' } });
-    const card = String((r?.[0]?.json?.respostas || [])[1]);
-    assert(card.includes('🕒 *Horário*\nTodos os dias, 24 horas'), 'deve dizer 24 horas: ' + card);
-    assert(!card.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
+    const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
+    assert(body.includes('🕒 *Horário*\nTodos os dias, 24 horas'), 'deve dizer 24 horas: ' + body);
+    assert(!body.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
   });
 
-  await test('saudação sem coordenadas → sem pin e endereço no cartão', async () => {
+  await test('saudação sem coordenadas → endereço sem link do mapa', async () => {
     const r = await exec({ texto: 'oi', establishment: { lat: 0, lng: 0, address: 'Rua das Flores, 100' } });
-    const resps = r?.[0]?.json?.respostas || [];
-    assert(!resps.some((resp) => resp && resp.type === 'location'), 'não deve mandar pin');
-    assert(String(resps[1]).includes('📍 *Endereço*\nRua das Flores, 100'), 'sem pin o endereço vai no cartão: ' + resps[1]);
+    const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
+    assert(body.includes('📍 *Endereço*\nRua das Flores, 100'), 'endereço no texto: ' + body);
+    assert(!body.includes('maps.google'), 'sem link do mapa');
   });
 
-  await test('saudação com pedido em andamento → lista com meu pedido e ajuda, sem repetir pedido', async () => {
-    const r = await exec({ texto: 'oi',
+  await test('saudação sem logo → mesma mensagem, sem imagem no topo', async () => {
+    const r = await exec({ texto: 'oi' });
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(resps.length === 1 && resps[0].type === 'buttons' && !resps[0].headerImage, 'botões sem cabeçalho: ' + JSON.stringify(resps));
+  });
+
+  await test('saudação sem nome → logo com o texto na legenda e pede o nome (awaiting_name)', async () => {
+    const r = await exec({ texto: 'oi', customerName: null, establishment: ESTABLISHMENT_WITH_LOGO });
+    assertState(r, 'awaiting_name');
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(resps.length === 1 && resps[0].type === 'image' && resps[0].link === HEADER_URL, 'foto do logo: ' + JSON.stringify(resps));
+    assert(/nome/i.test(resps[0].caption) && resps[0].caption.includes('🕒 *Horário*'), 'legenda com cartão e pedido do nome: ' + resps[0].caption);
+    assertNoObjectObject(r);
+  });
+
+  await test('saudação com pedido anterior → mesma mensagem pergunta se repete (repeat_order)', async () => {
+    const r = await exec({ texto: 'oi', establishment: ESTABLISHMENT_WITH_LOGO, lastOrder: {
+      items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], total: 47.80
+    }});
+    assertState(r, 'repeat_order');
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(resps.length === 1 && resps[0].type === 'buttons' && resps[0].headerImage === HEADER_URL, 'uma mensagem: ' + JSON.stringify(resps));
+    assert(resps[0].body.includes('Temaki Salmão') && resps[0].body.includes('🕒 *Horário*'), 'cartão e pedido anterior: ' + resps[0].body);
+    assertNoObjectObject(r);
+  });
+
+  await test('saudação com pedido em andamento → botões meu pedido, ajuda e fazer pedido, sem repetir pedido', async () => {
+    const r = await exec({ texto: 'oi', establishment: ESTABLISHMENT_WITH_LOGO,
       recent_orders: [{ code: 'PED-9', status: 'preparing', order_type: 'delivery', total: 50, created_at: '13/11' }],
       lastOrder: { items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], total: 47.80 } });
     assertState(r, 'start');
     const resps = r?.[0]?.json?.respostas || [];
-    const menu = resps[resps.length - 1];
-    assert(menu && menu.type === 'list', 'com 5 opções o menu vira lista: ' + JSON.stringify(menu));
-    const ids = menu.sections.flatMap((section) => section.rows.map((row) => row.id));
-    assert(ids[0] === 'meu pedido' && ids[1] === 'ajuda', 'meu pedido e ajuda primeiro: ' + ids);
-    assert(ids.includes('2') && ids.includes('4'), 'fazer pedido e atendente continuam: ' + ids);
+    const message = resps[0];
+    assert(resps.length === 1 && message.type === 'buttons', 'uma mensagem com botões: ' + JSON.stringify(resps));
+    assert(message.buttons.map((button) => button.id).join(',') === 'meu pedido,ajuda,2', 'botões: ' + JSON.stringify(message.buttons));
+    assert(message.body.includes('Seu pedido está em andamento'), 'avisa o pedido em andamento');
     assertNoObjectObject(r);
   });
 
@@ -340,25 +369,13 @@ async function runTests() {
     assertResponseContains(r, 'PED-9');
   });
 
-  await test('saudação sem logo → nenhuma figurinha', async () => {
-    const r = await exec({ texto: 'oi' });
+  await test('saudação no Evolution → figurinha, boas-vindas, cartão, pin e menu numerado em mensagens separadas', async () => {
+    const r = await exec({ texto: 'oi', provider: 'evolution', establishment: ESTABLISHMENT_WITH_LOGO });
     const resps = r?.[0]?.json?.respostas || [];
-    assert(!resps.some((resp) => resp && resp.type === 'sticker'), 'não deve mandar figurinha');
-  });
-
-  await test('saudação sem nome → pede nome (awaiting_name)', async () => {
-    const r = await exec({ texto: 'oi', customerName: null });
-    assertState(r, 'awaiting_name');
-    assertResponseContains(r, 'nome');
-    assertNoObjectObject(r);
-  });
-
-  await test('saudação com pedido anterior → pergunta repetir (repeat_order)', async () => {
-    const r = await exec({ texto: 'oi', lastOrder: {
-      items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], total: 47.80
-    }});
-    assertState(r, 'repeat_order');
-    assertResponseType(r, 'buttons');
+    assert(resps[0] && resps[0].type === 'sticker' && resps[0].link === STICKER_URL, 'figurinha primeiro');
+    assert(String(resps[2]).includes('📋 *Sobre o Sakura*'), 'cartão com título: ' + resps[2]);
+    assert(resps[3] && resps[3].type === 'location', 'pin do mapa');
+    assert(typeof resps[4] === 'string' && resps[4].includes('*1.*'), 'menu numerado: ' + resps[4]);
     assertNoObjectObject(r);
   });
 

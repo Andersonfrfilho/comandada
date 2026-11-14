@@ -4,39 +4,50 @@ class GreetingHandler extends BaseHandler {
 
     newState = BotState.START;
     newCart = CartConstants.EMPTY();
-    // A saudação abre com a figurinha do logo do restaurante, quando ele tem logo.
-    if (brandSticker) respostas.push(brandSticker);
 
-    // Boas-vindas curta, o cartão com os dados do restaurante e o pin no mapa, cada um numa mensagem.
-    const companyCard = buildCompanyInfo();
-    const locationCard = establishmentLocationCard();
-    const pushCompanyCard = (): void => {
-      respostas.push(companyCard);
-      if (locationCard) respostas.push(locationCard);
-    };
-
+    // Fecho da saudação: pedir o nome, oferecer repetir o último pedido ou o menu.
+    let welcome: string = msgWelcome;
+    let closing: ButtonMessage | string;
+    let repeatOrderLines: string | null = null;
     if (!customerName) {
       newState = BotState.AWAITING_NAME;
-      respostas.push(MessagesConstants.BOAS_VINDAS_NOVO(estName));
-      pushCompanyCard();
-      respostas.push(MessagesConstants.PEDIR_NOME);
+      welcome = MessagesConstants.BOAS_VINDAS_NOVO(estName);
+      closing = MessagesConstants.PEDIR_NOME;
     } else {
       if (!customerNameFromDB && pushNameFormatted) {
         customerNameToSave = pushNameFormatted;
         save_customer_name = true;
       }
-      respostas.push(msgWelcome);
-      pushCompanyCard();
       // Com pedido em andamento o menu já traz "Meu pedido" e "Ajuda": não oferece repetir o anterior.
       if (!hasOrderInProgress() && lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
-        const lines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) });
         newState = BotState.REPEAT_ORDER;
-        respostas.push(lines.join('\n'));
-        respostas.push(yesNo(MessagesConstants.SAUDACAO_REPEAT_PERGUNTA));
+        repeatOrderLines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) }).join('\n');
+        closing = yesNo(MessagesConstants.SAUDACAO_REPEAT_PERGUNTA);
       } else {
-        respostas.push(mainMenu());
+        closing = mainMenu();
       }
     }
+
+    // Meta: tudo numa mensagem só, com o logo no topo. O resumo do pedido anterior entra antes da pergunta.
+    if (channelProvider !== WhatsAppProvider.EVOLUTION) {
+      const closingWithOrder = repeatOrderLines && typeof closing !== 'string'
+        ? { ...closing, body: repeatOrderLines + '\n\n' + closing.body }
+        : closing;
+      const single = singleGreetingMessage(welcome, closingWithOrder);
+      if (single) {
+        respostas.push(single);
+        return true;
+      }
+    }
+
+    // Evolution (ou texto longo demais): figurinha do logo, boas-vindas, cartão, pin e o fecho, cada um numa mensagem.
+    if (brandSticker) respostas.push(brandSticker);
+    respostas.push(welcome);
+    respostas.push(buildCompanyInfo());
+    const locationCard = establishmentLocationCard();
+    if (locationCard) respostas.push(locationCard);
+    if (repeatOrderLines) respostas.push(repeatOrderLines);
+    respostas.push(closing);
     return true;
   }
 }

@@ -1,7 +1,7 @@
 import type { RouteHandler } from '@/infra/http/router'
 import type { GetBrandingUseCase } from '../../application/use-cases/GetBrandingUseCase'
 import type { BrandStickerService } from '../../application/services/BrandStickerService'
-import { BRAND_STICKER } from '../../shared/brandSticker.constant'
+import { BRAND_HEADER, BRAND_STICKER } from '../../shared/brandSticker.constant'
 import { NotFoundError, UnauthorizedError } from '@/shared/errors/AppError'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -31,5 +31,14 @@ export class BrandingController {
     const sticker = this.brandStickerService ? await this.brandStickerService.forEstablishment(establishmentId) : null
     if (!sticker) throw new NotFoundError('Figurinha')
     response.binary(sticker.webp, BRAND_STICKER.contentType)
+  }
+
+  // Cabeçalho da saudação do bot (logo na faixa da cor da marca). Público porque a Meta baixa pela URL.
+  getHeader: RouteHandler = async (request, response) => {
+    const establishmentId = request.params['establishmentId'] ?? ''
+    if (!UUID_PATTERN.test(establishmentId)) throw new NotFoundError('Cabeçalho')
+    const header = this.brandStickerService ? await this.brandStickerService.headerForEstablishment(establishmentId) : null
+    if (!header) throw new NotFoundError('Cabeçalho')
+    response.binary(header.jpeg, BRAND_HEADER.contentType)
   }
 }
