@@ -1,4 +1,4 @@
-# CLAUDE.md — sakura-bot-oficial
+# AGENTS.md — sakura-bot-oficial
 
 Template de bot de atendimento WhatsApp usando a **Meta WhatsApp Cloud API** (oficial).
 Projeto irmão de `sakura-bot/` (Evolution API). Use este para produção — sem risco de ban.
@@ -119,87 +119,7 @@ Os `tasks.md` em `.specs/features/*/` anotam o **modelo recomendado por fase**
 (`haiku` mecânico · `sonnet` execução padrão · `opus`/`fable` 🧠 arquitetura).
 Ao iniciar uma fase/task: se o modelo da sessão divergir do recomendado,
 **pare e peça ao usuário para rodar `/model <modelo>`** antes de codar.
-Regra completa: `~/.claude/rules/rules/model-economy.md`.
-
-## Dados do bot (n8n ↔ API)
-
-O workflow `01-receber-mensagem.json` não fala SQL com o Postgres: lê e grava pela API, nas rotas
-internas protegidas por `X-Internal-Token` (`N8N_INTERNAL_API_TOKEN` na API = `ORDER_HUB_N8N_INTERNAL_TOKEN`
-no n8n, mínimo 32 caracteres; sem ele as rotas respondem 401):
-
-| Nó | Rota |
-|---|---|
-| Buscar Dados | `GET /internal/bot/:whatsapp/context` (inclui `schedule_slots`: horários livres de encomenda) |
-| Salvar Sessão | `PUT /internal/bot/:whatsapp/session` (tabela `bot_sessions`) |
-| Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/orders` e `POST /internal/bot/:whatsapp/reservations` |
-| Atualizar Nome Cliente | `PUT /internal/bot/:whatsapp/customer` |
-| Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/issues` (problema relatado pelo cliente) |
-| Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/partial-confirmation` (SIM/NÃO à confirmação parcial) |
-
-**Ajuda com o pedido** (`src/handlers/IssueHandler.ts`, palavras *problema*/*ajuda*): as opções seguem o momento do pedido
-(em andamento: onde está, atrasado só depois da previsão, alterar só antes do preparo; entregue há até 6 h: faltou item,
-item errado, qualidade, entrega, pagamento; sem pedido: fazer pedido, cardápio). *Falar com atendente* aparece sempre.
-O problema vai para `order_issues` e aparece em **Relatórios → Problemas relatados**.
-
-**Atendimento humano segue a inbox** (`HandoffHandler`): o contexto traz `conversation.mode` de `meta_whatsapp.sessions`.
-Atendente assumiu no painel → bot calado; liberou → bot volta na hora.
-
-**Confirmação só depois de gravar:** `Rotear e Responder → Gravar Pedido e Reserva → Salvar Sessão → Enviar Resposta`.
-Se a API recusa, o cliente recebe um aviso, a sessão volta ao passo anterior com o carrinho e a cozinha não é avisada.
-O pedido gravado volta com `estimatedAt`, que entra na confirmação como previsão.
-
-**Entrada pela API com worker** (`docs/whatsapp-entrada-pela-api.md`): `POST /webhooks/whatsapp` confere a assinatura,
-enfileira (`whatsapp-inbound`) e o serviço worker (`src/worker.ts`, só consome filas) repassa o corpo cru com a assinatura
-original para `/webhook/routing` do n8n. Filas não rodam na API com `API_QUEUE_WORKERS=false`.
-
-**Webhook da Meta no n8n** (nó Extrair Mensagem): com `WHATSAPP_APP_SECRET` no n8n, só passa POST com
-`X-Hub-Signature-256` válido (corpo cru via `rawBody` do nó Webhook, `NODE_FUNCTION_ALLOW_BUILTIN=crypto`), e o
-formato já extraído só entra com `X-Internal-Token`. A mesma mensagem (id da Meta) entregue de novo em 24 h é ignorada.
-
-**Confirmação parcial:** o painel avisa que itens acabaram (`order_partial_confirmations`, pendente); o contexto do bot
-traz `partial_confirmation` e o `PartialConfirmationHandler` lê SIM/NÃO (antes do "cancelar" global). SIM tira os itens
-e ajusta total e partes do pagamento; NÃO cancela. **Observação por item:** botão 📝 depois de adicionar, vai em
-`order_items.notes` (cozinha e painel).
-
-**Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
-Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
-histórico de status chega pela sincronização. Fora da janela de 24 h vai o template `atualizacao_pedido`
-(`ORDER_UPDATE_TEMPLATE`, criar no WhatsApp Manager: pt_BR, Utilidade, corpo
-`Oi! Temos novidades sobre o seu pedido *{{1}}*: {{2}} Qualquer dúvida, é só responder esta mensagem. 😊`). A nota
-fiscal vai pelo mesmo WhatsApp (sem n8n).
-
-**Total do pedido = itens + taxa de entrega** (`orders.delivery_fee` guarda a taxa; a nota fiscal leva só os itens).
-Pago na entrega/retirada entra no caixa ao concluir (`RecordOrderPaymentsUseCase`, uma entrada por parte). Encomenda só
-aparece na fila da cozinha 40 min (retirada) ou 60 min (entrega) antes da hora marcada.
-
-Código em `apps/api/src/modules/bot/`. Preço vem do catálogo, nunca do payload; o pagamento vem em
-partes (`payments`: divisão por pessoa, misto cartão + dinheiro, troco por parte).
-
-## Pagamento pelo WhatsApp (Mercado Pago)
-
-Cada restaurante liga a própria conta em **Configurações → Pagamentos** (access token + assinatura secreta do
-webhook, cifrados com `SecretCipher` em `payment_accounts`); o dinheiro cai direto nela. Provedor vem do SDK:
-`@adatechnology/payment-contracts` (porta `ChargeProviderPort`) + `@adatechnology/mercadopago-payment-provider`.
-Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Código em `apps/api/src/modules/payments/`.
-
-- Conta ligada: o contexto do bot marca Pix com `config.online` e acrescenta `link_cartao` (cartão pelo link).
-- Pedido de **uma parte** em Pix/link: a API gera a cobrança (`payment_charges`), põe `orders.payment_status = awaiting`
-  e devolve `payment` no `POST /internal/bot/:whatsapp/orders`; o nó Gravar Pedido manda o copia-e-cola (mensagem
-  sozinha) ou o link. Divisão e misto continuam pagos na entrega/retirada.
-- `awaiting`/`failed` ficam fora da fila da cozinha. Webhook `POST /webhooks/payments/mercadopago/:establishmentId`
-  (assinatura `x-signature` conferida e estado relido na API do Mercado Pago, idempotente por `payment_webhook_events`):
-  aprovado → `paid`, movimento no caixa aberto, cozinha avisada, cliente avisado; expirado/cancelado → pedido cancelado.
-- Link de cartão vencido não gera webhook: a varredura a cada 5 min (`ExpireStaleChargesUseCase`) cancela.
-- `API_PUBLIC_URL` (HTTPS) monta o `notification_url`.
-
-## Agenda (encomendas e reservas)
-
-`@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.
-A API espelha o restaurante no SDK sozinha: 3 linhas de produção (até 3 encomendas por faixa de 15 min)
-e uma agenda por mesa, com o horário de `opening_time`/`closing_time`/`working_days` no momento da criação.
-Encomenda ocupa a faixa antes de o pedido existir (e libera se o pedido falhar); reserva escolhe a menor mesa livre.
-Painel: página **Agenda** (`GET /agenda?date=`). Cardápio com tamanhos: `products.variant_group`/`variant_label`.
-Seed do Yuyaki: `bun run --cwd apps/api db:seed:yuyaki`.
+Regra completa: `~/.Codex/rules/rules/model-economy.md`.
 
 ## Lógica do bot (src/)
 
@@ -209,7 +129,6 @@ O nó `Rotear e Responder` do workflow é gerado a partir de módulos em `src/`:
 src/
   setup.js              — extração de contexto, helpers, message builders
   handlers/
-    SchedulingHandler.ts — "para agora ou agendar?", dia e horário da encomenda
     global.js           — sair / cancelar (qualquer estado)
     greeting.js         — saudações → boas-vindas ou awaiting_name
     cart.js             — repeat_order, carrinho, finalizar, confirmar
