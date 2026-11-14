@@ -589,7 +589,23 @@ function categoryEmoji(categoryName: string): string {
 
 // Com o PDF do cardápio, cada página de categorias guarda uma linha para "📄 Ver cardápio completo".
 function categoryPageSize(): number {
-  return menuPdfUrl ? MENU_PAGE_SIZE - 1 : MENU_PAGE_SIZE;
+  return itemsPageSize() - (menuPdfUrl ? 1 : 0);
+}
+
+// Com itens no carrinho, cada lista do cardápio guarda uma linha para "🛒 Finalizar pedido":
+// o cliente não fica obrigado a escolher mais nada para fechar.
+function itemsPageSize(): number {
+  return newCart.items.length > 0 ? MENU_PAGE_SIZE - 1 : MENU_PAGE_SIZE;
+}
+
+function checkoutShortcut(): MenuCheckout | undefined {
+  if (newCart.items.length === 0) return undefined;
+  const { total, itemCount } = cartSummary(newCart.items);
+  return {
+    id: 'finalizar',
+    title: MessagesConstants.MENU_FINALIZAR,
+    description: MessagesConstants.MENU_FINALIZAR_DESCRICAO(itemCount, fmtBRL(total)),
+  };
 }
 
 function menuPdfMessage(): DocumentMessage {
@@ -601,7 +617,8 @@ function menuPdfMessage(): DocumentMessage {
   };
 }
 
-function categoryList(context: string, page?: number): ListMessage | TextMenuMessage | string {
+// returning: voltou de uma categoria; a dica de escrever/mandar áudio só aparece na primeira vez.
+function categoryList(context: string, page?: number, returning?: boolean): ListMessage | TextMenuMessage | string {
   if (!products || products.length === 0) return MessagesConstants.CARDAPIO_INDISPONIVEL;
   const categories = menuCategories();
   const pageSize = categoryPageSize();
@@ -629,7 +646,8 @@ function categoryList(context: string, page?: number): ListMessage | TextMenuMes
     });
   }
   const [heading, defaultSubtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
-  const subtitle = context === 'order' && currentPage === 0 ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample()) : defaultSubtitle;
+  const showHint = context === 'order' && currentPage === 0 && !returning && newCart.items.length === 0;
+  const subtitle = showHint ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample()) : defaultSubtitle;
   return channelStrategy.renderMenu({
     heading,
     subtitle: subtitle || '',
@@ -642,6 +660,7 @@ function categoryList(context: string, page?: number): ListMessage | TextMenuMes
     nextId: 'próxima',
     backId: '0',
     backLabel: MessagesConstants.MENU_VOLTAR_INICIO,
+    checkout: context === 'order' ? checkoutShortcut() : undefined,
   });
 }
 
@@ -691,24 +710,41 @@ function entryPriceText(entry: MenuEntry): string {
     .join(' · ');
 }
 
-function variantMenu(entry: MenuEntry): ButtonMessage | ListMessage {
-  const body = MessagesConstants.ESCOLHER_TAMANHO(entry.title)
-    + (entry.product.description ? '\n_' + entry.product.description + '_' : '');
-  const options = entry.variants.map((variant: Product) => ({
+// Emoji do item: o cadastrado no produto ou o sugerido pelo nome e pela categoria.
+function productEmoji(product: Product, categoryName?: string): string {
+  return product.emoji || menuEmojiFor(product.name, categoryName || product.category || '');
+}
+
+const SIZE_EMOJI = '🔸';
+
+// Tela do tamanho: emoji + nome em negrito, descrição em itálico, cada tamanho com preço e "↩️ Trocar item".
+function variantMenu(entry: MenuEntry, categoryName?: string): ButtonMessage | ListMessage {
+  const emoji = entry.product.emoji || menuEmojiFor(entry.title, categoryName || newCart.browse_category || entry.product.category || '');
+  const body = MessagesConstants.ESCOLHER_TAMANHO(emoji, entry.title, entry.product.description ? String(entry.product.description) : '');
+  const sizes = entry.variants.map((variant: Product) => ({
     id: 'size:' + variant.id,
-    title: ((variant.variant_label || variant.name) + ' R$ ' + fmtBRL(variant.price)).slice(0, 24),
+    label: SIZE_EMOJI + ' ' + (variant.variant_label || variant.name),
+    price: 'R$ ' + fmtBRL(variant.price),
   }));
-  if (options.length <= 3) return { type: 'buttons', body, buttons: options };
-  return { type: 'list', body, button: 'Ver tamanhos', sections: [{ title: 'Tamanhos', rows: options }] };
+  const back = { id: 'item:back', title: MessagesConstants.TROCAR_ITEM };
+  const buttons = sizes.map((size) => ({ id: size.id, title: size.label + ' · ' + size.price }));
+  // Até 2 tamanhos cabem em botões junto com o "Trocar item" (3 botões, 20 caracteres cada).
+  if (buttons.length <= 2 && buttons.every((button) => Array.from(button.title).length <= 20)) {
+    return { type: 'buttons', body, buttons: [...buttons, back] };
+  }
+  const rows: ListRow[] = sizes.slice(0, 9).map((size) => ({ id: size.id, title: size.label, description: '💰 ' + size.price }));
+  rows.push(back);
+  return { type: 'list', body, button: MessagesConstants.TAMANHO_BOTAO_LISTA, sections: [{ title: MessagesConstants.TAMANHO_SECAO, rows }] };
 }
 
 function itemsList(categoryName: string, context: string, page: number): ListMessage | TextMenuMessage {
   const allEntries = menuEntries(categoryName);
-  const totalPages = menuTotalPages(allEntries.length);
+  const pageSize = itemsPageSize();
+  const totalPages = Math.max(1, Math.ceil(allEntries.length / pageSize));
   const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
-  const start = currentPage * MENU_PAGE_SIZE;
+  const start = currentPage * pageSize;
   // id = número do item na categoria: tocar na lista ou digitar o número dá no mesmo.
-  const options: MenuOption[] = allEntries.slice(start, start + MENU_PAGE_SIZE).map((entry: MenuEntry, index: number) => ({
+  const options: MenuOption[] = allEntries.slice(start, start + pageSize).map((entry: MenuEntry, index: number) => ({
     id: String(start + index + 1),
     number: start + index + 1,
     emoji: entry.product.emoji || menuEmojiFor(entry.title, categoryName),
@@ -725,10 +761,11 @@ function itemsList(categoryName: string, context: string, page: number): ListMes
     options,
     page: currentPage,
     totalPages,
-    hasMore: allEntries.length > start + MENU_PAGE_SIZE,
+    hasMore: allEntries.length > start + pageSize,
     nextId: 'próxima',
     backId: '0',
     backLabel: MessagesConstants.MENU_VOLTAR_CATEGORIAS,
+    checkout: context === 'order' ? checkoutShortcut() : undefined,
   });
 }
 

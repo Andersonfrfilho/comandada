@@ -723,7 +723,7 @@ async function runTests() {
     const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temakis', provider: 'evolution' });
     assertState(r, 'awaiting_size');
     const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Qual tamanho'));
-    assert(text && text.includes('*1.* *Médio R$ 37,00*') && text.includes('*2.* *Grande R$ 49,00*'), String(text));
+    assert(text && text.includes('*1.* *🔸 Médio · R$ 37,00*') && text.includes('*2.* *🔸 Grande · R$ 49,00*') && text.includes('*3.* *↩️ Trocar item*'), String(text));
     const choices = r[0].json.cart.menu_choices;
     assert(choices['2'] === 'size:9', JSON.stringify(choices));
     const picked = await exec({ texto: '2', state: 'awaiting_size', provider: 'evolution',
@@ -840,7 +840,47 @@ async function runTests() {
     const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temakis' });
     assertState(r, 'awaiting_size');
     assertResponseContains(r, 'Qual tamanho?');
-    assertResponseContains(r, 'Grande R$ 49,00');
+    assertResponseContains(r, '🔸 Grande · R$ 49,00');
+  });
+
+  await test('tela de tamanho: emoji e nome em negrito, descrição em itálico e "Trocar item"', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temakis' });
+    const screen = r[0].json.respostas.find((message) => message && message.type === 'buttons');
+    assert(/^\S+ \*Temaki Hot\*/.test(screen.body), screen.body);
+    assert(screen.buttons.some((button) => button.id === 'item:back' && button.title === '↩️ Trocar item'), JSON.stringify(screen.buttons));
+    assert(screen.buttons.every((button) => Array.from(button.title).length <= 20), 'botão acima de 20');
+    const back = await exec({ texto: 'item:back', state: 'awaiting_size', cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot' } });
+    assertState(back, 'ordering_items');
+  });
+
+  await test('com carrinho: categorias e itens trazem "🛒 Finalizar pedido" e ele fecha o pedido', async () => {
+    const cart = { items: [{ id: 1, name: 'Combo Junior', qty: 2, price: 30 }], browse_category: 'Temakis' };
+    const items = await exec({ texto: '__add_more__', state: 'awaiting_more', cart });
+    const itemsListMsg = items[0].json.respostas.find((message) => message && message.type === 'list');
+    const itemRows = itemsListMsg.sections.flatMap((section) => section.rows);
+    assert(itemRows[0].id === 'finalizar' && itemRows[0].title === '🛒 Finalizar pedido' && itemRows[0].description.includes('R$ 60,00'), JSON.stringify(itemRows[0]));
+    assert(itemRows.some((row) => row.id === '0'), 'sem voltar');
+    const cats = await exec({ texto: '0', state: 'ordering_items', cart });
+    assertState(cats, 'ordering_cat');
+    const catList = cats[0].json.respostas.find((message) => message && message.type === 'list');
+    assert(catList.sections[0].rows[0].id === 'finalizar', JSON.stringify(catList.sections[0].rows[0]));
+    assert(!catList.body.includes('áudio'), 'não deveria repetir a dica longa: ' + catList.body);
+    const done = await exec({ texto: 'finalizar', state: 'ordering_cat', cart });
+    assertState(done, 'confirming');
+  });
+
+  await test('sem carrinho: voltar às categorias não repete a dica de escrever/áudio e não tem finalizar', async () => {
+    const cats = await exec({ texto: '0', state: 'ordering_items', browse_category: 'Temakis' });
+    const catList = cats[0].json.respostas.find((message) => message && message.type === 'list');
+    assert(!catList.body.includes('áudio'), catList.body);
+    assert(!catList.sections[0].rows.some((row) => row.id === 'finalizar'), 'finalizar sem carrinho');
+  });
+
+  await test('evolution com carrinho: lista em texto mostra como finalizar', async () => {
+    const cart = { items: [{ id: 1, name: 'Combo Junior', qty: 1, price: 30 }] };
+    const r = await exec({ texto: '0', state: 'ordering_items', provider: 'evolution', cart });
+    const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Finalizar pedido'));
+    assert(text && text.includes('digite *finalizar*') && text.includes('R$ 30,00'), String(text));
   });
 
   await test('botão de tamanho leva à quantidade do produto certo', async () => {

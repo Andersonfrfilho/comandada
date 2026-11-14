@@ -79,7 +79,7 @@ function textOrderChoiceRows(choice: TextOrderChoice): ListRow[] {
   if (isSameItemSizes(options)) {
     return options.slice(0, FREE_TEXT_MAX_ROWS).map((product: Product) => ({
       id: 'pick:' + product.id,
-      title: product.variant_label || product.name,
+      title: product.variant_label ? SIZE_EMOJI + ' ' + product.variant_label : product.name,
       description: '💰 R$ ' + fmtBRL(product.price),
     }));
   }
@@ -108,7 +108,7 @@ function textOrderChoiceRows(choice: TextOrderChoice): ListRow[] {
 function textOrderChoiceMessage(choice: TextOrderChoice, retry?: boolean): ListMessage {
   const options = textOrderChoiceOptions(choice);
   const body = (retry ? MessagesConstants.TEXTO_ESCOLHA_REPETIR + '\n\n' : '') + (isSameItemSizes(options)
-    ? MessagesConstants.TEXTO_ESCOLHA_TAMANHO(variantBaseName(options[0]), choice.qty)
+    ? MessagesConstants.TEXTO_ESCOLHA_TAMANHO(options[0].emoji || menuEmojiFor(variantBaseName(options[0]), options[0].category || ''), variantBaseName(options[0]), choice.qty)
     : MessagesConstants.TEXTO_ESCOLHA(choice.query, choice.qty));
   const rows = textOrderChoiceRows(choice);
   rows.push({ id: 'pick:none', title: MessagesConstants.TEXTO_ESCOLHA_NENHUM });
