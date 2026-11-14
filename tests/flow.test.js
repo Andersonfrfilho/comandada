@@ -886,12 +886,15 @@ async function runTests() {
     const items = await exec({ texto: '__add_more__', state: 'awaiting_more', cart });
     const itemsListMsg = items[0].json.respostas.find((message) => message && message.type === 'list');
     const itemRows = itemsListMsg.sections.flatMap((section) => section.rows);
-    assert(itemRows[0].id === 'finalizar' && itemRows[0].title === '🛒 Finalizar pedido' && itemRows[0].description.includes('R$ 60,00'), JSON.stringify(itemRows[0]));
+    const checkoutRow = itemRows[itemRows.length - 2];
+    assert(checkoutRow.id === 'finalizar' && checkoutRow.title === '🛒 Finalizar pedido' && checkoutRow.description.includes('R$ 60,00'), JSON.stringify(itemRows));
+    assert(itemRows[itemRows.length - 1].id === '0', 'voltar deveria ser a última');
     assert(itemRows.some((row) => row.id === '0'), 'sem voltar');
     const cats = await exec({ texto: '0', state: 'ordering_items', cart });
     assertState(cats, 'ordering_cat');
     const catList = cats[0].json.respostas.find((message) => message && message.type === 'list');
-    assert(catList.sections[0].rows[0].id === 'finalizar', JSON.stringify(catList.sections[0].rows[0]));
+    const catRows = catList.sections[0].rows;
+    assert(catRows[catRows.length - 2].id === 'finalizar' && catRows[catRows.length - 1].id === '0', JSON.stringify(catRows));
     assert(!catList.body.includes('áudio'), 'não deveria repetir a dica longa: ' + catList.body);
     const done = await exec({ texto: 'finalizar', state: 'ordering_cat', cart });
     assertState(done, 'confirming');
