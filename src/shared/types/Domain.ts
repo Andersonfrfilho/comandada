@@ -206,4 +206,6 @@ interface MsgData {
   location_lat: number | null;
   location_lng: number | null;
   push_name?: string;
+  // Provedor do WhatsApp que trouxe a mensagem: 'meta_cloud' (oficial) ou 'evolution'.
+  provider?: string;
 }

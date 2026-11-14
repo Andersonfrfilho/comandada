@@ -173,6 +173,13 @@ logo e `API_PUBLIC_URL` em HTTPS. O nó Enviar Resposta manda `{ type: 'sticker'
 **Logo sem fundo:** ao salvar `brand_logo` a API tira o fundo liso ligado à borda (`removeLogoBackground`, tolerância
 baixa para não comer detalhe escuro) e guarda PNG; a figurinha aplica o mesmo em logo antigo.
 
+**Mensagens por provedor** (`src/shared/channels/ChannelMessageStrategy.ts`): toda resposta passa pela strategy do provedor
+antes de sair (`renderPayloadForChannel` no teardown); handler nenhum monta texto numerado. `categoryList`/`itemsList`
+montam um `MenuPage` paginado. `meta_cloud` (oficial): lista interativa, 8 opções por página + "➡️ Ver mais" +
+"↩️ Voltar" (limite de 10 linhas, título 24, descrição 72). `evolution`: lista e botões viram texto numerado em negrito e o
+número digitado volta a ser o id da opção (`cart.menu_choices`), menos nos passos de número livre (`NumericInputStates`). O provedor vem de `provider` no nó Extrair Mensagem
+(payload da Meta = `meta_cloud`; senão `raw.provider` ou `WHATSAPP_PROVIDER`). Emoji sem cadastro: `MenuEmojiConstants`.
+
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
 histórico de status chega pela sincronização. Fora da janela de 24 h vai o template `atualizacao_pedido`

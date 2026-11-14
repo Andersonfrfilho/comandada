@@ -64,3 +64,23 @@ const ExpectingRawInputStates: ReadonlyArray<string> = [
   BotState.AWAITING_ISSUE_DETAIL,
   BotState.AWAITING_ITEM_NOTE,
 ];
+
+// Passos em que o cliente digita um número de verdade (quantidade, troco, CEP, nº da casa...):
+// no Evolution as opções saem sem número e "2" não é traduzido para a opção 2.
+const NumericInputStates: ReadonlyArray<string> = [
+  BotState.AWAITING_QTY,
+  BotState.AWAITING_ADDRESS,
+  BotState.AWAITING_ADDRESS_NUMBER,
+  BotState.AWAITING_COMPLEMENT,
+  BotState.AWAITING_CHANGE,
+  BotState.AWAITING_SPLIT_COUNT,
+  BotState.AWAITING_SPLIT_CHANGE,
+  BotState.AWAITING_MIXED_AMOUNT,
+  BotState.AWAITING_MIXED_CHANGE,
+  BotState.AWAITING_SCHEDULE_TIME,
+  BotState.AWAITING_NAME,
+  BotState.AWAITING_ORDER_DETAIL,
+  BotState.AWAITING_ITEM_NOTE,
+  BotState.AWAITING_ISSUE_DETAIL,
+  BotState.RESERVING,
+];

@@ -4,12 +4,14 @@ class MenuShortcutsHandler extends BaseHandler {
 
     if (texto === '1' || texto.includes('cardapio') || texto.includes('cardápio') || texto.includes('menu')) {
       newState = BotState.ORDERING_CAT;
+      newCart.browse_cat_page = 0;
       respostas.push(categoryList('order'));
       return true;
     }
 
     if (texto === '2' || (texto.includes('pedido') && texto !== 'meu pedido' && !texto.startsWith('meus pedido')) || texto.includes('pedir')) {
       newState = BotState.ORDERING_CAT;
+      newCart.browse_cat_page = 0;
       respostas.push(categoryList('order'));
       return true;
     }

@@ -193,7 +193,7 @@ async function runTests() {
     return new Promise((resolve) => {
       const jsonData = {
         config: CONFIG,
-        products: PRODUCTS,
+        products: args.products || PRODUCTS,
         payment_types: PAYMENT_TYPES,
         order_types: ORDER_TYPES,
         session: {
@@ -204,7 +204,8 @@ async function runTests() {
             split_count: 0, split_current: 0, split_payments: [],
             mixed_method: '', mixed_label: '', mixed_amount: 0,
             address_street_temp: null, browse_category: args.browse_category || '',
-            browse_page: 0, pending_item_id: args.pending_item_id || null,
+            browse_page: args.browse_page || 0, browse_cat_page: args.browse_cat_page || 0,
+            pending_item_id: args.pending_item_id || null,
             pending_item_name: args.pending_item_name || '',
           },
           reservation_temp: args.reservation_temp || {},
@@ -233,6 +234,7 @@ async function runTests() {
         location_lat: args.location_lat || null,
         location_lng: args.location_lng || null,
         push_name: args.customerName || '',
+        ...(args.provider ? { provider: args.provider } : {}),
       };
 
       const mockHelpers = {
@@ -545,9 +547,130 @@ async function runTests() {
 
   await test('lista mostra o item com tamanhos uma vez só, com os dois preços', async () => {
     const r = await exec({ texto: 'order_cat:temakis', state: 'ordering_cat' });
-    assertResponseContains(r, '1. Temaki Hot — Médio R$ 37,00 · Grande R$ 49,00');
-    assertResponseContains(r, '2. Sashimi — R$ 60,00');
+    assertResponseType(r, 'list');
+    assertResponseContains(r, 'Temaki Hot 💰 Médio R$ 37,00 · Grande R$ 49,00');
+    assertResponseContains(r, 'Sashimi 💰 R$ 60,00');
     assertNoObjectObject(r);
+  });
+
+  // ── GRUPO 8b: Cardápio por provedor e paginação ─────────────────────────
+  console.log('\n── Cardápio: lista interativa (oficial), texto (Evolution) e paginação');
+
+  const MANY_COMBOS = Array.from({ length: 11 }, (_, index) => ({
+    id: 100 + index, name: 'Combo ' + (index + 1), category: 'Combinados', price: 50 + index,
+    description: 'Peças variadas do chef número ' + (index + 1),
+  }));
+  const MANY_CATEGORIES = Array.from({ length: 10 }, (_, index) => ({
+    id: 200 + index, name: 'Item ' + index, category: 'Categoria ' + (index + 1), price: 10,
+  }));
+  const rowsOf = (r) => (r?.[0]?.json?.respostas || []).flatMap((m) => (m?.sections || []).flatMap((section) => section.rows));
+
+  await test('oficial: itens viram lista interativa com ≤10 linhas, "Ver mais" e "Voltar"', async () => {
+    const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', products: MANY_COMBOS });
+    assertResponseType(r, 'list');
+    const rows = rowsOf(r);
+    assert(rows.length === 10, 'esperado 10 linhas, veio ' + rows.length);
+    assert(rows[0].id === '1' && rows[0].title === '🍱 Combo 1', JSON.stringify(rows[0]));
+    assert(rows[8].id === 'próxima' && rows[8].title === '➡️ Ver mais', JSON.stringify(rows[8]));
+    assert(rows[9].id === '0', JSON.stringify(rows[9]));
+    assert(rows.every((row) => Array.from(row.title).length <= 24 && Array.from(row.description || '').length <= 72), 'limites da Meta');
+    assertResponseContains(r, '*Combinados*');
+    assertResponseContains(r, 'Página 1 de 2');
+  });
+
+  await test('oficial: "próxima" mostra a página 2 numerada a partir do 9 e oferece voltar ao início', async () => {
+    const r = await exec({ texto: 'próxima', state: 'ordering_items', browse_category: 'Combinados', products: MANY_COMBOS });
+    const rows = rowsOf(r);
+    assert(rows[0].id === '9' && rows[0].title.includes('Combo 9'), JSON.stringify(rows[0]));
+    assert(rows.some((row) => row.title === '🔁 Ver do início'), 'sem "Ver do início"');
+    assert(r[0].json.cart.browse_page === 1, 'browse_page não avançou');
+  });
+
+  await test('oficial: tocar no item 10 (página 2) abre a quantidade do Combo 10', async () => {
+    const r = await exec({ texto: '10', state: 'ordering_items', browse_category: 'Combinados', browse_page: 1, products: MANY_COMBOS });
+    assertState(r, 'awaiting_qty');
+    assertResponseContains(r, 'Combo 10');
+  });
+
+  await test('oficial: categorias paginadas com emoji e "Ver mais"', async () => {
+    const r = await exec({ texto: '2', state: 'start', products: MANY_CATEGORIES });
+    const rows = rowsOf(r);
+    assert(rows.length === 10, 'esperado 10 linhas, veio ' + rows.length);
+    assert(rows[0].id === 'order_cat:categoria 1' && rows[0].description === '1 item', JSON.stringify(rows[0]));
+    assert(rows[8].id === 'próxima', JSON.stringify(rows[8]));
+    const next = await exec({ texto: 'próxima', state: 'ordering_cat', products: MANY_CATEGORIES });
+    const nextRows = rowsOf(next);
+    assert(nextRows[0].title.includes('Categoria 9'), JSON.stringify(nextRows[0]));
+    assert(next[0].json.cart.browse_cat_page === 1, 'browse_cat_page não avançou');
+  });
+
+  await test('evolution: categorias e itens chegam como texto numerado em negrito', async () => {
+    const categories = await exec({ texto: '2', state: 'start', provider: 'evolution' });
+    const categoriesText = categories[0].json.respostas[0];
+    assert(typeof categoriesText === 'string', 'categorias deveriam ser texto');
+    assert(categoriesText.includes('*1.* 🌯 *Temaki* · _4 itens_'), categoriesText);
+    assert(categoriesText.includes('*0*'), categoriesText);
+
+    const items = await exec({ texto: '1', state: 'ordering_cat', provider: 'evolution' });
+    assertState(items, 'ordering_items');
+    const itemsText = items[0].json.respostas[0];
+    assert(typeof itemsText === 'string', 'itens deveriam ser texto');
+    assert(itemsText.includes('*1.* 🌯 *Temaki Salmão* — *R$ 23,90*'), itemsText);
+  });
+
+  await test('oficial: nenhuma resposta sai como texto numerado e tudo cabe nos limites da Meta', async () => {
+    const steps = [
+      { texto: 'oi', state: 'start' },
+      { texto: '2', state: 'start', products: MANY_COMBOS },
+      { texto: 'order_cat:combinados', state: 'ordering_cat', products: MANY_COMBOS },
+      { texto: 'order_cat:temakis', state: 'ordering_cat' },
+      { texto: '1', state: 'ordering_items', browse_category: 'Temakis' },
+      { texto: 'issue_atraso', state: 'awaiting_help_option', recent_orders: [{ code: 'PED-1', status: 'preparing', order_type: 'delivery', total: 50, created_at: '13/11', estimated_at: new Date(Date.now() - 600000).toISOString() }], cart: { items: [], issue_order_code: 'PED-1' } },
+    ];
+    for (const step of steps) {
+      const r = await exec(step);
+      for (const message of r[0].json.respostas) {
+        const body = typeof message === 'string' ? message : message.body || '';
+        assert(!/\n\*?\d+\.\*? /.test(body), 'texto numerado na Meta (' + step.texto + '): ' + body.slice(0, 200));
+        assert(!(message && message.type === 'text_menu'), 'text_menu na Meta');
+        if (message && message.type === 'buttons') {
+          assert(message.buttons.length <= 3 && message.buttons.every((button) => Array.from(button.title).length <= 20), 'botão fora do limite: ' + JSON.stringify(message.buttons));
+        }
+        if (message && message.type === 'list') {
+          const rows = message.sections.flatMap((section) => section.rows);
+          assert(rows.length <= 10, 'lista com ' + rows.length + ' linhas');
+          assert(rows.every((row) => Array.from(row.title).length <= 24 && Array.from(row.description || '').length <= 72), 'linha fora do limite');
+        }
+      }
+    }
+  });
+
+  await test('evolution: botões viram texto numerado e o número volta a ser o id da opção', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temakis', provider: 'evolution' });
+    assertState(r, 'awaiting_size');
+    const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Qual tamanho'));
+    assert(text && text.includes('*1.* *Médio R$ 37,00*') && text.includes('*2.* *Grande R$ 49,00*'), String(text));
+    const choices = r[0].json.cart.menu_choices;
+    assert(choices['2'] === 'size:9', JSON.stringify(choices));
+    const picked = await exec({ texto: '2', state: 'awaiting_size', provider: 'evolution',
+      cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot', menu_choices: choices } });
+    assertState(picked, 'awaiting_qty');
+    assertResponseContains(picked, 'Temaki Hot (Grande)');
+  });
+
+  await test('evolution: em passo de número livre (quantidade) as opções saem sem número e "2" é quantidade', async () => {
+    const r = await exec({ texto: 'size:9', state: 'awaiting_size', provider: 'evolution', cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot' } });
+    assertState(r, 'awaiting_qty');
+    const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Adicionar'));
+    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar (1un)*'), String(text));
+    assert(Object.keys(r[0].json.cart.menu_choices).length === 0, 'não deveria guardar números');
+  });
+
+  await test('evolution: lista longa mostra "próxima" e número da página', async () => {
+    const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', provider: 'evolution', products: MANY_COMBOS });
+    const text = r[0].json.respostas[0];
+    assert(text.includes('*8.*') && !text.includes('*9.*'), text);
+    assert(text.includes('Página 1 de 2') && text.includes('*próxima*'), text);
   });
 
   await test('escolher item com tamanhos pergunta o tamanho', async () => {
@@ -687,7 +810,7 @@ async function runTests() {
     assert(json.save_issue === true && json.issue?.category === 'atraso' && json.issue?.order_code === 'PED-1', 'issue: ' + JSON.stringify(json.issue));
     assertState(r, 'awaiting_issue_followup');
     assertResponseContains(r, 'A previsão era');
-    assertResponseContains(r, 'Falar com atendente');
+    assertResponseContains(r, 'Chamar atendente');
   });
 
   await test('problema depois de entregue pede o detalhe e registra com descrição', async () => {

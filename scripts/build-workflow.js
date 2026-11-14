@@ -22,6 +22,8 @@ const MODULE_ORDER = [
   'shared/constants/CartConstants.ts',
   'shared/constants/MessagesConstants.ts',
   'shared/constants/IssueConstants.ts',
+  'shared/constants/MenuEmojiConstants.ts',
+  'shared/channels/ChannelMessageStrategy.ts',
   // provider contracts (interfaces)
   'shared/providers/contracts/HttpClientProvider.ts',
   'shared/providers/contracts/CepProvider.ts',
