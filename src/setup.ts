@@ -107,6 +107,8 @@ const minOrderValue  = establishment.min_order_value != null ? establishment.min
 const brandSticker: StickerMessage | null = establishment.sticker_url
   ? { type: 'sticker', link: establishment.sticker_url }
   : null;
+// Logo na faixa da cor da marca: topo da mensagem única da saudação na Meta.
+const brandHeaderImage: string = establishment.header_image_url || '';
 // "📄 Ver cardápio completo": PDF que a API gera do cadastro. Sem URL pública a opção não aparece.
 const menuPdfUrl: string = establishment.menu_pdf_url || '';
 // Mensagem que chegou como áudio: o texto é a transcrição, e a resposta abre mostrando o que foi ouvido.
@@ -368,22 +370,28 @@ function hasOrderInProgress(): boolean {
   return recentOrders.some((order: RecentOrder) => (IssueConstants.OPEN_STATUSES as readonly string[]).includes(order.status));
 }
 
-// Menu principal em botões. "Meu pedido" e "Ajuda com o pedido" só aparecem com pedido em andamento;
-// com mais de 3 opções a strategy do provedor transforma em lista (Meta) ou texto numerado (Evolution).
+// Menu principal em 3 botões. Com pedido em andamento troca para "Meu pedido", "Ajuda com o pedido"
+// (que também leva ao atendente) e "Fazer pedido"; sem pedido, nada de "meu pedido"/"ajuda".
 function mainMenu(): ButtonMessage {
-  const buttons = [
-    { id: '2', title: MessagesConstants.MENU_FAZER_PEDIDO },
-    { id: '3', title: MessagesConstants.MENU_RESERVAR_MESA },
-    { id: '4', title: MessagesConstants.MENU_ATENDENTE },
-  ];
-  if (!hasOrderInProgress()) return { type: 'buttons', body: MessagesConstants.MENU_PRINCIPAL, buttons };
+  const newOrder = { id: '2', title: MessagesConstants.MENU_FAZER_PEDIDO };
+  if (hasOrderInProgress()) {
+    return {
+      type: 'buttons',
+      body: MessagesConstants.MENU_PRINCIPAL_COM_PEDIDO,
+      buttons: [
+        { id: 'meu pedido', title: MessagesConstants.MENU_MEU_PEDIDO },
+        { id: 'ajuda', title: MessagesConstants.MENU_AJUDA_PEDIDO },
+        newOrder,
+      ],
+    };
+  }
   return {
     type: 'buttons',
-    body: MessagesConstants.MENU_PRINCIPAL_COM_PEDIDO,
+    body: MessagesConstants.MENU_PRINCIPAL,
     buttons: [
-      { id: 'meu pedido', title: MessagesConstants.MENU_MEU_PEDIDO },
-      { id: 'ajuda', title: MessagesConstants.MENU_AJUDA_PEDIDO },
-      ...buttons,
+      newOrder,
+      { id: '3', title: MessagesConstants.MENU_RESERVAR_MESA },
+      { id: '4', title: MessagesConstants.MENU_ATENDENTE },
     ],
   };
 }
@@ -768,8 +776,9 @@ function buildPayload(): N8nResponsePayload {
 }
 
 // Cartão de visita da saudação, tudo do cadastro do restaurante: só entra o bloco cujo dado existe.
-// Vai numa mensagem própria, blocos separados por linha em branco, para o cliente ter espaço para ler.
-function buildCompanyInfo(): string {
+// Blocos separados por linha em branco, para o cliente ter espaço para ler. Dentro da mensagem única
+// (compact) vai sem título e com o endereço e o link do mapa no lugar do pin.
+function buildCompanyInfo(compact?: boolean): string {
   const blocks: string[] = [];
   // 00:00 às 23:59 é "o dia todo": vira "24 horas" em vez de "das 0h às 23h59".
   const opensAllDay = openingTime <= '00:00' && closingTime >= '23:59';
@@ -779,7 +788,9 @@ function buildCompanyInfo(): string {
   blocks.push(MessagesConstants.INFO_HORARIO(isOpen && !ignoreHours, hoursLine));
   // Com o pin no mapa o WhatsApp já mostra o endereço: no cartão ele só entra quando não há pin.
   const fullAddress = fullEstablishmentAddress();
-  if (fullAddress && !establishmentLocationCard()) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  const mapLink = establishmentMapLink();
+  if (fullAddress && compact && mapLink) blocks.push(MessagesConstants.INFO_ENDERECO_COM_MAPA(fullAddress, mapLink));
+  else if (fullAddress && (compact || !establishmentLocationCard())) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
   const feeText = describeDeliveryFee();
   if (featureDelivery && featureRetirada) blocks.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
   else if (featureDelivery) blocks.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
@@ -792,7 +803,28 @@ function buildCompanyInfo(): string {
   if (instagramLink) blocks.push(MessagesConstants.INFO_INSTAGRAM(instagramLink));
   const websiteLink = toWebsiteLink(estWebsite);
   if (websiteLink) blocks.push(MessagesConstants.INFO_SITE(websiteLink));
-  return [MessagesConstants.INFO_TITULO(estName), ...blocks].join('\n\n');
+  return (compact ? blocks : [MessagesConstants.INFO_TITULO(estName), ...blocks]).join('\n\n');
+}
+
+function establishmentMapLink(): string {
+  if (!estLat || !estLng) return '';
+  return 'https://maps.google.com/?q=' + estLat + ',' + estLng;
+}
+
+// Saudação numa mensagem só (Meta): logo no topo, boas-vindas, cartão do restaurante e, no fim, a
+// pergunta com os botões (menu, repetir pedido) ou o pedido do nome (foto com legenda, sem botões).
+// Texto acima do limite da Meta → null, e a saudação volta a sair em mensagens separadas.
+const GREETING_BODY_MAX = 1024;
+function singleGreetingMessage(welcome: string, closing: ButtonMessage | string): ButtonMessage | ImageMessage | string | null {
+  const closingText = typeof closing === 'string' ? closing : closing.body;
+  const body = [welcome, buildCompanyInfo(true), closingText].filter(Boolean).join('\n\n');
+  if (Array.from(body).length > GREETING_BODY_MAX) return null;
+  if (typeof closing !== 'string') {
+    const message: ButtonMessage = { ...closing, body };
+    if (brandHeaderImage) message.headerImage = brandHeaderImage;
+    return message;
+  }
+  return brandHeaderImage ? { type: 'image', link: brandHeaderImage, caption: body } : body;
 }
 
 function fullEstablishmentAddress(): string {

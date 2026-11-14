@@ -6,7 +6,7 @@ import type { PaymentAccountService } from '@/modules/payments/application/servi
 import { CARD_LINK_PAYMENT_TYPE } from '@/modules/payments/shared/payments.constant'
 import { NotFoundError } from '@/shared/errors/AppError'
 import type { EstablishmentLocationService } from '@/modules/settings/application/services/EstablishmentLocationService'
-import { brandStickerUrl } from '@/modules/settings/shared/brandSticker.constant'
+import { brandHeaderUrl, brandStickerUrl } from '@/modules/settings/shared/brandSticker.constant'
 import { BRANDING_SETTING_KEYS } from '@/modules/settings/shared/branding.constant'
 import { menuContentVersion, menuPdfUrl } from '@/modules/menu/shared/menuPdf.constant'
 import type { ListScheduledOrderSlotsUseCase, ScheduledOrderDay } from '@/modules/agenda/application/use-cases/ListScheduledOrderSlotsUseCase'
@@ -118,6 +118,10 @@ export class GetBotContextUseCase {
         // Figurinha do logo (Configurações → Marca) que abre a saudação; null sem logo.
         sticker_url: this.publicApiUrl
           ? brandStickerUrl(this.publicApiUrl, establishmentId, config[BRANDING_SETTING_KEYS.logo])
+          : null,
+        // Logo na faixa da cor da marca, no topo da mensagem única da saudação; null sem logo.
+        header_image_url: this.publicApiUrl
+          ? brandHeaderUrl(this.publicApiUrl, establishmentId, config[BRANDING_SETTING_KEYS.logo], config[BRANDING_SETTING_KEYS.primaryColor])
           : null,
         // "📄 Ver cardápio completo": PDF gerado do cadastro; a versão muda junto com cardápio, logo e cor.
         menu_pdf_url: this.publicApiUrl && products.length > 0

@@ -1,5 +1,5 @@
 import sharp from 'sharp'
-import { BRAND_STICKER, brandLogoVersion } from '../../shared/brandSticker.constant'
+import { BRAND_HEADER, BRAND_STICKER, brandLogoVersion } from '../../shared/brandSticker.constant'
 import { removeLogoBackground } from './removeLogoBackground'
 
 export interface BrandSticker {
@@ -7,8 +7,13 @@ export interface BrandSticker {
   webp: Buffer
 }
 
+export interface BrandHeaderImage {
+  version: string
+  jpeg: Buffer
+}
+
 interface LogoSource {
-  forEstablishment(establishmentId: string): Promise<{ logo: string | null } | null>
+  forEstablishment(establishmentId: string): Promise<{ logo: string | null; primaryColor?: string | null } | null>
 }
 
 const DATA_URL_PATTERN = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/i
@@ -17,6 +22,7 @@ const DATA_URL_PATTERN = /^data:image\/[a-z0-9.+-]+;base64,(.+)$/i
 // O resultado fica em memória por restaurante e só é refeito quando o logo muda.
 export class BrandStickerService {
   private readonly cache = new Map<string, BrandSticker>()
+  private readonly headerCache = new Map<string, BrandHeaderImage>()
 
   constructor(
     private readonly branding: LogoSource,
@@ -33,6 +39,20 @@ export class BrandStickerService {
     const sticker = { version, webp: await toStickerWebp(await this.readLogo(logo)) }
     this.cache.set(establishmentId, sticker)
     return sticker
+  }
+
+  // Cabeçalho da saudação (logo na faixa da cor da marca); refeito quando o logo ou a cor mudam.
+  async headerForEstablishment(establishmentId: string): Promise<BrandHeaderImage | null> {
+    const branding = await this.branding.forEstablishment(establishmentId)
+    const logo = branding?.logo?.trim()
+    if (!logo) return null
+    const primaryColor = branding?.primaryColor?.trim() ?? ''
+    const version = brandLogoVersion(logo + '|' + primaryColor)
+    const cached = this.headerCache.get(establishmentId)
+    if (cached && cached.version === version) return cached
+    const header = { version, jpeg: await toHeaderJpeg(await this.readLogo(logo), primaryColor) }
+    this.headerCache.set(establishmentId, header)
+    return header
   }
 
   private async readLogo(logo: string): Promise<Buffer> {
@@ -65,6 +85,22 @@ export async function toStickerWebp(logo: Buffer): Promise<Buffer> {
     detailSize = Math.floor(detailSize / 2)
   }
   throw new Error('Logo não coube no limite de 100 KB da figurinha')
+}
+
+const HEX_COLOR_PATTERN = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+
+/** Logo sem fundo, centralizado numa faixa 1200x628 na cor da marca (branco sem cor válida). */
+export async function toHeaderJpeg(logo: Buffer, primaryColor: string | null | undefined): Promise<Buffer> {
+  const image = await removeLogoBackground(logo)
+  const fittedLogo = await sharp(image)
+    .resize(BRAND_HEADER.logoMaxWidth, BRAND_HEADER.logoMaxHeight, { fit: 'inside' })
+    .png()
+    .toBuffer()
+  const background = primaryColor && HEX_COLOR_PATTERN.test(primaryColor.trim()) ? primaryColor.trim() : BRAND_HEADER.defaultBackground
+  return sharp({ create: { width: BRAND_HEADER.width, height: BRAND_HEADER.height, channels: 3, background } })
+    .composite([{ input: fittedLogo, gravity: 'center' }])
+    .jpeg({ quality: BRAND_HEADER.quality })
+    .toBuffer()
 }
 
 const TRANSPARENT = { r: 0, g: 0, b: 0, alpha: 0 }

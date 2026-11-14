@@ -31,6 +31,7 @@ const MessagesConstants = {
   INFO_HORARIO_LINHA:           (dias: string, abre: string, fecha: string) => `${capitalize(dias)}, das ${abre} às ${fecha}`,
   INFO_HORARIO_24H_LINHA:       (dias: string) => `${capitalize(dias)}, 24 horas`,
   INFO_ENDERECO:                (endereco: string) => `📍 *Endereço*\n${endereco}`,
+  INFO_ENDERECO_COM_MAPA:       (endereco: string, mapa: string) => `📍 *Endereço*\n${endereco}\n${mapa}`,
   INFO_ENTREGA_E_RETIRADA:      (taxa: string) => `🛵 *Entrega e retirada*\n${capitalize(taxa)}`,
   INFO_SO_ENTREGA:              (taxa: string) => `🛵 *Entrega*\n${capitalize(taxa)}`,
   INFO_SO_RETIRADA:             '🛍️ *Retirada*\nNo local',
