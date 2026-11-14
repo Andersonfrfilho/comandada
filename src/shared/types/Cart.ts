@@ -39,6 +39,8 @@ interface Cart {
   pending_item_name: string;
   // Observação escrita na escolha do item, antes da quantidade: entra junto com ele no carrinho.
   pending_item_note?: string;
+  // Editar carrinho: posição (em items) da linha que o cliente escolheu mudar.
+  edit_index?: number | null;
   pending_group: string;
   // Último item adicionado: é a ele que a observação se aplica.
   last_item_id?: string | null;

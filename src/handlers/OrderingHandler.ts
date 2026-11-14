@@ -125,7 +125,7 @@ class OrderingHandler extends BaseHandler {
       buttons: [
         { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
         { id: 'qty:note', title: MessagesConstants.OBSERVACAO_BOTAO },
-        { id: 'qty:more', title: MessagesConstants.QTD_OUTRA },
+        { id: 'item:back', title: MessagesConstants.TROCAR_ITEM },
       ],
     });
   }
@@ -137,8 +137,7 @@ class OrderingHandler extends BaseHandler {
       body,
       buttons: [
         { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
-        { id: 'qty:more', title: MessagesConstants.QTD_OUTRA },
-        { id: 'item:back', title: '↩️ Voltar' },
+        { id: 'item:back', title: MessagesConstants.TROCAR_ITEM },
       ],
     };
   }
@@ -168,6 +167,7 @@ class OrderingHandler extends BaseHandler {
 
   private _handleQuantity(): boolean {
     if (texto === 'item:back' || texto === '0' || texto === 'voltar') {
+      this._clearPendingItem();
       newState = BotState.ORDERING_ITEMS;
       respostas.push(itemsList(newCart.browse_category || '', 'order', newCart.browse_page || 0));
       return true;
@@ -181,7 +181,14 @@ class OrderingHandler extends BaseHandler {
     // Na Evolution os botões viram texto sem número: "obs"/"observação" também abre a observação.
     if (texto === 'qty:note' || /^(com )?(obs|observa[cç][aã]o)$/.test(texto.trim())) {
       newState = BotState.AWAITING_ITEM_NOTE;
-      respostas.push(MessagesConstants.OBSERVACAO_PERGUNTA(newCart.pending_item_name || ''));
+      respostas.push({
+        type: 'buttons',
+        body: MessagesConstants.OBSERVACAO_PERGUNTA_ITEM(newCart.pending_item_name || ''),
+        buttons: [
+          { id: 'note:skip', title: MessagesConstants.OBSERVACAO_SEM },
+          { id: 'item:back', title: MessagesConstants.TROCAR_ITEM },
+        ],
+      });
       return true;
     }
 
@@ -232,6 +239,12 @@ class OrderingHandler extends BaseHandler {
     return true;
   }
 
+  private _clearPendingItem(): void {
+    newCart.pending_item_id = null;
+    newCart.pending_item_name = '';
+    newCart.pending_item_note = '';
+  }
+
   private _moreButtons(body: string): OutgoingMessage {
     return moreItemsButtons(body);
   }
@@ -243,12 +256,19 @@ class OrderingHandler extends BaseHandler {
   private _handleNote(): boolean {
     // Observação pedida na escolha do item: guarda e volta para a quantidade.
     if (newCart.pending_item_id) {
+      // Escolheu o item errado: volta para a lista da categoria sem levar nada.
+      if (texto === 'item:back' || texto === 'voltar' || texto === 'trocar item') {
+        this._clearPendingItem();
+        newState = BotState.ORDERING_ITEMS;
+        respostas.push(itemsList(newCart.browse_category || '', 'order', newCart.browse_page || 0));
+        return true;
+      }
       const raw = rawText.trim();
-      const skipped = ['pular', 'nao', 'não', 'n', '-', '0', 'voltar'].includes(texto.trim());
+      const skipped = texto === 'note:skip' || ['pular', 'nao', 'não', 'n', '-', '0', 'sem observacao', 'sem observação'].includes(texto.trim());
       newState = BotState.AWAITING_QTY;
       if (skipped || !raw) {
         newCart.pending_item_note = '';
-        respostas.push(this._quantityButtons(MessagesConstants.OBSERVACAO_PULADA + '\n\n' + MessagesConstants.QTD_SOLICITAR));
+        respostas.push(this._quantityButtons(MessagesConstants.OBSERVACAO_PULADA_QTD));
         return true;
       }
       newCart.pending_item_note = raw.slice(0, 140);

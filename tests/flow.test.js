@@ -767,6 +767,68 @@ async function runTests() {
     assertState(r, 'awaiting_item_note');
   });
 
+  await test('tela do produto tem "Trocar item" e ele volta para a lista sem levar nada', async () => {
+    const shown = await exec({ texto: 'qty:note', state: 'awaiting_qty', cart: baseCartForNote() });
+    assert(JSON.stringify(shown).includes('↩️ Trocar item'), 'observação deve ter Trocar item');
+    const back = await exec({ texto: 'item:back', state: 'awaiting_item_note', cart: shown[0].json.cart });
+    assertState(back, 'ordering_items');
+    assert(back[0].json.cart.pending_item_id === null, 'item pendente limpo');
+    assert(back[0].json.cart.items.length === 1, 'carrinho igual');
+  });
+
+  await test('observação: "Sem observação" segue para a quantidade', async () => {
+    const r = await exec({ texto: 'note:skip', state: 'awaiting_item_note', cart: baseCartForNote() });
+    assertState(r, 'awaiting_qty');
+    assertResponseContains(r, 'sem observação');
+  });
+
+  const editCart = () => ({ ...baseCartForNote(), pending_item_id: null, pending_item_name: '', items: [
+    { id: 1, name: 'Temaki Salmão', qty: 2, price: 25, menuIdx: 1 },
+    { id: 2, name: 'Hot Roll', qty: 1, price: 30, menuIdx: 2, note: 'sem cream cheese' },
+  ] });
+
+  await test('editar carrinho: lista as linhas e remove a escolhida', async () => {
+    const list = await exec({ texto: 'cart:edit', state: 'awaiting_more', cart: editCart() });
+    assertState(list, 'awaiting_cart_edit');
+    assertResponseType(list, 'list');
+    const picked = await exec({ texto: 'edit:item:1', state: 'awaiting_cart_edit', cart: list[0].json.cart });
+    assertState(picked, 'awaiting_cart_edit_item');
+    assertResponseContains(picked, '↳ obs: _sem cream cheese_');
+    const removed = await exec({ texto: 'edit:remove', state: 'awaiting_cart_edit_item', cart: picked[0].json.cart });
+    assertState(removed, 'awaiting_more');
+    const items = removed[0].json.cart.items;
+    assert(items.length === 1 && items[0].id === 1, JSON.stringify(items));
+    assertResponseContains(removed, 'Tirei *Hot Roll* do carrinho');
+  });
+
+  await test('editar carrinho: muda a quantidade; 0 tira; texto estranho pede de novo', async () => {
+    const picked = await exec({ texto: 'edit:item:0', state: 'awaiting_cart_edit', cart: editCart() });
+    const asking = await exec({ texto: 'edit:qty', state: 'awaiting_cart_edit_item', cart: picked[0].json.cart });
+    assertState(asking, 'awaiting_cart_edit_qty');
+    const bad = await exec({ texto: '-3', state: 'awaiting_cart_edit_qty', cart: asking[0].json.cart });
+    assertState(bad, 'awaiting_cart_edit_qty');
+    const changed = await exec({ texto: '5', state: 'awaiting_cart_edit_qty', cart: asking[0].json.cart });
+    assert(changed[0].json.cart.items[0].qty === 5, JSON.stringify(changed[0].json.cart.items));
+    const zero = await exec({ texto: '0', state: 'awaiting_cart_edit_qty', cart: asking[0].json.cart });
+    assert(zero[0].json.cart.items.length === 1 && zero[0].json.cart.items[0].id === 2, 'zero remove');
+  });
+
+  await test('confirmação tem Confirmar, Editar e Cancelar', async () => {
+    const r = await exec({ texto: 'finalizar', state: 'awaiting_more', cart: editCart() });
+    assertState(r, 'confirming');
+    const body = JSON.stringify(r);
+    assert(body.includes('✅ Confirmar') && body.includes('✏️ Editar') && body.includes('❌ Cancelar'), body.slice(-400));
+    const edit = await exec({ texto: 'cart:edit', state: 'confirming', cart: editCart() });
+    assertState(edit, 'awaiting_cart_edit');
+  });
+
+  await test('removendo o último item o carrinho vazio volta para as categorias', async () => {
+    const cart = { ...editCart(), items: [{ id: 1, name: 'Temaki Salmão', qty: 1, price: 25, menuIdx: 1 }], edit_index: 0 };
+    const r = await exec({ texto: 'edit:remove', state: 'awaiting_cart_edit_item', cart });
+    assertState(r, 'ordering_cat');
+    assertResponseContains(r, 'carrinho ficou vazio');
+  });
+
   await test('evolution: lista longa mostra "próxima" e número da página', async () => {
     const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', provider: 'evolution', products: MANY_COMBOS });
     const text = r[0].json.respostas[0];

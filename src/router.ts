@@ -32,6 +32,7 @@ async function runHandlers(): Promise<void> {
     new MenuPdfHandler(),
     new IssueHandler(),
     new TextOrderHandler(),
+    new CartEditHandler(),
     new CartHandler(),
     new SchedulingHandler(),
     new DeliveryHandler(),

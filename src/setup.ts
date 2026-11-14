@@ -84,6 +84,7 @@ if (Array.isArray(rawCart)) {
     issue_order_code:   rawCart.issue_order_code || '',
     issue_category:     rawCart.issue_category || '',
     text_order:         rawCart.text_order || null,
+    edit_index:         typeof rawCart.edit_index === 'number' ? rawCart.edit_index : null,
   };
 } else {
   currentCart = CartConstants.EMPTY();
@@ -517,7 +518,11 @@ function yesNo(body: string): ButtonMessage {
 }
 
 function confirmBtn(body: string): ButtonMessage {
-  return { type: 'buttons', body, buttons: [{ id: 'sim', title: '✅ Confirmar' }, { id: 'não', title: '❌ Cancelar' }] };
+  return {
+    type: 'buttons',
+    body,
+    buttons: [{ id: 'sim', title: '✅ Confirmar' }, { id: 'cart:edit', title: MessagesConstants.EDITAR_BOTAO_CURTO }, { id: 'não', title: '❌ Cancelar' }],
+  };
 }
 
 function offerPickupBtn(body: string): ButtonMessage {
@@ -795,10 +800,14 @@ function startCheckout(): void {
   }
 }
 
-// Depois de adicionar: mais itens ou finalizar.
+// Depois de adicionar: mais itens, editar o carrinho (tirar ou mudar quantidade) ou finalizar.
 function moreItemsButtons(body: string): ButtonMessage {
   // A observação é pedida na escolha do item (botão "📝 Com observação"), não depois de adicionar.
-  const buttons = [{ id: '__add_more__', title: '➕ Adicionar mais' }, { id: 'finalizar', title: '✅ Finalizar' }];
+  const buttons = [
+    { id: '__add_more__', title: '➕ Adicionar mais' },
+    { id: 'cart:edit', title: MessagesConstants.EDITAR_CARRINHO_BOTAO },
+    { id: 'finalizar', title: '✅ Finalizar' },
+  ];
   return { type: 'buttons', body, buttons };
 }
 
