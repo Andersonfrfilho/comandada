@@ -32,6 +32,9 @@ interface Cart {
   address_street_temp: string | null;
   browse_category: string;
   browse_page?: number;
+  browse_cat_page?: number;
+  // Evolution: número digitado → id da opção da última lista/botões enviada.
+  menu_choices?: Record<string, string>;
   pending_item_id: string | null;
   pending_item_name: string;
   pending_group: string;
@@ -43,4 +46,19 @@ interface Cart {
   // Problema relatado pelo cliente, montado em três mensagens (pedido → tipo → detalhe).
   issue_order_code?: string;
   issue_category?: string;
+  // Pedido escrito ou falado ("2 combo tradicional e 1 hot roll") esperando escolha ou confirmação.
+  text_order?: TextOrderDraft | null;
+}
+
+// Item do texto que bateu com mais de um produto: o cliente escolhe numa lista.
+interface TextOrderChoice {
+  query: string;
+  qty: number;
+  option_ids: string[];
+}
+
+interface TextOrderDraft {
+  items: CartItem[];
+  pending: TextOrderChoice[];
+  unrecognized: string[];
 }

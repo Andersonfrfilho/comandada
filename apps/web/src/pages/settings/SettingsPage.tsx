@@ -308,7 +308,7 @@ export function SettingsPage() {
                         <img
                           src={logoUrl}
                           alt="Logo do estabelecimento"
-                          className="w-full h-full object-contain bg-black"
+                          className="w-full h-full object-contain bg-gray-100"
                           onError={(e) => {
                             (e.currentTarget as HTMLImageElement).style.display = 'none'
                             ;(e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex'

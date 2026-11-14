@@ -21,7 +21,7 @@ function sign(raw) {
   return 'sha256=' + crypto.createHmac('sha256', SECRET).update(raw).digest('hex');
 }
 
-async function run({ body, headers, raw, staticData, env = { WHATSAPP_APP_SECRET: SECRET } }) {
+async function run({ body, headers, raw, staticData, env = { WHATSAPP_APP_SECRET: SECRET }, httpRequest = async () => ({}) }) {
   const item = { json: { body, headers } };
   const wrapped = `(async function(helpers) { const self = { helpers }; return (async function() { ${CODE} }).call(self); })`;
   const fn = vm.runInNewContext(wrapped, {
@@ -29,9 +29,9 @@ async function run({ body, headers, raw, staticData, env = { WHATSAPP_APP_SECRET
     $json: item.json,
     $env: env,
     $getWorkflowStaticData: () => staticData,
-    require, Buffer, console: { log: () => {} }, JSON, Date, Object, String,
+    require, Buffer, console: { log: () => {} }, JSON, Date, Object, String, encodeURIComponent,
   });
-  return fn({ getBinaryDataBuffer: async () => Buffer.from(raw) });
+  return fn({ getBinaryDataBuffer: async () => Buffer.from(raw), httpRequest });
 }
 
 let failed = 0;
@@ -82,6 +82,31 @@ const assert = (condition, message) => { if (!condition) throw new Error(message
     const body = metaBody('wamid.5');
     const out = await run({ body, raw: '', headers: {}, staticData: {}, env: {} });
     assert(out.length === 1, 'deveria passar');
+  });
+
+  const audioBody = (id) => ({
+    entry: [{ changes: [{ value: {
+      metadata: { display_phone_number: '5516999990000' },
+      contacts: [{ profile: { name: 'Ana' } }],
+      messages: [{ id, from: '5516988887777', type: 'audio', audio: { id: 'media-123', mime_type: 'audio/ogg; codecs=opus' } }],
+    } }] }],
+  });
+
+  await test('áudio: a API transcreve e o texto segue como mensagem digitada', async () => {
+    const calls = [];
+    const httpRequest = async (options) => { calls.push(options); return { text: '2 Combo Tradicional e 1 hot roll' }; };
+    const out = await run({ body: audioBody('wamid.6'), raw: '', headers: {}, staticData: {}, env: { ORDER_HUB_API_URL: 'http://api:3333/' }, httpRequest });
+    assert(out.length === 1, 'deveria passar');
+    const json = out[0].json;
+    assert(json.from_audio === true && json.texto === '2 combo tradicional e 1 hot roll' && json.texto_original === '2 Combo Tradicional e 1 hot roll', JSON.stringify(json));
+    assert(calls[0].url === 'http://api:3333/internal/bot/5516988887777/transcriptions', calls[0].url);
+    assert(calls[0].body.mediaId === 'media-123' && calls[0].body.instance === '5516999990000', JSON.stringify(calls[0].body));
+  });
+
+  await test('áudio: transcrição falhou vira __audio_unclear__ (o bot pede para repetir)', async () => {
+    const httpRequest = async () => { throw new Error('503'); };
+    const out = await run({ body: audioBody('wamid.7'), raw: '', headers: {}, staticData: {}, env: {}, httpRequest });
+    assert(out.length === 1 && out[0].json.texto === '__audio_unclear__' && out[0].json.from_audio === true, JSON.stringify(out));
   });
 
   if (failed > 0) { console.log(`❌ ${failed} falharam`); process.exit(1); }

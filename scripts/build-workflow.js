@@ -22,6 +22,9 @@ const MODULE_ORDER = [
   'shared/constants/CartConstants.ts',
   'shared/constants/MessagesConstants.ts',
   'shared/constants/IssueConstants.ts',
+  'shared/constants/MenuEmojiConstants.ts',
+  'shared/ordering/FreeTextOrderParser.ts',
+  'shared/channels/ChannelMessageStrategy.ts',
   // provider contracts (interfaces)
   'shared/providers/contracts/HttpClientProvider.ts',
   'shared/providers/contracts/CepProvider.ts',
@@ -39,6 +42,7 @@ const MODULE_ORDER = [
   'handlers/GlobalHandler.ts',
   'handlers/GreetingHandler.ts',
   'handlers/IssueHandler.ts',
+  'handlers/TextOrderHandler.ts',
   'handlers/CartHandler.ts',
   'handlers/SchedulingHandler.ts',
   'handlers/DeliveryHandler.ts',

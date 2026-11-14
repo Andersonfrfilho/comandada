@@ -38,6 +38,8 @@ enum BotState {
   AWAITING_ISSUE_FOLLOWUP   = 'awaiting_issue_followup',
   AWAITING_ISSUE_DETAIL     = 'awaiting_issue_detail',
   AWAITING_ITEM_NOTE        = 'awaiting_item_note',
+  AWAITING_TEXT_ORDER_CHOICE  = 'awaiting_text_order_choice',
+  AWAITING_TEXT_ORDER_CONFIRM = 'awaiting_text_order_confirm',
 }
 
 // Estados onde o usuário digita INPUT livre (não atalhos de menu)
@@ -63,4 +65,26 @@ const ExpectingRawInputStates: ReadonlyArray<string> = [
   BotState.RESERVING,
   BotState.AWAITING_ISSUE_DETAIL,
   BotState.AWAITING_ITEM_NOTE,
+  BotState.AWAITING_TEXT_ORDER_CHOICE,
+  BotState.AWAITING_TEXT_ORDER_CONFIRM,
+];
+
+// Passos em que o cliente digita um número de verdade (quantidade, troco, CEP, nº da casa...):
+// no Evolution as opções saem sem número e "2" não é traduzido para a opção 2.
+const NumericInputStates: ReadonlyArray<string> = [
+  BotState.AWAITING_QTY,
+  BotState.AWAITING_ADDRESS,
+  BotState.AWAITING_ADDRESS_NUMBER,
+  BotState.AWAITING_COMPLEMENT,
+  BotState.AWAITING_CHANGE,
+  BotState.AWAITING_SPLIT_COUNT,
+  BotState.AWAITING_SPLIT_CHANGE,
+  BotState.AWAITING_MIXED_AMOUNT,
+  BotState.AWAITING_MIXED_CHANGE,
+  BotState.AWAITING_SCHEDULE_TIME,
+  BotState.AWAITING_NAME,
+  BotState.AWAITING_ORDER_DETAIL,
+  BotState.AWAITING_ITEM_NOTE,
+  BotState.AWAITING_ISSUE_DETAIL,
+  BotState.RESERVING,
 ];

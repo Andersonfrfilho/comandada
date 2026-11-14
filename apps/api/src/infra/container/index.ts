@@ -87,6 +87,12 @@ import { OrderReferenceDataController } from '@/modules/orders/infra/http/OrderR
 import { BotConfigRepository } from '@/infra/database/BotConfigRepository'
 import { BotCustomerService } from '@/modules/bot/application/services/BotCustomerService'
 import { GetBotContextUseCase } from '@/modules/bot/application/use-cases/GetBotContextUseCase'
+import { TranscribeBotAudioUseCase } from '@/modules/bot/application/use-cases/TranscribeBotAudioUseCase'
+import {
+  DEFAULT_TRANSCRIPTION_MODEL,
+  GroqSpeechToTextProviderImplementation,
+} from '@/shared/providers/GroqSpeechToTextProviderImplementation'
+import { BOT_SHARED_CONTEXT_CACHE_TTL_SECONDS } from '@/modules/bot/shared/bot.constant'
 import { SaveBotSessionUseCase } from '@/modules/bot/application/use-cases/SaveBotSessionUseCase'
 import { CreateBotOrderUseCase } from '@/modules/bot/application/use-cases/CreateBotOrderUseCase'
 import { BotController } from '@/modules/bot/infra/http/BotController'
@@ -161,6 +167,9 @@ import { GetSettingsUseCase } from '@/modules/settings/application/use-cases/Get
 import { UpsertSettingUseCase } from '@/modules/settings/application/use-cases/UpsertSettingUseCase'
 import { SettingsController } from '@/modules/settings/infra/http/SettingsController'
 import { BrandingController } from '@/modules/settings/infra/http/BrandingController'
+import { MenuPdfController } from '@/modules/menu/infra/http/MenuPdfController'
+import { MenuPdfService } from '@/modules/menu/application/services/MenuPdfService'
+import { DrizzleMenuSourceReader } from '@/modules/menu/infra/database/DrizzleMenuSourceReader'
 import { GetBrandingUseCase } from '@/modules/settings/application/use-cases/GetBrandingUseCase'
 import { BrandStickerService } from '@/modules/settings/application/services/BrandStickerService'
 import { EstablishmentLocationService } from '@/modules/settings/application/services/EstablishmentLocationService'
@@ -235,6 +244,7 @@ export interface AppContainer {
   reportsController: ReportsController
   settingsController: SettingsController
   brandingController: BrandingController
+  menuPdfController: MenuPdfController
   deliveryFeeController: DeliveryFeeController
   botController: BotController
   orderIssueController: OrderIssueController
@@ -257,6 +267,14 @@ export interface AppContainer {
   expenseController: ExpenseController
   uploadController: UploadController
   queueWorkerDependencies: QueueWorkerDependencies
+}
+
+/** BOT_CONTEXT_CACHE_TTL_SECONDS no ambiente; vazio ou inválido usa o padrão, 0 desliga. */
+function botContextCacheTtlSeconds(): number {
+  const configured = Number(process.env.BOT_CONTEXT_CACHE_TTL_SECONDS)
+  return process.env.BOT_CONTEXT_CACHE_TTL_SECONDS !== undefined && Number.isFinite(configured) && configured >= 0
+    ? configured
+    : BOT_SHARED_CONTEXT_CACHE_TTL_SECONDS
 }
 
 export function buildContainer(wsHub: WebSocketHub): AppContainer {
@@ -430,6 +448,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const settingsController = new SettingsController(getSettingsUseCase, upsertSettingUseCase)
   const getBrandingUseCase = new GetBrandingUseCase(db)
   const brandingController = new BrandingController(getBrandingUseCase, new BrandStickerService(getBrandingUseCase))
+  const menuPdfController = new MenuPdfController(new MenuPdfService(new DrizzleMenuSourceReader(db)))
   const deliveryFeeController = new DeliveryFeeController()
   const botCustomerService = new BotCustomerService(db)
   // Agenda: encomendas e reservas ocupam horário no SDK de agendamento.
@@ -459,17 +478,32 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   )
   const expireStaleCharges = new ExpireStaleChargesUseCase(db, paymentAccountService, orderPaymentTransitions)
 
+  const getBotContextUseCase = new GetBotContextUseCase(
+    db,
+    botConfigRepository,
+    botCustomerService,
+    new ListScheduledOrderSlotsUseCase(scheduling, agendaSetupService),
+    paymentAccountService,
+    // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
+    publicApiUrl.startsWith('https://') ? publicApiUrl : undefined,
+    new EstablishmentLocationService(db, new NominatimProvider()),
+    { cache, ttlSeconds: botContextCacheTtlSeconds() }
+  )
+  // Pedido por áudio: Whisper na Groq. Sem GROQ_API_KEY a rota responde 503 e o bot pede para escrever.
+  const groqApiKey = process.env.GROQ_API_KEY?.trim() ?? ''
+  const transcribeBotAudioUseCase = new TranscribeBotAudioUseCase({
+    menuFor: (instance) => getBotContextUseCase.menuFor(instance),
+    fetchMedia: (establishmentId, mediaId) =>
+      metaWhatsAppModules.forEstablishment(establishmentId).channel.fetchMediaAsBase64(mediaId),
+    speechToText: groqApiKey
+      ? new GroqSpeechToTextProviderImplementation(
+          groqApiKey,
+          process.env.AUDIO_TRANSCRIPTION_MODEL?.trim() || DEFAULT_TRANSCRIPTION_MODEL
+        )
+      : null,
+  })
   const botController = new BotController(
-    new GetBotContextUseCase(
-      db,
-      botConfigRepository,
-      botCustomerService,
-      new ListScheduledOrderSlotsUseCase(scheduling, agendaSetupService),
-      paymentAccountService,
-      // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
-      publicApiUrl.startsWith('https://') ? publicApiUrl : undefined,
-      new EstablishmentLocationService(db, new NominatimProvider())
-    ),
+    getBotContextUseCase,
     new SaveBotSessionUseCase(db),
     new CreateBotOrderUseCase(
       db,
@@ -482,7 +516,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     botCustomerService,
     new CreateBotReservationUseCase(botCustomerService, new ReserveTableUseCase(db, scheduling, agendaSetupService)),
     new CreateOrderIssueUseCase(db, botCustomerService, wsHub),
-    new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase)
+    new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase),
+    transcribeBotAudioUseCase
   )
   const orderIssueController = new OrderIssueController(new GetOrderIssueReportUseCase(db), new ResolveOrderIssueUseCase(db))
 
@@ -672,6 +707,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     reportsController,
     settingsController,
     brandingController,
+    menuPdfController,
     deliveryFeeController,
     botController,
     orderIssueController,

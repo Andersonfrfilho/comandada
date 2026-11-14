@@ -17,14 +17,11 @@ interface ListMessage {
   sections: Array<{ title: string; rows: ListRow[] }>;
 }
 
+// Menu já desenhado como texto (Evolution): choices leva o número digitado ao id da opção.
 interface TextMenuMessage {
   type: 'text_menu';
   body: string;
-  items: Array<{ num: number; id: string; name: string }>;
-  categoryName: string;
-  context: string;
-  page: number;
-  hasMore: boolean;
+  choices: Record<string, string>;
 }
 
 interface LocationMessage {
@@ -40,10 +37,19 @@ interface StickerMessage {
   link: string;
 }
 
+// Arquivo (PDF do cardápio): a Meta baixa pelo link.
+interface DocumentMessage {
+  type: 'document';
+  link: string;
+  filename: string;
+  caption?: string;
+}
+
 type OutgoingMessage =
   | string
   | ButtonMessage
   | ListMessage
   | TextMenuMessage
   | LocationMessage
-  | StickerMessage;
+  | StickerMessage
+  | DocumentMessage;

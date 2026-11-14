@@ -136,6 +136,11 @@ no n8n, mínimo 32 caracteres; sem ele as rotas respondem 401):
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/issues` (problema relatado pelo cliente) |
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/partial-confirmation` (SIM/NÃO à confirmação parcial) |
 
+**Cache do contexto no Redis:** o `GET /internal/bot/:whatsapp/context` guarda a parte igual para todo cliente
+(estabelecimento, configurações, cardápio, formas de pagamento, tipos de pedido, mesas, taxa, coordenadas) em
+`bot:context:shared:<instance>` por 30 s (`BOT_CONTEXT_CACHE_TTL_SECONDS`, 0 desliga). Sessão, pedidos, conversa,
+confirmação parcial e horários da agenda vêm sempre do banco. Mudança no cardápio ou nas configurações chega ao bot em até 30 s.
+
 **Ajuda com o pedido** (`src/handlers/IssueHandler.ts`, palavras *problema*/*ajuda*): as opções seguem o momento do pedido
 (em andamento: onde está, atrasado só depois da previsão, alterar só antes do preparo; entregue há até 6 h: faltou item,
 item errado, qualidade, entrega, pagamento; sem pedido: fazer pedido, cardápio). *Falar com atendente* aparece sempre.
@@ -172,6 +177,33 @@ A figurinha é o logo em WebP 512x512 (≤100 KB, fundo transparente) em `GET /p
 logo e `API_PUBLIC_URL` em HTTPS. O nó Enviar Resposta manda `{ type: 'sticker' }` como figurinha da Graph API.
 **Logo sem fundo:** ao salvar `brand_logo` a API tira o fundo liso ligado à borda (`removeLogoBackground`, tolerância
 baixa para não comer detalhe escuro) e guarda PNG; a figurinha aplica o mesmo em logo antigo.
+
+**Mensagens por provedor** (`src/shared/channels/ChannelMessageStrategy.ts`): toda resposta passa pela strategy do provedor
+antes de sair (`renderPayloadForChannel` no teardown); handler nenhum monta texto numerado. `categoryList`/`itemsList`
+montam um `MenuPage` paginado. `meta_cloud` (oficial): lista interativa, 8 opções por página + "➡️ Ver mais" +
+"↩️ Voltar" (limite de 10 linhas, título 24, descrição 72). `evolution`: lista e botões viram texto numerado em negrito e o
+número digitado volta a ser o id da opção (`cart.menu_choices`), menos nos passos de número livre (`NumericInputStates`). O provedor vem de `provider` no nó Extrair Mensagem
+(payload da Meta = `meta_cloud`; senão `raw.provider` ou `WHATSAPP_PROVIDER`). Emoji sem cadastro: `MenuEmojiConstants`.
+
+**Cardápio em PDF** (`apps/api/src/modules/menu/`): `GET /public/menu/:establishmentId/cardapio.pdf` gera o cardápio
+do cadastro (produtos ativos na ordem do bot, tamanhos numa linha, descrição, logo sem fundo, cor `brand_primary_color`,
+endereço/WhatsApp/Instagram) com um escritor de PDF próprio (`SimplePdfDocument`, Helvetica WinAnsi, sem dependência;
+emoji some). Fica em memória por restaurante até o conteúdo ou o dia mudar. O contexto traz `establishment.menu_pdf_url`
+(com `?v=` do conteúdo, só com `API_PUBLIC_URL` em HTTPS e cardápio não vazio); o bot põe "📄 Ver cardápio completo"
+(id `menu:pdf`) na lista de categorias e responde a "cardápio completo"/"pdf" com `{ type: 'document' }`.
+
+**Pedido por texto livre** (`src/shared/ordering/FreeTextOrderParser.ts` + `src/handlers/TextOrderHandler.ts`): nos passos
+de escolher do cardápio (início, categorias, itens, "mais alguma coisa?") o cliente pode escrever
+"2 combo tradicional e 1 hot roll". Cada trecho vira quantidade (número, por extenso, "x2") + palavras comparadas ao nome
+(sem acento, plural, prefixo, 1 erro de digitação). Ambíguo ou com tamanhos → lista (`pick:<id>`, `pick:none`) em
+`awaiting_text_order_choice`; tudo resolvido → "Anotei assim" com Confirmar/Pedir mais/Corrigir em
+`awaiting_text_order_confirm` (rascunho em `cart.text_order`; só entra no carrinho ao confirmar). Texto sem item do
+cardápio segue os atalhos de sempre.
+
+**Pedido por áudio:** o nó Extrair Mensagem manda o id da nota de voz para `POST /internal/bot/:whatsapp/transcriptions`
+(API baixa pelo canal do restaurante e transcreve com o Whisper da Groq, nomes do cardápio de dica; `GROQ_API_KEY` na
+API, `AUDIO_TRANSCRIPTION_MODEL` opcional) e o texto segue como mensagem digitada, com `from_audio`; a resposta abre com
+"🎤 Ouvi: …". Falhou ou sem chave → `__audio_unclear__` e o bot pede para repetir ou escrever.
 
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o

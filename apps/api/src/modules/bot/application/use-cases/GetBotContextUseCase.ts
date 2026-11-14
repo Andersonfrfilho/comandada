@@ -8,9 +8,16 @@ import { NotFoundError } from '@/shared/errors/AppError'
 import type { EstablishmentLocationService } from '@/modules/settings/application/services/EstablishmentLocationService'
 import { brandStickerUrl } from '@/modules/settings/shared/brandSticker.constant'
 import { BRANDING_SETTING_KEYS } from '@/modules/settings/shared/branding.constant'
+import { menuContentVersion, menuPdfUrl } from '@/modules/menu/shared/menuPdf.constant'
 import type { ListScheduledOrderSlotsUseCase, ScheduledOrderDay } from '@/modules/agenda/application/use-cases/ListScheduledOrderSlotsUseCase'
+import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import type { BotCustomerService } from '../services/BotCustomerService'
-import { API_ORDER_STATUS_TO_BOT, API_ORDER_TYPE_TO_BOT, RECENT_ORDERS_LIMIT } from '../../shared/bot.constant'
+import {
+  API_ORDER_STATUS_TO_BOT,
+  API_ORDER_TYPE_TO_BOT,
+  BOT_SHARED_CONTEXT_CACHE_PREFIX,
+  RECENT_ORDERS_LIMIT,
+} from '../../shared/bot.constant'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -32,6 +39,46 @@ interface BotOrderSummary {
   items: Array<{ id: string; name: string; qty: number; price: number }>
 }
 
+interface BotProduct {
+  id: string
+  name: string
+  price: number
+  description: string | null
+  category: string
+  variant_group: string | null
+  variant_label: string | null
+}
+
+interface BotTable {
+  id: string
+  number: number
+  capacity: number
+}
+
+type DeliveryFeeRule = Awaited<ReturnType<BotConfigRepository['getActiveDeliveryFeeRule']>>
+
+/**
+ * Parte do contexto que é igual para todo cliente do restaurante (cardápio, configurações, formas de
+ * pagamento, mesas, taxa). É a parte cara e vai para o Redis por alguns segundos: cada mensagem do
+ * WhatsApp chama o contexto, e assim o n8n recebe a resposta sem refazer essas consultas.
+ */
+export interface BotSharedContext {
+  establishment: Pick<schema.Establishment, 'id' | 'name' | 'whatsappNumber' | 'settings'>
+  config: Record<string, string>
+  products: BotProduct[]
+  paymentTypes: PaymentTypeRow[]
+  orderTypes: Awaited<ReturnType<BotConfigRepository['listActiveOrderTypes']>>
+  tables: BotTable[]
+  deliveryFeeRule: DeliveryFeeRule
+  coordinates: { latitude: number; longitude: number } | null
+}
+
+export interface BotSharedContextCache {
+  cache: Pick<CacheProvider, 'get' | 'set'>
+  /** 0 desliga o cache. */
+  ttlSeconds: number
+}
+
 // Same shape the bot used to read from the legacy "Buscar Dados" SQL node, so the bot code is unchanged.
 export class GetBotContextUseCase {
   constructor(
@@ -41,33 +88,24 @@ export class GetBotContextUseCase {
     private readonly listScheduleSlots: Pick<ListScheduledOrderSlotsUseCase, 'execute'>,
     private readonly paymentAccounts?: Pick<PaymentAccountService, 'findActive'>,
     private readonly publicApiUrl?: string,
-    private readonly establishmentLocation?: Pick<EstablishmentLocationService, 'resolve'>
+    private readonly establishmentLocation?: Pick<EstablishmentLocationService, 'resolve'>,
+    private readonly sharedContextCache?: BotSharedContextCache
   ) {}
 
   async execute(params: GetBotContextParams): Promise<Record<string, unknown>> {
-    const establishment = await this.resolveEstablishment(params.instance)
+    const { establishment, config, products, paymentTypes, orderTypes, tables, deliveryFeeRule, coordinates } =
+      await this.loadSharedContext(params.instance)
     const establishmentId = establishment.id
     const customer = await this.customerService.findByNumber({ establishmentId, whatsappNumber: params.whatsappNumber })
 
-    const [config, products, session, recentOrders, paymentTypes, orderTypes, tables, deliveryFeeRule, scheduleSlots, conversation, partialConfirmation] =
-      await Promise.all([
-        this.loadConfig(establishmentId),
-        this.loadProducts(establishmentId),
-        this.loadSession(establishmentId, params.whatsappNumber),
-        customer ? this.loadRecentOrders(customer.id) : Promise.resolve([]),
-        this.loadPaymentTypes(establishmentId),
-        this.botConfigRepository.listActiveOrderTypes(),
-        this.loadTables(establishmentId),
-        this.botConfigRepository.getActiveDeliveryFeeRule(),
-        this.loadScheduleSlots(establishmentId),
-        this.loadConversation(establishmentId, params.whatsappNumber),
-        customer ? this.loadPartialConfirmation(establishmentId, customer.id) : Promise.resolve(null),
-      ])
-
-    // Pin do restaurante na saudação: coordenadas do endereço (geocodificado uma vez e salvo) ou digitadas.
-    const coordinates = this.establishmentLocation
-      ? await this.establishmentLocation.resolve(establishmentId, config).catch(() => null)
-      : null
+    // O que é do cliente (sessão, pedidos, conversa) e a agenda mudam a cada mensagem: sempre do banco.
+    const [session, recentOrders, scheduleSlots, conversation, partialConfirmation] = await Promise.all([
+      this.loadSession(establishmentId, params.whatsappNumber),
+      customer ? this.loadRecentOrders(customer.id) : Promise.resolve([]),
+      this.loadScheduleSlots(establishmentId),
+      this.loadConversation(establishmentId, params.whatsappNumber),
+      customer ? this.loadPartialConfirmation(establishmentId, customer.id) : Promise.resolve(null),
+    ])
 
     return {
       establishment: {
@@ -80,6 +118,22 @@ export class GetBotContextUseCase {
         // Figurinha do logo (Configurações → Marca) que abre a saudação; null sem logo.
         sticker_url: this.publicApiUrl
           ? brandStickerUrl(this.publicApiUrl, establishmentId, config[BRANDING_SETTING_KEYS.logo])
+          : null,
+        // "📄 Ver cardápio completo": PDF gerado do cadastro; a versão muda junto com cardápio, logo e cor.
+        menu_pdf_url: this.publicApiUrl && products.length > 0
+          ? menuPdfUrl(
+              this.publicApiUrl,
+              establishmentId,
+              menuContentVersion({
+                products,
+                name: establishment.name,
+                logo: config[BRANDING_SETTING_KEYS.logo] ?? null,
+                color: config[BRANDING_SETTING_KEYS.primaryColor] ?? null,
+                address: config['establishment_address'] ?? null,
+                city: config['establishment_city'] ?? null,
+                instagram: config['establishment_instagram'] ?? null,
+              })
+            )
           : null,
       },
       config,
@@ -98,6 +152,65 @@ export class GetBotContextUseCase {
       conversation,
       partial_confirmation: partialConfirmation,
     }
+  }
+
+  /** Restaurante do número e os nomes do cardápio, do mesmo cache do contexto (pedido por áudio). */
+  async menuFor(instance?: string): Promise<{ establishmentId: string; productNames: string[] }> {
+    const { establishment, products } = await this.loadSharedContext(instance)
+    return { establishmentId: establishment.id, productNames: products.map((product) => product.name) }
+  }
+
+  private async loadSharedContext(instance?: string): Promise<BotSharedContext> {
+    const ttlSeconds = this.sharedContextCache?.ttlSeconds ?? 0
+    const cache = ttlSeconds > 0 ? this.sharedContextCache?.cache : undefined
+    const cacheKey = `${BOT_SHARED_CONTEXT_CACHE_PREFIX}${instance ?? 'default'}`
+
+    // Redis fora do ar não derruba o bot: só volta a ler do banco.
+    const cached = cache ? await cache.get(cacheKey).catch(() => null) : null
+    if (cached) {
+      try {
+        return JSON.parse(cached) as BotSharedContext
+      } catch {
+        // valor corrompido: lê do banco e regrava
+      }
+    }
+
+    const establishment = await this.resolveEstablishment(instance)
+    const establishmentId = establishment.id
+    const [config, products, paymentTypes, orderTypes, tables, deliveryFeeRule] = await Promise.all([
+      this.loadConfig(establishmentId),
+      this.loadProducts(establishmentId),
+      this.loadPaymentTypes(establishmentId),
+      this.botConfigRepository.listActiveOrderTypes(),
+      this.loadTables(establishmentId),
+      this.botConfigRepository.getActiveDeliveryFeeRule(),
+    ])
+    // Pin do restaurante na saudação: coordenadas do endereço (geocodificado uma vez e salvo) ou digitadas.
+    const coordinates = this.establishmentLocation
+      ? await this.establishmentLocation.resolve(establishmentId, config).catch(() => null)
+      : null
+
+    const shared: BotSharedContext = {
+      establishment: {
+        id: establishment.id,
+        name: establishment.name,
+        whatsappNumber: establishment.whatsappNumber,
+        settings: establishment.settings,
+      },
+      config,
+      products,
+      paymentTypes,
+      orderTypes,
+      tables,
+      deliveryFeeRule,
+      coordinates: coordinates ? { latitude: coordinates.latitude, longitude: coordinates.longitude } : null,
+    }
+    if (cache) {
+      await cache.set(cacheKey, JSON.stringify(shared), ttlSeconds).catch((error: unknown) => {
+        console.error('[Bot] context cache unavailable:', error instanceof Error ? error.message : error)
+      })
+    }
+    return shared
   }
 
   /** Pergunta "seguir sem os itens em falta?" esperando o SIM/NÃO do cliente. */
@@ -173,7 +286,7 @@ export class GetBotContextUseCase {
     )
   }
 
-  private async loadProducts(establishmentId: string) {
+  private async loadProducts(establishmentId: string): Promise<BotProduct[]> {
     const rows = await this.db
       .select({
         id: schema.products.id,
@@ -265,7 +378,7 @@ export class GetBotContextUseCase {
     })
   }
 
-  private async loadTables(establishmentId: string) {
+  private async loadTables(establishmentId: string): Promise<BotTable[]> {
     return this.db
       .select({
         id: schema.restaurantTables.id,

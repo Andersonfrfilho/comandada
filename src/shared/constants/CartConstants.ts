@@ -16,6 +16,7 @@ const CartConstants = {
     address_street_temp: null,
     browse_category: '',
     browse_page: 0,
+    browse_cat_page: 0,
     pending_item_id: null,
     pending_item_name: '',
     pending_group: '',
