@@ -116,6 +116,8 @@ const brandHeaderImage: string = establishment.header_image_url || '';
 const menuPdfUrl: string = establishment.menu_pdf_url || '';
 // Mensagem que chegou como áudio: o texto é a transcrição, e a resposta abre mostrando o que foi ouvido.
 const fromAudio: boolean = !!msgData.from_audio;
+// Pedido por áudio (FEATURE_AUDIO_ORDERS na API): desligado, o bot não fala em áudio e pede para escrever.
+const audioOrdersEnabled: boolean = config['feature_audio_orders'] === 'true';
 const kitchenPhone   = establishment.kitchen_phone  || config['kitchen_phone']           || '';
 
 // ── Tipos de pedido / entrega ────────────────────────────────────────────────
@@ -671,7 +673,7 @@ function categoryList(context: string, page?: number, returning?: boolean): List
   }
   const [heading, defaultSubtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
   const showHint = context === 'order' && currentPage === 0 && !returning && newCart.items.length === 0;
-  const subtitle = showHint ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample()) : defaultSubtitle;
+  const subtitle = showHint ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample(), audioOrdersEnabled) : defaultSubtitle;
   const scheduledNote = context === 'order' && newCart.scheduled_date && newCart.scheduled_time
     ? MessagesConstants.AGENDADO_PARA(fmtScheduleDay(newCart.scheduled_date), newCart.scheduled_time) + MessagesConstants.AGENDADO_MUDAR_DICA + '\n\n'
     : '';

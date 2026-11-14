@@ -1,4 +1,5 @@
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
+import { AUDIO_ORDERS_CONFIG_KEY } from '@/shared/constants/featureFlags.constant'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { BotConfigRepository, DeliveryFeeRuleRow, PaymentTypeRow } from '@/infra/database/BotConfigRepository'
@@ -89,7 +90,9 @@ export class GetBotContextUseCase {
     private readonly paymentAccounts?: Pick<PaymentAccountService, 'findActive'>,
     private readonly publicApiUrl?: string,
     private readonly establishmentLocation?: Pick<EstablishmentLocationService, 'resolve'>,
-    private readonly sharedContextCache?: BotSharedContextCache
+    private readonly sharedContextCache?: BotSharedContextCache,
+    /** FEATURE_AUDIO_ORDERS: o bot só oferece e aceita áudio com ela ligada. */
+    private readonly audioOrdersEnabled: boolean = false
   ) {}
 
   async execute(params: GetBotContextParams): Promise<Record<string, unknown>> {
@@ -140,7 +143,7 @@ export class GetBotContextUseCase {
             )
           : null,
       },
-      config,
+      config: { ...config, [AUDIO_ORDERS_CONFIG_KEY]: this.audioOrdersEnabled ? 'true' : 'false' },
       products,
       session,
       last_order: recentOrders[0] ?? null,

@@ -197,7 +197,7 @@ const MessagesConstants = {
   CARDAPIO_INDISPONIVEL:        '😕 Nosso cardápio está indisponível neste momento. Tenta de novo daqui a pouquinho!',
   CARDAPIO_PEDIDO_TITULO:       '🛒 *Vamos montar seu pedido!*\n\nEscolha uma categoria 👇',
   // Primeira tela do "Fazer pedido": o jeito mais rápido (escrever ou falar) vem antes da lista.
-  CARDAPIO_PEDIDO_DICA:         (exemplo: string) => `✍️ *Já sabe o que quer? É só escrever*, por exemplo:\n_${exemplo}_\n\n🎤 Ou mande um *áudio* falando o pedido.\n\n📋 Prefere ver as opções? Escolha uma categoria 👇`,
+  CARDAPIO_PEDIDO_DICA:         (exemplo: string, audio: boolean) => `✍️ *Já sabe o que quer? É só escrever*, por exemplo:\n_${exemplo}_${audio ? '\n\n🎤 Ou mande um *áudio* falando o pedido.' : ''}\n\n📋 Prefere ver as opções? Escolha uma categoria 👇`,
   CARDAPIO_TITULO:              '📖 *Nosso cardápio*\n\nEscolha uma categoria 👇',
   VER_CATEGORIAS:               'Ver categorias',
   CATEGORIAS_TITULO:            'Categorias',
@@ -296,7 +296,7 @@ const MessagesConstants = {
   CARDAPIO_PDF_OPCAO_DESCRICAO: 'PDF com todos os itens e preços',
   CARDAPIO_PDF_LEGENDA:         (estName: string) => `📄 *Cardápio completo* · ${estName}`,
   CARDAPIO_PDF_ARQUIVO:         (estName: string) => `Cardapio ${estName}.pdf`,
-  CARDAPIO_PDF_DICA:            (exemplo: string) => `✍️ *Para pedir, é só escrever* o que você quer, por exemplo:\n_${exemplo}_\n\n🎤 Ou mande um *áudio* falando o pedido.\n\nSe preferir, escolha pelas opções 👇`,
+  CARDAPIO_PDF_DICA:            (exemplo: string, audio: boolean) => `✍️ *Para pedir, é só escrever* o que você quer, por exemplo:\n_${exemplo}_${audio ? '\n\n🎤 Ou mande um *áudio* falando o pedido.' : ''}\n\nSe preferir, escolha pelas opções 👇`,
   CARDAPIO_PDF_BOTAO_CATEGORIAS: '🛒 Ver categorias',
 
   // Pedido por texto livre ou áudio
@@ -314,8 +314,9 @@ const MessagesConstants = {
   TEXTO_ESCOLHA_SECAO:          'Opções',
   TEXTO_ESCOLHA_NENHUM:         '❌ Nenhum desses',
   TEXTO_ESCOLHA_REPETIR:        'Toque numa das opções da lista 👇',
-  TEXTO_ESCREVA_MAIS:           (exemplo: string) => `✍️ Pode escrever (ou mandar um 🎤 áudio) o que mais você quer.\n_Ex.: ${exemplo}_`,
-  TEXTO_CORRIGIR:               '✏️ Sem problemas, descartei essa lista.\n\nEscreva de novo o que você quer (ou mande um 🎤 áudio), ou digite *2* para escolher pelo cardápio.',
+  TEXTO_ESCREVA_MAIS:           (exemplo: string, audio: boolean) => `✍️ Pode escrever${audio ? ' (ou mandar um 🎤 áudio)' : ''} o que mais você quer.\n_Ex.: ${exemplo}_`,
+  TEXTO_CORRIGIR:               (audio: boolean) => `✏️ Sem problemas, descartei essa lista.\n\nEscreva de novo o que você quer${audio ? ' (ou mande um 🎤 áudio)' : ''}, ou digite *2* para escolher pelo cardápio.`,
+  AUDIO_DESLIGADO:              (exemplo: string) => `🎤 Por enquanto não consigo ouvir áudios 😅\n\n✍️ Escreve pra mim o que você quer?\n_Ex.: ${exemplo}_`,
   TEXTO_NADA_ENCONTRADO:        (itens: string) => `😕 Não encontrei no cardápio: _${itens}_\n\nPode escrever de outro jeito, ou escolher pelas opções 👇`,
   TEXTO_ADICIONADOS:            '✅ *Adicionado ao carrinho!*',
   TEXTO_BOTAO_VER_CARDAPIO:     '📋 Ver cardápio',
