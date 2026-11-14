@@ -272,15 +272,29 @@ function parseTrocoInput(texto: string, amountToPay: number): number | null {
   return isNaN(val) ? null : val;
 }
 
+/**
+ * Uma linha de item igual em todo resumo (carrinho, confirmação, texto livre, repetir pedido):
+ * quantidade e nome em cima, valores embaixo com recuo. O WhatsApp não tem fonte monoespaçada,
+ * então alinhar em coluna não funciona; duas linhas por item ficam alinhadas em qualquer celular.
+ */
+function orderItemLine(name: string, qty: number, unitPrice: number, note?: string): string {
+  const subtotal = unitPrice * qty;
+  const values = qty > 1
+    ? MessagesConstants.ITEM_VALORES_VARIOS(fmtBRL(unitPrice), fmtBRL(subtotal))
+    : MessagesConstants.ITEM_VALORES_UM(fmtBRL(subtotal));
+  return MessagesConstants.ITEM_LINHA(qty, name) + '\n' + values + (note ? '\n' + MessagesConstants.ITEM_OBSERVACAO(note) : '');
+}
+
 function cartSummary(items: CartItem[]): CartSummarioResult {
   let total = 0;
+  let itemCount = 0;
   const lines: string[] = [];
   for (const item of items) {
-    const sub = item.price * item.qty;
-    total += sub;
-    lines.push('• *' + item.name + '* × ' + item.qty + ' — R$ ' + fmtBRL(sub) + (item.note ? '\n   _📝 ' + item.note + '_' : ''));
+    total += item.price * item.qty;
+    itemCount += item.qty;
+    lines.push(orderItemLine(item.name, item.qty, item.price, item.note));
   }
-  return { lines, total };
+  return { lines, total, itemCount };
 }
 
 function calcDeliveryFee(km: number, min: number, subtotal: number): number {
@@ -720,7 +734,7 @@ function buildRepeatOrderLines(params: ConstruirLinhasPedidoParams): string[] {
       lines.push('• ' + item.name + ' × ' + item.qty + ' — *R$ ' + fmtBRL(newLineTotal) + '*' + icon
         + '\n  _era R$ ' + fmtBRL(oldUnitPrice * item.qty) + ' (' + sign + 'R$ ' + fmtBRL(Math.abs(diff)) + ')_');
     } else {
-      lines.push('• ' + item.name + ' — R$ ' + fmtBRL(newUnitPrice) + ' × ' + item.qty + ' — R$ ' + fmtBRL(newLineTotal));
+      lines.push(orderItemLine(item.name, item.qty, newUnitPrice));
     }
   }
   if (unavailable.length > 0) lines.push(MessagesConstants.FORA_DO_CARDAPIO(unavailable.join(', ')));

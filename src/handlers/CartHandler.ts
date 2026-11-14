@@ -49,13 +49,13 @@ class CartHandler extends BaseHandler {
       if (newCart.items.length === 0) {
         respostas.push(MessagesConstants.CARRINHO_VAZIO);
       } else {
-        const { lines, total } = cartSummary(newCart.items);
+        const { lines, total, itemCount } = cartSummary(newCart.items);
         const minOrder = minOrderValue;
         if (minOrder > 0 && total < minOrder) {
           respostas.push(MessagesConstants.VALOR_MINIMO(fmtBRL(minOrder), fmtBRL(total)));
         } else {
           newState = BotState.CONFIRMING;
-          respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total))));
+          respostas.push(confirmBtn(MessagesConstants.CONFIRMAR_PEDIDO(lines.join('\n'), fmtBRL(total), itemCount)));
         }
       }
       return true;

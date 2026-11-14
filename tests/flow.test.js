@@ -533,6 +533,19 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
+  await test('resumo da confirmação: quantidade na frente, valores embaixo, total separado', async () => {
+    const cart = { ...cartWithItem, items: [
+      { id: 1, name: 'Combo Individual Hot', qty: 13, price: 43, menuIdx: 1 },
+      { id: 2, name: 'Combo Hot Top', qty: 1, price: 70, menuIdx: 2 },
+    ] };
+    const r = await exec({ texto: 'finalizar', state: 'ordering', cart });
+    assertState(r, 'confirming');
+    assertResponseContains(r, '🔸 *13x Combo Individual Hot*\n      R$ 43,00 cada  →  *R$ 559,00*');
+    assertResponseContains(r, '🔸 *1x Combo Hot Top*\n      *R$ 70,00*');
+    assertResponseContains(r, '━━━━━━━━━━━━━━━\n🧾 14 itens\n💰 *Total: R$ 629,00*');
+    if (process.env.SHOW_SUMMARY) console.log(JSON.stringify(r.responses ?? r, null, 2));
+  });
+
   await test('confirmar → pede tipo de entrega', async () => {
     const r = await exec({ texto: 'sim', state: 'confirming', cart: cartWithItem });
     assertState(r, 'awaiting_type');

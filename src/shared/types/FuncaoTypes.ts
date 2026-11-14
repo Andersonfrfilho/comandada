@@ -7,6 +7,8 @@ interface CartSummarioParams {
 interface CartSummarioResult {
   lines: string[];
   total: number;
+  /** Soma das quantidades: "14 itens". */
+  itemCount: number;
 }
 
 interface ValidarNomeParams {

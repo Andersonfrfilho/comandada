@@ -59,7 +59,11 @@ const MessagesConstants = {
   REPEAT_ORDER_PROMPT:          '🔄 Quer repetir seu último pedido?',
   REPEAT_ORDER_RECUSA:          'Sem problemas! 😊 Como posso te ajudar?',
   VALOR_MINIMO:                 (minOrder: string, total: string) => `Quase lá! 😊\n\nO pedido mínimo é de *R$ ${minOrder}* e seu carrinho está em *R$ ${total}*.\n\nQue tal adicionar mais alguma delícia? 🛒`,
-  CONFIRMAR_PEDIDO:             (linhas: string, total: string) => `📋 *Confere se está tudo certo:*\n\n${linhas}\n\n💰 *Total: R$ ${total}*\n\nPosso confirmar?`,
+  CONFIRMAR_PEDIDO:             (linhas: string, total: string, itens: number) => `📋 *Confere se está tudo certo:*\n\n${linhas}\n\n━━━━━━━━━━━━━━━\n🧾 ${itens} ${itens === 1 ? 'item' : 'itens'}\n💰 *Total: R$ ${total}*\n\nPosso confirmar?`,
+  ITEM_LINHA:                   (qtd: number, nome: string) => `🔸 *${qtd}x ${nome}*`,
+  ITEM_VALORES_VARIOS:          (unitario: string, subtotal: string) => `      R$ ${unitario} cada  →  *R$ ${subtotal}*`,
+  ITEM_VALORES_UM:              (subtotal: string) => `      *R$ ${subtotal}*`,
+  ITEM_OBSERVACAO:              (observacao: string) => `      _📝 ${observacao}_`,
 
   // Entrega / Endereço
   SOLICITAR_ENDERECO:           '📍 *Pra onde a gente leva?*\n\nMe manda o endereço completo, por exemplo:\n_Rua das Flores, 123, Centro_\n\nSe preferir, envie só o *CEP* (ex: _14403-772_) ou compartilhe sua 📍 *localização* aqui no WhatsApp.',
