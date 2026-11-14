@@ -1,10 +1,11 @@
 import { z } from 'zod'
 import type { RouteHandler } from '@/infra/http/router'
-import { ValidationError } from '@/shared/errors/AppError'
+import { ServiceUnavailableError, ValidationError } from '@/shared/errors/AppError'
 import type { GetBotContextUseCase } from '../../application/use-cases/GetBotContextUseCase'
 import type { SaveBotSessionUseCase } from '../../application/use-cases/SaveBotSessionUseCase'
 import type { CreateBotOrderUseCase } from '../../application/use-cases/CreateBotOrderUseCase'
 import type { CreateBotReservationUseCase } from '../../application/use-cases/CreateBotReservationUseCase'
+import type { TranscribeBotAudioUseCase } from '../../application/use-cases/TranscribeBotAudioUseCase'
 import type { BotCustomerService } from '../../application/services/BotCustomerService'
 import type { CreateOrderIssueUseCase } from '@/modules/issues/application/use-cases/CreateOrderIssueUseCase'
 import type { AnswerPartialConfirmationUseCase } from '@/modules/orders/application/use-cases/AnswerPartialConfirmationUseCase'
@@ -65,6 +66,11 @@ const reservationSchema = z.object({
   partySize: z.number().int().min(1).max(50),
 })
 
+const transcriptionSchema = z.object({
+  mediaId: z.string().trim().min(1).max(200),
+  instance: z.string().max(40).optional(),
+})
+
 const customerSchema = z.object({
   establishmentId: z.string().uuid(),
   name: z.string().trim().min(1).max(255),
@@ -92,7 +98,8 @@ export class BotController {
     private readonly customerService: BotCustomerService,
     private readonly createReservationUseCase: CreateBotReservationUseCase,
     private readonly createIssueUseCase: Pick<CreateOrderIssueUseCase, 'execute'>,
-    private readonly answerPartialConfirmationUseCase: Pick<AnswerPartialConfirmationUseCase, 'execute'>
+    private readonly answerPartialConfirmationUseCase: Pick<AnswerPartialConfirmationUseCase, 'execute'>,
+    private readonly transcribeAudioUseCase?: Pick<TranscribeBotAudioUseCase, 'execute'>
   ) {}
 
   context: RouteHandler = async (request, response) => {
@@ -130,6 +137,14 @@ export class BotController {
     const whatsappNumber = parseOrThrow(whatsappNumberSchema, request.params['whatsapp'])
     const body = parseOrThrow(partialAnswerSchema, request.body)
     response.json(await this.answerPartialConfirmationUseCase.execute({ whatsappNumber, ...body }))
+  }
+
+  // Pedido por áudio: o n8n manda o id da nota de voz e recebe o texto falado.
+  transcribeAudio: RouteHandler = async (request, response) => {
+    parseOrThrow(whatsappNumberSchema, request.params['whatsapp'])
+    const body = parseOrThrow(transcriptionSchema, request.body)
+    if (!this.transcribeAudioUseCase) throw new ServiceUnavailableError('Audio transcription')
+    response.json(await this.transcribeAudioUseCase.execute(body))
   }
 
   updateCustomer: RouteHandler = async (request, response) => {

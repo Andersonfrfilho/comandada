@@ -25,10 +25,13 @@ async function runHandlers(): Promise<void> {
 
   const handlers: BaseHandler[] = [
     new HandoffHandler(),
+    new UnclearAudioHandler(),
     new PartialConfirmationHandler(),
     new GlobalHandler(),
     new GreetingHandler(),
+    new MenuPdfHandler(),
     new IssueHandler(),
+    new TextOrderHandler(),
     new CartHandler(),
     new SchedulingHandler(),
     new DeliveryHandler(),

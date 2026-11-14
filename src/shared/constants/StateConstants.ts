@@ -38,6 +38,8 @@ enum BotState {
   AWAITING_ISSUE_FOLLOWUP   = 'awaiting_issue_followup',
   AWAITING_ISSUE_DETAIL     = 'awaiting_issue_detail',
   AWAITING_ITEM_NOTE        = 'awaiting_item_note',
+  AWAITING_TEXT_ORDER_CHOICE  = 'awaiting_text_order_choice',
+  AWAITING_TEXT_ORDER_CONFIRM = 'awaiting_text_order_confirm',
 }
 
 // Estados onde o usuário digita INPUT livre (não atalhos de menu)
@@ -63,6 +65,8 @@ const ExpectingRawInputStates: ReadonlyArray<string> = [
   BotState.RESERVING,
   BotState.AWAITING_ISSUE_DETAIL,
   BotState.AWAITING_ITEM_NOTE,
+  BotState.AWAITING_TEXT_ORDER_CHOICE,
+  BotState.AWAITING_TEXT_ORDER_CONFIRM,
 ];
 
 // Passos em que o cliente digita um número de verdade (quantidade, troco, CEP, nº da casa...):

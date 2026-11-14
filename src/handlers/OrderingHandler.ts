@@ -34,7 +34,7 @@ class OrderingHandler extends BaseHandler {
     const currentCatPage = newCart.browse_cat_page || 0;
 
     if (isNextPageCommand(texto)) {
-      const nextPage = allCategories.length > (currentCatPage + 1) * MENU_PAGE_SIZE ? currentCatPage + 1 : 0;
+      const nextPage = allCategories.length > (currentCatPage + 1) * categoryPageSize() ? currentCatPage + 1 : 0;
       newCart.browse_cat_page = nextPage;
       respostas.push(categoryList('order', nextPage));
       return true;
@@ -209,12 +209,8 @@ class OrderingHandler extends BaseHandler {
     return true;
   }
 
-  // Depois de adicionar: mais itens, observação para o item que acabou de entrar, ou finalizar.
   private _moreButtons(body: string): OutgoingMessage {
-    const buttons = [{ id: '__add_more__', title: '➕ Adicionar mais' }];
-    if (newCart.last_item_id) buttons.push({ id: '__item_note__', title: MessagesConstants.OBSERVACAO_BOTAO });
-    buttons.push({ id: 'finalizar', title: '✅ Finalizar' });
-    return { type: 'buttons', body, buttons };
+    return moreItemsButtons(body);
   }
 
   private _lastItem(): CartItem | undefined {

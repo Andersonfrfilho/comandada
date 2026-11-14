@@ -185,6 +185,26 @@ montam um `MenuPage` paginado. `meta_cloud` (oficial): lista interativa, 8 opç�
 número digitado volta a ser o id da opção (`cart.menu_choices`), menos nos passos de número livre (`NumericInputStates`). O provedor vem de `provider` no nó Extrair Mensagem
 (payload da Meta = `meta_cloud`; senão `raw.provider` ou `WHATSAPP_PROVIDER`). Emoji sem cadastro: `MenuEmojiConstants`.
 
+**Cardápio em PDF** (`apps/api/src/modules/menu/`): `GET /public/menu/:establishmentId/cardapio.pdf` gera o cardápio
+do cadastro (produtos ativos na ordem do bot, tamanhos numa linha, descrição, logo sem fundo, cor `brand_primary_color`,
+endereço/WhatsApp/Instagram) com um escritor de PDF próprio (`SimplePdfDocument`, Helvetica WinAnsi, sem dependência;
+emoji some). Fica em memória por restaurante até o conteúdo ou o dia mudar. O contexto traz `establishment.menu_pdf_url`
+(com `?v=` do conteúdo, só com `API_PUBLIC_URL` em HTTPS e cardápio não vazio); o bot põe "📄 Ver cardápio completo"
+(id `menu:pdf`) na lista de categorias e responde a "cardápio completo"/"pdf" com `{ type: 'document' }`.
+
+**Pedido por texto livre** (`src/shared/ordering/FreeTextOrderParser.ts` + `src/handlers/TextOrderHandler.ts`): nos passos
+de escolher do cardápio (início, categorias, itens, "mais alguma coisa?") o cliente pode escrever
+"2 combo tradicional e 1 hot roll". Cada trecho vira quantidade (número, por extenso, "x2") + palavras comparadas ao nome
+(sem acento, plural, prefixo, 1 erro de digitação). Ambíguo ou com tamanhos → lista (`pick:<id>`, `pick:none`) em
+`awaiting_text_order_choice`; tudo resolvido → "Anotei assim" com Confirmar/Pedir mais/Corrigir em
+`awaiting_text_order_confirm` (rascunho em `cart.text_order`; só entra no carrinho ao confirmar). Texto sem item do
+cardápio segue os atalhos de sempre.
+
+**Pedido por áudio:** o nó Extrair Mensagem manda o id da nota de voz para `POST /internal/bot/:whatsapp/transcriptions`
+(API baixa pelo canal do restaurante e transcreve com o Whisper da Groq, nomes do cardápio de dica; `GROQ_API_KEY` na
+API, `AUDIO_TRANSCRIPTION_MODEL` opcional) e o texto segue como mensagem digitada, com `from_audio`; a resposta abre com
+"🎤 Ouvi: …". Falhou ou sem chave → `__audio_unclear__` e o bot pede para repetir ou escrever.
+
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
 histórico de status chega pela sincronização. Fora da janela de 24 h vai o template `atualizacao_pedido`
