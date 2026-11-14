@@ -47,6 +47,8 @@ interface Cart {
   // Encomenda: data (YYYY-MM-DD) e hora (HH:mm) locais escolhidas; vazio = para agora.
   scheduled_date: string;
   scheduled_time: string;
+  // Agendamento aberto pelo menu principal: o "Voltar" dos dias volta para ele, não para as categorias.
+  schedule_from_menu?: boolean;
   // Problema relatado pelo cliente, montado em três mensagens (pedido → tipo → detalhe).
   issue_order_code?: string;
   issue_category?: string;

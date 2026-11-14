@@ -950,13 +950,38 @@ async function runTests() {
     assert(!text.includes('agora ou quer agendar'), text);
   });
 
-  await test('lista de categorias traz "📅 Agendar pedido" quando há horários livres', async () => {
+  await test('saudação traz "📅 Agendar pedido" no menu (3 botões, com o logo) quando há horários livres', async () => {
+    const r = await exec({ texto: 'oi', schedule_slots: SLOTS, establishment: { header_image_url: 'https://api.exemplo.com/h.jpg' } });
+    const message = r[0].json.respostas[0];
+    assert(message.type === 'buttons' && message.buttons.length === 3, JSON.stringify(message));
+    assert(message.headerImage, 'continua com o logo no topo');
+    assert(message.buttons.some((button) => button.id === 'schedule:start' && button.title === '📅 Agendar pedido'), JSON.stringify(message.buttons));
+    assert(message.body.includes('escreva *reservar*'), 'reservar continua por escrito');
+    const noSlots = await exec({ texto: 'oi' });
+    const buttons = noSlots[0].json.respostas.find((m) => m && m.type === 'buttons').buttons;
+    assert(!buttons.some((button) => button.id === 'schedule:start') && buttons.some((button) => button.id === '3'), JSON.stringify(buttons));
+  });
+
+  await test('lista de categorias não traz mais o agendar', async () => {
     const r = await exec({ texto: '2', state: 'start', schedule_slots: SLOTS });
-    const rows = (r[0].json.respostas.find((m) => m && m.type === 'list') || { sections: [] }).sections.flatMap((sec) => sec.rows);
-    assert(rows.some((row) => row.id === 'schedule:start' && row.title === '📅 Agendar pedido'), JSON.stringify(rows));
-    const noSlots = await exec({ texto: '2', state: 'start' });
-    const rowsNoSlots = noSlots[0].json.respostas.find((m) => m && m.type === 'list').sections.flatMap((sec) => sec.rows);
-    assert(!rowsNoSlots.some((row) => row.id === 'schedule:start'), 'sem horários não oferece agendar');
+    const rows = r[0].json.respostas.find((m) => m && m.type === 'list').sections.flatMap((sec) => sec.rows);
+    assert(!rows.some((row) => row.id === 'schedule:start'), JSON.stringify(rows));
+  });
+
+  await test('agendar pelo menu: Voltar dos dias volta ao menu; horário escolhido abre as categorias', async () => {
+    const days = await exec({ texto: 'schedule:start', state: 'start', schedule_slots: SLOTS });
+    assertState(days, 'awaiting_schedule_day');
+    const cart = days[0].json.cart;
+    const dayRows = days[0].json.respostas[0].sections[0].rows;
+    assert(dayRows[dayRows.length - 1].title === '↩️ Voltar ao início', JSON.stringify(dayRows));
+    const back = await exec({ texto: '0', state: 'awaiting_schedule_day', cart, schedule_slots: SLOTS });
+    assertState(back, 'start');
+    assertResponseType(back, 'buttons');
+    const typed = await exec({ texto: 'agendar pedido', state: 'start', schedule_slots: SLOTS });
+    assertState(typed, 'awaiting_schedule_day');
+    const chosen = await exec({ texto: 'time:18:30', state: 'awaiting_schedule_time', cart: { ...cart, scheduled_date: '2026-11-14' }, schedule_slots: SLOTS });
+    assertState(chosen, 'ordering_cat');
+    assertResponseContains(chosen, 'Agendado para sáb 14/11 às 18:30');
   });
 
   await test('agendar mostra os dias e depois os horários livres', async () => {
@@ -986,8 +1011,7 @@ async function runTests() {
     const cart = { ...filledCart, scheduled_date: '2026-11-14', scheduled_time: '18:30' };
     const cats = await exec({ texto: '0', state: 'ordering_items', cart, schedule_slots: SLOTS });
     const list = cats[0].json.respostas.find((m) => m && m.type === 'list');
-    assert(list.body.includes('Agendado para sáb 14/11 às 18:30'), list.body);
-    assert(list.sections[0].rows.some((row) => row.id === 'schedule:start' && row.title.includes('14/11 18:30')), JSON.stringify(list.sections[0].rows));
+    assert(list.body.includes('Agendado para sáb 14/11 às 18:30') && list.body.includes('escreva *agendar*'), list.body);
     const days = await exec({ texto: 'schedule:start', state: 'ordering_cat', cart, schedule_slots: SLOTS });
     assert(days[0].json.respostas[0].sections[0].rows.some((row) => row.id === 'schedule:now'), 'sem "para agora"');
     const now = await exec({ texto: 'schedule:now', state: 'awaiting_schedule_day', cart, schedule_slots: SLOTS });

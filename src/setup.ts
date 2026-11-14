@@ -81,6 +81,7 @@ if (Array.isArray(rawCart)) {
     last_item_id:       rawCart.last_item_id || null,
     scheduled_date:     rawCart.scheduled_date || '',
     scheduled_time:     rawCart.scheduled_time || '',
+    schedule_from_menu: rawCart.schedule_from_menu === true,
     issue_order_code:   rawCart.issue_order_code || '',
     issue_category:     rawCart.issue_category || '',
     text_order:         rawCart.text_order || null,
@@ -502,6 +503,19 @@ function mainMenu(): ButtonMessage {
       ],
     };
   }
+  // Com horários livres na agenda, "Agendar pedido" entra no lugar de "Reservar mesa" (a Meta aceita 3 botões
+  // e o 4º viraria lista, sem o logo no topo); reservar continua por escrito.
+  if (scheduleSlots.length > 0) {
+    return {
+      type: 'buttons',
+      body: MessagesConstants.MENU_PRINCIPAL + MessagesConstants.MENU_RESERVAR_DICA,
+      buttons: [
+        newOrder,
+        { id: SCHEDULE_START_ID, title: MessagesConstants.MENU_AGENDAR_PEDIDO },
+        { id: '4', title: MessagesConstants.MENU_ATENDENTE },
+      ],
+    };
+  }
   return {
     type: 'buttons',
     body: MessagesConstants.MENU_PRINCIPAL,
@@ -594,7 +608,7 @@ function categoryEmoji(categoryName: string): string {
 
 // Com o PDF do cardápio, cada página de categorias guarda uma linha para "📄 Ver cardápio completo".
 function categoryPageSize(): number {
-  return itemsPageSize() - (menuPdfUrl ? 1 : 0) - (scheduleSlots.length > 0 ? 1 : 0);
+  return itemsPageSize() - (menuPdfUrl ? 1 : 0);
 }
 
 const SCHEDULE_START_ID = 'schedule:start';
@@ -646,19 +660,6 @@ function categoryList(context: string, page?: number, returning?: boolean): List
       description: MessagesConstants.MENU_CATEGORIA_ITENS(itemCount),
     };
   });
-  // Agendar fica na lista de categorias (antes de escolher), não no fim do pedido.
-  if (context === 'order' && scheduleSlots.length > 0) {
-    const scheduled = !!(newCart.scheduled_date && newCart.scheduled_time);
-    options.push({
-      id: SCHEDULE_START_ID,
-      number: options.length + 1,
-      emoji: '📅',
-      title: scheduled
-        ? MessagesConstants.AGENDAR_OPCAO_AGENDADO(fmtScheduleDay(newCart.scheduled_date).split(' ')[1] || '', newCart.scheduled_time)
-        : MessagesConstants.AGENDAR_OPCAO,
-      description: scheduled ? MessagesConstants.AGENDAR_OPCAO_MUDAR : MessagesConstants.AGENDAR_OPCAO_DESCRICAO,
-    });
-  }
   if (menuPdfUrl) {
     options.push({
       id: 'menu:pdf',
@@ -672,7 +673,7 @@ function categoryList(context: string, page?: number, returning?: boolean): List
   const showHint = context === 'order' && currentPage === 0 && !returning && newCart.items.length === 0;
   const subtitle = showHint ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample()) : defaultSubtitle;
   const scheduledNote = context === 'order' && newCart.scheduled_date && newCart.scheduled_time
-    ? MessagesConstants.AGENDADO_PARA(fmtScheduleDay(newCart.scheduled_date), newCart.scheduled_time) + '\n\n'
+    ? MessagesConstants.AGENDADO_PARA(fmtScheduleDay(newCart.scheduled_date), newCart.scheduled_time) + MessagesConstants.AGENDADO_MUDAR_DICA + '\n\n'
     : '';
   return channelStrategy.renderMenu({
     heading,
@@ -878,7 +879,7 @@ function fmtScheduleDay(isoDate: string): string {
 function scheduleDayMenu(): ListMessage {
   const rows: ListRow[] = scheduleSlots.slice(0, 7).map((day: ScheduleDay) => ({ id: 'day:' + day.date, title: '📅 ' + fmtScheduleDay(day.date) }));
   if (newCart.scheduled_date && newCart.scheduled_time) rows.push({ id: SCHEDULE_NOW_ID, title: MessagesConstants.AGENDAR_PARA_AGORA, description: MessagesConstants.AGENDAR_PARA_AGORA_DESCRICAO });
-  rows.push({ id: MENU_BACK_ID, title: MessagesConstants.MENU_VOLTAR_CATEGORIAS });
+  rows.push({ id: MENU_BACK_ID, title: newCart.schedule_from_menu ? MessagesConstants.MENU_VOLTAR_INICIO : MessagesConstants.MENU_VOLTAR_CATEGORIAS });
   return { type: 'list', body: MessagesConstants.AGENDAR_DIA, button: MessagesConstants.AGENDAR_VER_DIAS, sections: [{ title: MessagesConstants.AGENDAR_SECAO_DIAS, rows }] };
 }
 
