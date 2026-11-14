@@ -1,7 +1,6 @@
 // ── Leitura de contexto do n8n ───────────────────────────────────────────────
 const msgData = ($("Calcular Hora") as { first(): { json: MsgData } }).first().json;
-const { tel, instancia, texto, horaAtual, diaSemana, location_lat, location_lng } = msgData;
-const rawText: string = msgData.texto_original || texto;
+const { tel, instancia, texto: incomingText, horaAtual, diaSemana, location_lat, location_lng } = msgData;
 
 const inputData = $json as N8nInputData;
 const establishment: EstablishmentConfig = inputData.establishment || {} as EstablishmentConfig;
@@ -26,6 +25,21 @@ let currentState = sessionExpired && !idleStates.includes(sessionRaw.state || 's
   ? BotState.START
   : ((sessionRaw.state || BotState.START) as BotState);
 const sessionWasReset = sessionExpired && !!sessionRaw.state && !idleStates.includes(sessionRaw.state);
+
+// ── Provedor do WhatsApp → formato de toda resposta (ChannelMessageStrategy) ──
+const channelProvider: string = msgData.provider || WhatsAppProvider.META_CLOUD;
+const channelStrategy: ChannelMessageStrategy = channelStrategyFor(channelProvider);
+
+// Evolution: "2" digitado vira o id da opção 2 da última lista/botões (fora dos passos de número livre).
+function resolveMenuChoice(input: string): string {
+  if (channelProvider !== WhatsAppProvider.EVOLUTION || !/^\d+$/.test(input.trim())) return input;
+  if (NumericInputStates.includes(currentState)) return input;
+  const savedCart = sessionRaw.cart && !Array.isArray(sessionRaw.cart) ? sessionRaw.cart : null;
+  const choices = (savedCart && savedCart.menu_choices) || {};
+  return choices[input.trim()] || input;
+}
+const texto: string = resolveMenuChoice(incomingText);
+const rawText: string = msgData.texto_original || incomingText;
 
 // ── Nome do cliente ──────────────────────────────────────────────────────────
 const customerNameFromDB: string | null = inputData.customer_name || null;
@@ -168,10 +182,6 @@ const routingProvider: RoutingProvider     = new OsrmProviderImplementation(http
 
 // ── Guard de input raw ───────────────────────────────────────────────────────
 const expectingRawInput = ExpectingRawInputStates.includes(currentState);
-
-// ── Provedor do WhatsApp → como o cardápio é desenhado (lista interativa ou texto numerado) ──
-const channelProvider: string = msgData.provider || WhatsAppProvider.META_CLOUD;
-const menuStrategy: MenuChannelStrategy = menuStrategyFor(channelProvider);
 
 // SIM/NÃO da confirmação parcial; null quando a mensagem é outra coisa.
 function partialAnswerOf(input: string): boolean | null {
@@ -428,7 +438,7 @@ function categoryEmoji(categoryName: string): string {
   return withEmoji?.emoji || menuEmojiFor(categoryName);
 }
 
-function categoryList(context: string, page?: number): ListMessage | string {
+function categoryList(context: string, page?: number): ListMessage | TextMenuMessage | string {
   if (!products || products.length === 0) return MessagesConstants.CARDAPIO_INDISPONIVEL;
   const categories = menuCategories();
   const totalPages = menuTotalPages(categories.length);
@@ -446,7 +456,7 @@ function categoryList(context: string, page?: number): ListMessage | string {
     };
   });
   const [heading, subtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
-  return menuStrategy.render({
+  return channelStrategy.renderMenu({
     heading,
     subtitle: subtitle || '',
     button: MessagesConstants.VER_CATEGORIAS,
@@ -508,7 +518,7 @@ function variantMenu(entry: MenuEntry): ButtonMessage | ListMessage {
   return { type: 'list', body, button: 'Ver tamanhos', sections: [{ title: 'Tamanhos', rows: options }] };
 }
 
-function itemsList(categoryName: string, context: string, page: number): ListMessage | string {
+function itemsList(categoryName: string, context: string, page: number): ListMessage | TextMenuMessage {
   const allEntries = menuEntries(categoryName);
   const totalPages = menuTotalPages(allEntries.length);
   const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
@@ -523,7 +533,7 @@ function itemsList(categoryName: string, context: string, page: number): ListMes
     description: entry.product.description ? String(entry.product.description) : undefined,
   }));
   const isText = channelProvider === WhatsAppProvider.EVOLUTION;
-  return menuStrategy.render({
+  return channelStrategy.renderMenu({
     heading: categoryEmoji(categoryName) + ' *' + categoryName + '*',
     subtitle: isText ? MessagesConstants.MENU_ITENS_SUBTITULO_TEXTO(allEntries.length) : MessagesConstants.MENU_ITENS_SUBTITULO(allEntries.length),
     button: MessagesConstants.MENU_VER_ITENS,
@@ -660,6 +670,14 @@ function maybeAskOptIn(): void {
     respostas.push(yesNo(MessagesConstants.OPT_IN_PERGUNTA));
     newState = BotState.AWAITING_MARKETING_OPT_IN;
   }
+}
+
+// Passada final: a resposta inteira no formato do provedor (lista/botões na Meta, texto numerado no Evolution).
+function renderPayloadForChannel(payload: N8nResponsePayload): N8nResponsePayload {
+  const numberedChoices = !NumericInputStates.includes(payload.state);
+  const rendered = channelStrategy.renderOutgoing(payload.respostas, numberedChoices);
+  const cart: Cart = { ...payload.cart, menu_choices: rendered.choices };
+  return { ...payload, respostas: rendered.messages, cart };
 }
 
 function buildPayload(): N8nResponsePayload {

@@ -33,6 +33,8 @@ interface Cart {
   browse_category: string;
   browse_page?: number;
   browse_cat_page?: number;
+  // Evolution: número digitado → id da opção da última lista/botões enviada.
+  menu_choices?: Record<string, string>;
   pending_item_id: string | null;
   pending_item_name: string;
   pending_group: string;

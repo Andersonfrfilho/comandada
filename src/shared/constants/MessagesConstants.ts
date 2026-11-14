@@ -183,6 +183,8 @@ const MessagesConstants = {
   QTD_INVALIDA:                 '✏️ *Quantas unidades?*\nDigite um número ou escolha abaixo:',
   PROXIMA_PAGINA:               (proximaPagina: number) => `➡️ Tem mais! Responda *próxima* para ver a página ${proximaPagina}`,
   MENU_INSTRUCAO_TEXTO:         (voltar: string) => `\n👉 Digite o *número* da opção ou *0* para ${voltar.replace(/^\S+\s/, '').toLowerCase()}`,
+  OPCAO_INSTRUCAO_TEXTO:        '\n👉 Responda com o *número* da opção',
+  OPCOES_TITULO:                'Opções',
   MENU_PAGINA:                  (pagina: number, total: number) => `_📄 Página ${pagina} de ${total}_`,
   MENU_VER_MAIS:                '➡️ Ver mais',
   MENU_VER_MAIS_DESCRICAO:      (pagina: number, total: number) => `Página ${pagina} de ${total}`,

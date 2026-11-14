@@ -59,6 +59,6 @@ const IssueConstants = {
     `✅ *Problema registrado${orderCode ? ' no pedido #' + orderCode : ''}.* A equipe já foi avisada.`,
   RESOLVEU_PERGUNTA: 'Isso resolve por enquanto, ou prefere falar com alguém da equipe?',
   RESOLVIDO_BOTAO: '✅ Resolvido',
-  ATENDENTE_BOTAO: '👤 Falar com atendente',
+  ATENDENTE_BOTAO: '👤 Chamar atendente', // botão da Meta: até 20 caracteres
   OBRIGADO: 'Obrigado por avisar! 🙏 Estamos à disposição.',
 } as const;

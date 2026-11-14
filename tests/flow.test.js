@@ -593,6 +593,54 @@ async function runTests() {
     assert(itemsText.includes('*1.* 🌯 *Temaki Salmão* — *R$ 23,90*'), itemsText);
   });
 
+  await test('oficial: nenhuma resposta sai como texto numerado e tudo cabe nos limites da Meta', async () => {
+    const steps = [
+      { texto: 'oi', state: 'start' },
+      { texto: '2', state: 'start', products: MANY_COMBOS },
+      { texto: 'order_cat:combinados', state: 'ordering_cat', products: MANY_COMBOS },
+      { texto: 'order_cat:temakis', state: 'ordering_cat' },
+      { texto: '1', state: 'ordering_items', browse_category: 'Temakis' },
+      { texto: 'issue_atraso', state: 'awaiting_help_option', recent_orders: [{ code: 'PED-1', status: 'preparing', order_type: 'delivery', total: 50, created_at: '13/11', estimated_at: new Date(Date.now() - 600000).toISOString() }], cart: { items: [], issue_order_code: 'PED-1' } },
+    ];
+    for (const step of steps) {
+      const r = await exec(step);
+      for (const message of r[0].json.respostas) {
+        const body = typeof message === 'string' ? message : message.body || '';
+        assert(!/\n\*?\d+\.\*? /.test(body), 'texto numerado na Meta (' + step.texto + '): ' + body.slice(0, 200));
+        assert(!(message && message.type === 'text_menu'), 'text_menu na Meta');
+        if (message && message.type === 'buttons') {
+          assert(message.buttons.length <= 3 && message.buttons.every((button) => Array.from(button.title).length <= 20), 'botão fora do limite: ' + JSON.stringify(message.buttons));
+        }
+        if (message && message.type === 'list') {
+          const rows = message.sections.flatMap((section) => section.rows);
+          assert(rows.length <= 10, 'lista com ' + rows.length + ' linhas');
+          assert(rows.every((row) => Array.from(row.title).length <= 24 && Array.from(row.description || '').length <= 72), 'linha fora do limite');
+        }
+      }
+    }
+  });
+
+  await test('evolution: botões viram texto numerado e o número volta a ser o id da opção', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temakis', provider: 'evolution' });
+    assertState(r, 'awaiting_size');
+    const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Qual tamanho'));
+    assert(text && text.includes('*1.* *Médio R$ 37,00*') && text.includes('*2.* *Grande R$ 49,00*'), String(text));
+    const choices = r[0].json.cart.menu_choices;
+    assert(choices['2'] === 'size:9', JSON.stringify(choices));
+    const picked = await exec({ texto: '2', state: 'awaiting_size', provider: 'evolution',
+      cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot', menu_choices: choices } });
+    assertState(picked, 'awaiting_qty');
+    assertResponseContains(picked, 'Temaki Hot (Grande)');
+  });
+
+  await test('evolution: em passo de número livre (quantidade) as opções saem sem número e "2" é quantidade', async () => {
+    const r = await exec({ texto: 'size:9', state: 'awaiting_size', provider: 'evolution', cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot' } });
+    assertState(r, 'awaiting_qty');
+    const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Adicionar'));
+    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar (1un)*'), String(text));
+    assert(Object.keys(r[0].json.cart.menu_choices).length === 0, 'não deveria guardar números');
+  });
+
   await test('evolution: lista longa mostra "próxima" e número da página', async () => {
     const r = await exec({ texto: 'order_cat:combinados', state: 'ordering_cat', provider: 'evolution', products: MANY_COMBOS });
     const text = r[0].json.respostas[0];
@@ -737,7 +785,7 @@ async function runTests() {
     assert(json.save_issue === true && json.issue?.category === 'atraso' && json.issue?.order_code === 'PED-1', 'issue: ' + JSON.stringify(json.issue));
     assertState(r, 'awaiting_issue_followup');
     assertResponseContains(r, 'A previsão era');
-    assertResponseContains(r, 'Falar com atendente');
+    assertResponseContains(r, 'Chamar atendente');
   });
 
   await test('problema depois de entregue pede o detalhe e registra com descrição', async () => {

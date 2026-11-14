@@ -153,7 +153,7 @@ class OrderingHandler extends BaseHandler {
   }
 
   private _handleQuantity(): boolean {
-    if (texto === 'item:back') {
+    if (texto === 'item:back' || texto === '0' || texto === 'voltar') {
       newState = BotState.ORDERING_ITEMS;
       respostas.push(itemsList(newCart.browse_category || '', 'order', newCart.browse_page || 0));
       return true;
