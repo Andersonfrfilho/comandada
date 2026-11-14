@@ -359,9 +359,11 @@ function wrapWords(text: string, width: number): string[] {
  * direita. A observação fica na linha seguinte.
  */
 function orderTable(items: CartItem[]): string {
-  const calculation = (qty: string, unit: string, total: string, sign: string): string => {
-    const left = ORDER_TABLE_INDENT + qty.padStart(ORDER_TABLE_QTY_WIDTH) + ' x ' + unit.padStart(ORDER_TABLE_UNIT_WIDTH) + ' ' + sign;
-    return left + total.padStart(ORDER_TABLE_WIDTH - left.length);
+  // Pontilhado guia o olho da conta até o total ("13 x  43,00 ...... 559,00"); o cabeçalho usa espaço.
+  const calculation = (qty: string, unit: string, total: string, filler: string): string => {
+    const left = ORDER_TABLE_INDENT + qty.padStart(ORDER_TABLE_QTY_WIDTH) + ' x ' + unit.padStart(ORDER_TABLE_UNIT_WIDTH) + ' ';
+    const right = ' ' + total;
+    return left + filler.repeat(Math.max(0, ORDER_TABLE_WIDTH - left.length - right.length)) + right;
   };
   const rows: string[] = [
     MessagesConstants.TABELA_ITEM,
@@ -372,7 +374,7 @@ function orderTable(items: CartItem[]): string {
     // Linha em branco entre os itens: cada item vira um bloco fácil de achar.
     if (index > 0) rows.push('');
     rows.push(...wrapWords(item.name, ORDER_TABLE_WIDTH));
-    rows.push(calculation(String(item.qty), fmtBRL(item.price), fmtBRL(item.price * item.qty), '='));
+    rows.push(calculation(String(item.qty), fmtBRL(item.price), fmtBRL(item.price * item.qty), '.'));
     if (item.note) {
       for (const noteLine of wrapWords(MessagesConstants.TABELA_OBS(item.note), ORDER_TABLE_WIDTH - ORDER_TABLE_INDENT.length)) {
         rows.push(ORDER_TABLE_INDENT + noteLine);

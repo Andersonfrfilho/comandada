@@ -533,7 +533,7 @@ async function runTests() {
     assertNoObjectObject(r);
   });
 
-  await test('resumo da confirmação: nome numa linha, quantidade × unitário = total embaixo', async () => {
+  await test('resumo da confirmação: nome numa linha, quantidade × unitário ..... total embaixo', async () => {
     const cart = { ...cartWithItem, items: [
       { id: 1, name: 'Combo Individual Hot', qty: 13, price: 43, menuIdx: 1 },
       { id: 2, name: 'Combo Hot Top', qty: 1, price: 70, menuIdx: 2, note: 'sem cebolinha' },
@@ -546,10 +546,10 @@ async function runTests() {
       '  Qtd x  Unit.           Total',
       '------------------------------',
       'Combo Individual Hot',
-      '   13 x  43,00 =        559,00',
+      '   13 x  43,00 ........ 559,00',
       '',
       'Combo Hot Top',
-      '    1 x  70,00 =         70,00',
+      '    1 x  70,00 .......... 70,00',
       '  obs: sem cebolinha',
       '```',
     ];
