@@ -18,7 +18,17 @@ const MessagesConstants = {
 
   // Sessão / Sistema
   SESSION_EXPIRED:              '⏱️ _Faz um tempinho que a gente não se fala, então recomecei a conversa pra você._',
-  ATENDIMENTO_ENCERRADO:        '✅ Prontinho, conversa encerrada!\n\nObrigado pelo contato e até a próxima! 👋😊',
+  ATENDIMENTO_ENCERRADO:        (despedida: { nome: string | null; restaurante: string; itensDescartados: number; pedidoAberto: string | null }) => [
+    `👋 *Até logo${despedida.nome ? ', ' + despedida.nome : ''}!*`,
+    `Obrigado por falar com o *${despedida.restaurante}*. Foi um prazer te atender! 💛`,
+    ...(despedida.itensDescartados > 0
+      ? [`🗑️ Descartei o carrinho (${despedida.itensDescartados} ${despedida.itensDescartados === 1 ? 'item' : 'itens'}). Nenhum pedido novo foi feito.`]
+      : []),
+    ...(despedida.pedidoAberto
+      ? [`🛵 Seu pedido *#${despedida.pedidoAberto}* continua normalmente. Para acompanhar, mande *meu pedido*.`]
+      : []),
+    'Quando quiser voltar, é só mandar um *oi*. 😊',
+  ].join('\n\n'),
 
   // Saudação / Nome
   BOAS_VINDAS_NOVO:             (estName: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!`,
@@ -64,7 +74,7 @@ const MessagesConstants = {
   TABELA_QTD:                   'Qtd',
   TABELA_UNITARIO:              'Unit.',
   TABELA_TOTAL:                 'Total',
-  TABELA_OBS:                   (observacao: string) => `obs: ${observacao}`,
+  TABELA_OBS:                   (observacao: string) => `↳ obs: ${observacao}`,
   ITEM_LINHA:                   (qtd: number, nome: string) => `🔸 *${qtd}x ${nome}*`,
   ITEM_VALORES_VARIOS:          (unitario: string, subtotal: string) => `      R$ ${unitario} cada  →  *R$ ${subtotal}*`,
   ITEM_VALORES_UM:              (subtotal: string) => `      *R$ ${subtotal}*`,
@@ -184,6 +194,8 @@ const MessagesConstants = {
   // Ordering
   CARDAPIO_INDISPONIVEL:        '😕 Nosso cardápio está indisponível neste momento. Tenta de novo daqui a pouquinho!',
   CARDAPIO_PEDIDO_TITULO:       '🛒 *Vamos montar seu pedido!*\n\nEscolha uma categoria 👇',
+  // Primeira tela do "Fazer pedido": o jeito mais rápido (escrever ou falar) vem antes da lista.
+  CARDAPIO_PEDIDO_DICA:         (exemplo: string) => `✍️ *Já sabe o que quer? É só escrever*, por exemplo:\n_${exemplo}_\n\n🎤 Ou mande um *áudio* falando o pedido.\n\n📋 Prefere ver as opções? Escolha uma categoria 👇`,
   CARDAPIO_TITULO:              '📖 *Nosso cardápio*\n\nEscolha uma categoria 👇',
   VER_CATEGORIAS:               'Ver categorias',
   CATEGORIAS_TITULO:            'Categorias',
@@ -205,7 +217,11 @@ const MessagesConstants = {
   OBSERVACAO_PERGUNTA:          (nome: string) => `📝 *Alguma observação para o ${nome}?*\n\nMe conta como você prefere (ex: _sem cebola_, _molho à parte_, _bem passado_).\nSe mudou de ideia, responda *pular*.`,
   OBSERVACAO_ANOTADA:           (nome: string, nota: string) => `📝 Anotado! *${nome}*: _${nota}_\n\nA cozinha vai ver direitinho 👨‍🍳`,
   OBSERVACAO_PULADA:            'Tudo bem, sem observação 😊',
-  OBSERVACAO_BOTAO:             '📝 Observação',
+  OBSERVACAO_BOTAO:             '📝 Com observação',
+  QTD_ADICIONAR_UM:             '✅ Adicionar 1',
+  QTD_OUTRA:                    '✏️ Outra qtd',
+  PRODUTO_VOLTAR_DICA:          '\n\n↩️ *0* para voltar · ou digite a quantidade com a observação (ex.: _2 sem cebolinha_)',
+  OBSERVACAO_ITEM_ANOTADA:      (nome: string, nota: string) => `📝 Anotado para o *${nome}*: _${nota}_\n\nQuantas unidades? Toque abaixo ou digite o número.`,
   QTD_SOLICITAR:                '✏️ *Quantas unidades?* É só digitar o número:',
   QTD_LIMITE:                   (nome: string, maximo: number) => `⚠️ O limite é *${maximo} unidades* de *${nome}* por pedido. Deixei ${maximo} no carrinho.`,
   QTD_INVALIDA:                 '✏️ *Quantas unidades?*\nDigite um número ou escolha abaixo:',
