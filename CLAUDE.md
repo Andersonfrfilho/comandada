@@ -164,9 +164,13 @@ formato já extraído só entra com `X-Internal-Token`. A mesma mensagem (id da 
 **Confirmação parcial:** o painel avisa que itens acabaram (`order_partial_confirmations`, pendente); o contexto do bot
 traz `partial_confirmation` e o `PartialConfirmationHandler` lê SIM/NÃO (antes do "cancelar" global). SIM tira os itens
 e ajusta total e partes do pagamento; NÃO cancela. **Observação por item:** na escolha do item (botões Adicionar 1 /
-📝 Com observação / Outra qtd; Evolution aceita "obs"; "2 sem cebolinha" já manda quantidade e observação), fica em
+📝 Com observação / ↩️ Trocar item; Evolution aceita "obs"; "2 sem cebolinha" já manda quantidade e observação), fica em
 `cart.pending_item_note` até a quantidade e vai em `order_items.notes` (cozinha e painel). Mesmo produto com observação
 diferente é outra linha. No resumo, a observação aparece embaixo do nome, antes da conta.
+**Trocar item e editar carrinho:** a tela do produto tem Adicionar 1 / 📝 Com observação / ↩️ Trocar item (quantidade
+maior é digitada); a da observação tem ⏭️ Sem observação / ↩️ Trocar item. `CartEditHandler`: "✏️ Editar carrinho"
+(depois de adicionar) e "✏️ Editar" (na confirmação) abrem a lista das linhas do carrinho (`awaiting_cart_edit`), e a
+linha escolhida (`cart.edit_index`) tem 🗑️ Remover / 🔢 Mudar qtd / ↩️ Voltar; 0 tira; carrinho vazio volta às categorias.
 
 **Saudação** (`GreetingHandler`): na Meta vai **numa mensagem só**: logo no topo (cabeçalho de imagem), boas-vindas,
 cartão do restaurante (blocos em negrito separados por linha em branco: horário com "aberto agora", endereço + cidade

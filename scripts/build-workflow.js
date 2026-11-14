@@ -43,6 +43,7 @@ const MODULE_ORDER = [
   'handlers/GreetingHandler.ts',
   'handlers/IssueHandler.ts',
   'handlers/TextOrderHandler.ts',
+  'handlers/CartEditHandler.ts',
   'handlers/CartHandler.ts',
   'handlers/SchedulingHandler.ts',
   'handlers/DeliveryHandler.ts',
