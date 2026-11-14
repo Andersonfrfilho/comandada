@@ -5,6 +5,8 @@ import type { BotConfigRepository, DeliveryFeeRuleRow, PaymentTypeRow } from '@/
 import type { PaymentAccountService } from '@/modules/payments/application/services/PaymentAccountService'
 import { CARD_LINK_PAYMENT_TYPE } from '@/modules/payments/shared/payments.constant'
 import { NotFoundError } from '@/shared/errors/AppError'
+import { brandStickerUrl } from '@/modules/settings/shared/brandSticker.constant'
+import { BRANDING_SETTING_KEYS } from '@/modules/settings/shared/branding.constant'
 import type { ListScheduledOrderSlotsUseCase, ScheduledOrderDay } from '@/modules/agenda/application/use-cases/ListScheduledOrderSlotsUseCase'
 import type { BotCustomerService } from '../services/BotCustomerService'
 import { API_ORDER_STATUS_TO_BOT, API_ORDER_TYPE_TO_BOT, RECENT_ORDERS_LIMIT } from '../../shared/bot.constant'
@@ -36,7 +38,8 @@ export class GetBotContextUseCase {
     private readonly botConfigRepository: BotConfigRepository,
     private readonly customerService: BotCustomerService,
     private readonly listScheduleSlots: Pick<ListScheduledOrderSlotsUseCase, 'execute'>,
-    private readonly paymentAccounts?: Pick<PaymentAccountService, 'findActive'>
+    private readonly paymentAccounts?: Pick<PaymentAccountService, 'findActive'>,
+    private readonly publicApiUrl?: string
   ) {}
 
   async execute(params: GetBotContextParams): Promise<Record<string, unknown>> {
@@ -66,6 +69,10 @@ export class GetBotContextUseCase {
         id: establishmentId,
         name: establishment.name,
         whatsapp_number: establishment.whatsappNumber,
+        // Figurinha do logo (Configurações → Marca) que abre a saudação; null sem logo.
+        sticker_url: this.publicApiUrl
+          ? brandStickerUrl(this.publicApiUrl, establishmentId, config[BRANDING_SETTING_KEYS.logo])
+          : null,
       },
       config,
       products,

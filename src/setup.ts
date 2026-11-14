@@ -86,6 +86,9 @@ const msgWelcome     = (establishment.msg_welcome  || config['msg_welcome']  || 
 const estCity        = establishment.city          || config['establishment_city']    || '';
 const estAddress     = establishment.address       || config['establishment_address'] || '';
 const minOrderValue  = establishment.min_order_value != null ? establishment.min_order_value : parseFloat(config['min_order_value'] || '0');
+const brandSticker: StickerMessage | null = establishment.sticker_url
+  ? { type: 'sticker', link: establishment.sticker_url }
+  : null;
 const kitchenPhone   = establishment.kitchen_phone  || config['kitchen_phone']           || '';
 
 // ── Tipos de pedido / entrega ────────────────────────────────────────────────
@@ -629,6 +632,43 @@ function buildPayload(): N8nResponsePayload {
     save_issue, issue: finalIssue,
     save_partial_answer, partial_answer: partialAnswer,
   };
+}
+
+// Informações do restaurante na saudação, tudo do cadastro dele: só entra a linha cujo dado existe.
+function buildCompanyInfo(): string {
+  const lines: string[] = [];
+  if (isOpen && !ignoreHours) lines.push(MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
+  lines.push(MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
+  const fullAddress = [estAddress, estCity].filter((part: string) => part && part.trim()).join(' · ');
+  if (fullAddress) lines.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  const feeText = describeDeliveryFee();
+  if (featureDelivery && featureRetirada) lines.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
+  else if (featureDelivery) lines.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
+  else if (featureRetirada) lines.push(MessagesConstants.INFO_SO_RETIRADA);
+  const paymentLabels = paymentTypes
+    .map((paymentType: PaymentType) => paymentType.label)
+    .filter((label: string, index: number, labels: string[]) => !!label && labels.indexOf(label) === index);
+  if (paymentLabels.length > 0) lines.push(MessagesConstants.INFO_PAGAMENTO(joinWithAnd(paymentLabels)));
+  return lines.join('\n');
+}
+
+function describeDeliveryFee(): string {
+  const hasZones = Array.isArray(feeRule.zones) && feeRule.zones.length > 0;
+  let feeText: string;
+  if (feeMode === 'fixed' && !hasZones) {
+    feeText = baseFee > 0 ? MessagesConstants.INFO_TAXA_FIXA(fmtBRL(baseFee)) : MessagesConstants.INFO_TAXA_GRATIS;
+  } else {
+    feeText = MessagesConstants.INFO_TAXA_DISTANCIA;
+  }
+  if (freeDeliveryAbove > 0 && feeText !== MessagesConstants.INFO_TAXA_GRATIS) {
+    feeText = feeText.replace(/\)$/, MessagesConstants.INFO_FRETE_GRATIS_ACIMA(fmtBRL(freeDeliveryAbove)) + ')');
+  }
+  return feeText;
+}
+
+function joinWithAnd(items: string[]): string {
+  if (items.length <= 1) return items.join('');
+  return items.slice(0, -1).join(', ') + ' e ' + items[items.length - 1];
 }
 
 const greetings = ['oi', 'ola', 'bom dia', 'boa tarde', 'boa noite', 'inicio', 'menu', 'start', 'hello', 'hi'];
