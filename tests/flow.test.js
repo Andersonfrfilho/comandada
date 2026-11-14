@@ -906,6 +906,27 @@ async function runTests() {
     assert(r?.[0]?.json?.request_human_handoff === true, 'deve pedir atendente');
   });
 
+  await test('sair: despedida com nome e restaurante, sem falar de carrinho vazio', async () => {
+    const r = await exec({ texto: 'sair', state: 'start' });
+    assertState(r, 'start');
+    assertResponseContains(r, '👋 *Até logo, Anderson!*');
+    assertResponseContains(r, 'Obrigado por falar com o *Sakura*');
+    assertResponseContains(r, 'é só mandar um *oi*');
+    const body = JSON.stringify(r);
+    assert(!body.includes('Descartei o carrinho'), 'carrinho vazio não deve aparecer');
+  });
+
+  await test('cancelar com carrinho cheio avisa que descartou e não fez pedido', async () => {
+    const r = await exec({ texto: 'cancelar', state: 'ordering', cart: { items: [{ id: 1, name: 'Temaki Salmão', qty: 3, price: 25, menuIdx: 1 }] } });
+    assertResponseContains(r, 'Descartei o carrinho (3 itens). Nenhum pedido novo foi feito.');
+    assert((r?.[0]?.json?.cart?.items || []).length === 0, 'carrinho deve ficar vazio');
+  });
+
+  await test('sair com pedido em andamento lembra que ele continua', async () => {
+    const r = await exec({ texto: 'sair', state: 'start', recent_orders: ACTIVE_ON_TIME });
+    assertResponseContains(r, 'Seu pedido *#PED-1* continua normalmente');
+  });
+
   await test('alterar ou cancelar chama a equipe', async () => {
     const r = await exec({ texto: 'ajuda_alterar', state: 'awaiting_help_option', recent_orders: ACTIVE_ON_TIME, cart: { items: [], issue_order_code: 'PED-1' } });
     assertState(r, 'human_handoff');

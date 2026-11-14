@@ -18,7 +18,17 @@ const MessagesConstants = {
 
   // Sessão / Sistema
   SESSION_EXPIRED:              '⏱️ _Faz um tempinho que a gente não se fala, então recomecei a conversa pra você._',
-  ATENDIMENTO_ENCERRADO:        '✅ Prontinho, conversa encerrada!\n\nObrigado pelo contato e até a próxima! 👋😊',
+  ATENDIMENTO_ENCERRADO:        (despedida: { nome: string | null; restaurante: string; itensDescartados: number; pedidoAberto: string | null }) => [
+    `👋 *Até logo${despedida.nome ? ', ' + despedida.nome : ''}!*`,
+    `Obrigado por falar com o *${despedida.restaurante}*. Foi um prazer te atender! 💛`,
+    ...(despedida.itensDescartados > 0
+      ? [`🗑️ Descartei o carrinho (${despedida.itensDescartados} ${despedida.itensDescartados === 1 ? 'item' : 'itens'}). Nenhum pedido novo foi feito.`]
+      : []),
+    ...(despedida.pedidoAberto
+      ? [`🛵 Seu pedido *#${despedida.pedidoAberto}* continua normalmente. Para acompanhar, mande *meu pedido*.`]
+      : []),
+    'Quando quiser voltar, é só mandar um *oi*. 😊',
+  ].join('\n\n'),
 
   // Saudação / Nome
   BOAS_VINDAS_NOVO:             (estName: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!`,
