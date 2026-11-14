@@ -189,6 +189,12 @@ function assertNoObjectObject(result) {
 // ── Execução síncrona simples para testes ─────────────────────────────────
 // Node.js permite rodar Promises de forma síncrona via async IIFE
 async function runTests() {
+  const baseCartForNote = () => ({
+    items: [{ id: 1, name: 'Temaki Salmão', qty: 1, price: 23.9, menuIdx: 1 }], order_type: '', address: '', complement: '',
+    delivery_fee: 0, payment_method: '', change_for: null, split_count: 0, split_current: 0, split_payments: [],
+    mixed_method: '', mixed_label: '', mixed_amount: 0, address_street_temp: null, browse_category: 'Temaki', browse_page: 0,
+    pending_item_id: 1, pending_item_name: 'Temaki Salmão', pending_group: '',
+  });
   const exec = (args) => {
     return new Promise((resolve) => {
       const jsonData = {
@@ -549,8 +555,8 @@ async function runTests() {
       '   13 x  43,00 ........ 559,00',
       '',
       'Combo Hot Top',
+      '  ↳ obs: sem cebolinha',
       '    1 x  70,00 ......... 70,00',
-      '  obs: sem cebolinha',
       '```',
     ];
     table.slice(1, -1).forEach((row) => assert(row.length <= 30, 'linha passa de 30 caracteres: ' + row));
@@ -730,8 +736,35 @@ async function runTests() {
     const r = await exec({ texto: 'size:9', state: 'awaiting_size', provider: 'evolution', cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot' } });
     assertState(r, 'awaiting_qty');
     const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Adicionar'));
-    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar (1un)*'), String(text));
+    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar 1*') && text.includes('• *📝 Com observação*'), String(text));
     assert(Object.keys(r[0].json.cart.menu_choices).length === 0, 'não deveria guardar números');
+  });
+
+  await test('observação na escolha do item: pede a nota, depois a quantidade, e entra só naquele item', async () => {
+    const pending = baseCartForNote();
+    const asked = await exec({ texto: 'qty:note', state: 'awaiting_qty', cart: pending });
+    assertState(asked, 'awaiting_item_note');
+    const noted = await exec({ texto: 'sem cebolinha', state: 'awaiting_item_note', cart: asked[0].json.cart });
+    assertState(noted, 'awaiting_qty');
+    assertResponseContains(noted, 'Anotado para o *Temaki Salmão*: _sem cebolinha_');
+    const added = await exec({ texto: '2', state: 'awaiting_qty', cart: noted[0].json.cart });
+    assertState(added, 'awaiting_more');
+    const items = added[0].json.cart.items;
+    assert(items.length === 2, 'itens: ' + JSON.stringify(items));
+    assert(items[0].note === undefined && items[0].qty === 1, 'o item que já estava não ganha a observação');
+    assert(items[1].note === 'sem cebolinha' && items[1].qty === 2, 'novo: ' + JSON.stringify(items[1]));
+    assert(!JSON.stringify(added).includes('__item_note__'), 'não oferece mais observação depois de adicionar');
+  });
+
+  await test('"2 sem cebolinha" na quantidade: quantidade e observação de uma vez', async () => {
+    const r = await exec({ texto: '2 sem cebolinha', state: 'awaiting_qty', cart: baseCartForNote() });
+    const added = r[0].json.cart.items.find((item) => item.note === 'sem cebolinha');
+    assert(added && added.qty === 2, JSON.stringify(r[0].json.cart.items));
+  });
+
+  await test('evolution: "obs" na quantidade abre a observação', async () => {
+    const r = await exec({ texto: 'obs', state: 'awaiting_qty', provider: 'evolution', cart: baseCartForNote() });
+    assertState(r, 'awaiting_item_note');
   });
 
   await test('evolution: lista longa mostra "próxima" e número da página', async () => {

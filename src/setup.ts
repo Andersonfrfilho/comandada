@@ -76,6 +76,7 @@ if (Array.isArray(rawCart)) {
     browse_cat_page:    rawCart.browse_cat_page || 0,
     pending_item_id:    rawCart.pending_item_id || null,
     pending_item_name:  rawCart.pending_item_name || '',
+    pending_item_note:  rawCart.pending_item_note || '',
     pending_group:      rawCart.pending_group || '',
     last_item_id:       rawCart.last_item_id || null,
     scheduled_date:     rawCart.scheduled_date || '',
@@ -306,7 +307,9 @@ function parseTrocoInput(texto: string, amountToPay: number): number | null {
 function mergeCartItem(items: CartItem[], item: CartItem): boolean {
   const addedQty = Math.max(0, Math.floor(Number(item.qty) || 0));
   if (addedQty < 1) return false;
-  const existing = items.find((cartItem: CartItem) => String(cartItem.id) === String(item.id));
+  // Mesmo produto com observação diferente é outra linha: "1 sem cebolinha" e "1 normal" não se misturam.
+  const noteKey = (note?: string) => (note || '').trim().toLowerCase();
+  const existing = items.find((cartItem: CartItem) => String(cartItem.id) === String(item.id) && noteKey(cartItem.note) === noteKey(item.note));
   const wanted = (existing ? existing.qty : 0) + addedQty;
   const accepted = Math.min(wanted, MAX_ITEM_QTY);
   if (existing) existing.qty = accepted;
@@ -374,12 +377,13 @@ function orderTable(items: CartItem[]): string {
     // Linha em branco entre os itens: cada item vira um bloco fácil de achar.
     if (index > 0) rows.push('');
     rows.push(...wrapWords(item.name, ORDER_TABLE_WIDTH));
-    rows.push(calculation(String(item.qty), fmtBRL(item.price), fmtBRL(item.price * item.qty), '.'));
+    // A observação fica colada no nome, antes da conta: fica claro que é só deste item.
     if (item.note) {
       for (const noteLine of wrapWords(MessagesConstants.TABELA_OBS(item.note), ORDER_TABLE_WIDTH - ORDER_TABLE_INDENT.length)) {
         rows.push(ORDER_TABLE_INDENT + noteLine);
       }
     }
+    rows.push(calculation(String(item.qty), fmtBRL(item.price), fmtBRL(item.price * item.qty), '.'));
   });
   return '```\n' + rows.join('\n') + '\n```';
 }
@@ -791,11 +795,10 @@ function startCheckout(): void {
   }
 }
 
-// Depois de adicionar: mais itens, observação para o item que acabou de entrar, ou finalizar.
+// Depois de adicionar: mais itens ou finalizar.
 function moreItemsButtons(body: string): ButtonMessage {
-  const buttons = [{ id: '__add_more__', title: '➕ Adicionar mais' }];
-  if (newCart.last_item_id) buttons.push({ id: '__item_note__', title: MessagesConstants.OBSERVACAO_BOTAO });
-  buttons.push({ id: 'finalizar', title: '✅ Finalizar' });
+  // A observação é pedida na escolha do item (botão "📝 Com observação"), não depois de adicionar.
+  const buttons = [{ id: '__add_more__', title: '➕ Adicionar mais' }, { id: 'finalizar', title: '✅ Finalizar' }];
   return { type: 'buttons', body, buttons };
 }
 

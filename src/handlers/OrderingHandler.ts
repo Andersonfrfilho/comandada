@@ -116,17 +116,31 @@ class OrderingHandler extends BaseHandler {
     newCart.pending_item_id = selectedProduct.id;
     newCart.pending_item_name = selectedProduct.name;
     newCart.pending_group = '';
+    newCart.pending_item_note = '';
     newState = BotState.AWAITING_QTY;
     const descriptionText = selectedProduct.description ? '\n\n_' + selectedProduct.description + '_' : '';
     respostas.push({
       type: 'buttons',
-      body: MessagesConstants.PRODUTO_DETALHE(selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText),
+      body: MessagesConstants.PRODUTO_DETALHE(selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText) + MessagesConstants.PRODUTO_VOLTAR_DICA,
       buttons: [
-        { id: 'qty:1', title: '✅ Adicionar (1un)' },
-        { id: 'qty:more', title: '✏️ Outra qtd' },
-        { id: 'item:back', title: '↩️ Voltar' },
+        { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
+        { id: 'qty:note', title: MessagesConstants.OBSERVACAO_BOTAO },
+        { id: 'qty:more', title: MessagesConstants.QTD_OUTRA },
       ],
     });
+  }
+
+  /** Depois da observação: só falta a quantidade (a observação já está guardada no pedido em andamento). */
+  private _quantityButtons(body: string): ButtonMessage {
+    return {
+      type: 'buttons',
+      body,
+      buttons: [
+        { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
+        { id: 'qty:more', title: MessagesConstants.QTD_OUTRA },
+        { id: 'item:back', title: '↩️ Voltar' },
+      ],
+    };
   }
 
   private _handleSize(): boolean {
@@ -164,7 +178,21 @@ class OrderingHandler extends BaseHandler {
       return true;
     }
 
-    const quantity = parseQuantityInput(texto.startsWith('qty:') ? texto.slice('qty:'.length) : texto);
+    // Na Evolution os botões viram texto sem número: "obs"/"observação" também abre a observação.
+    if (texto === 'qty:note' || /^(com )?(obs|observa[cç][aã]o)$/.test(texto.trim())) {
+      newState = BotState.AWAITING_ITEM_NOTE;
+      respostas.push(MessagesConstants.OBSERVACAO_PERGUNTA(newCart.pending_item_name || ''));
+      return true;
+    }
+
+    // "2 sem cebolinha": quantidade e observação de uma vez.
+    const quantityWithNote = rawText.trim().match(/^(\d{1,3})\s+(?:x\s+)?([a-zà-ú].*)$/i);
+    if (quantityWithNote && parseQuantityInput(quantityWithNote[1]) !== null && /[a-zà-ú]{2}/i.test(quantityWithNote[2])) {
+      newCart.pending_item_note = quantityWithNote[2].trim().slice(0, 140);
+    }
+    const quantity = parseQuantityInput(
+      texto.startsWith('qty:') ? texto.slice('qty:'.length) : (quantityWithNote ? quantityWithNote[1] : texto)
+    );
 
     if (!quantity || quantity < 1) {
       respostas.push({
@@ -182,10 +210,15 @@ class OrderingHandler extends BaseHandler {
       return true;
     }
 
-    const capped = mergeCartItem(newCart.items, { id: foundProduct.id, name: foundProduct.name, qty: quantity, price: Number(foundProduct.price), menuIdx: products.indexOf(foundProduct) + 1 });
+    const note = (newCart.pending_item_note || '').trim();
+    const capped = mergeCartItem(newCart.items, {
+      id: foundProduct.id, name: foundProduct.name, qty: quantity, price: Number(foundProduct.price),
+      menuIdx: products.indexOf(foundProduct) + 1, ...(note ? { note } : {}),
+    });
     if (capped) respostas.push(MessagesConstants.QTD_LIMITE(foundProduct.name, MAX_ITEM_QTY));
     newCart.pending_item_id = null;
     newCart.pending_item_name = '';
+    newCart.pending_item_note = '';
     newCart.last_item_id = foundProduct.id;
 
     const { lines: cartLines, total } = cartSummary(newCart.items);
@@ -208,6 +241,20 @@ class OrderingHandler extends BaseHandler {
   }
 
   private _handleNote(): boolean {
+    // Observação pedida na escolha do item: guarda e volta para a quantidade.
+    if (newCart.pending_item_id) {
+      const raw = rawText.trim();
+      const skipped = ['pular', 'nao', 'não', 'n', '-', '0', 'voltar'].includes(texto.trim());
+      newState = BotState.AWAITING_QTY;
+      if (skipped || !raw) {
+        newCart.pending_item_note = '';
+        respostas.push(this._quantityButtons(MessagesConstants.OBSERVACAO_PULADA + '\n\n' + MessagesConstants.QTD_SOLICITAR));
+        return true;
+      }
+      newCart.pending_item_note = raw.slice(0, 140);
+      respostas.push(this._quantityButtons(MessagesConstants.OBSERVACAO_ITEM_ANOTADA(newCart.pending_item_name || '', newCart.pending_item_note)));
+      return true;
+    }
     const item = this._lastItem();
     newState = BotState.AWAITING_MORE;
     const raw = rawText.trim();
