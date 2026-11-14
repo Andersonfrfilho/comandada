@@ -1,0 +1,13 @@
+{
+  "$comment": "Estado desejado de cada workflow no n8n, aplicado por scripts/n8n-migrate.sh. active: true liga, false desliga, \"keep\" não mexe na ativação (só no conteúdo). Arquivo fora da lista é importado e fica como está.",
+  "workflows": {
+    "00-preview-chat.json": { "active": true },
+    "01-receber-mensagem.json": { "active": true },
+    "01-whatsapp-receiver.json": { "active": "keep" },
+    "02-cron-limpeza-sessoes.json": { "active": true },
+    "03-cron-promocoes.json": { "active": false },
+    "04-cron-lembretes.json": { "active": false },
+    "05-cron-lembretes-reserva.json": { "active": false },
+    "07-cron-retry-fiscal.json": { "active": true }
+  }
+}

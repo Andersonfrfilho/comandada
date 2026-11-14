@@ -1,14 +1,38 @@
 name: Sync n8n Workflows
 
+# Migration dos workflows do n8n: a cada push na main que mexe no bot, aplica n8n/workflows/*.json
+# pela API do n8n (scripts/n8n-migrate.sh). Só o que mudou é atualizado e reativado; o resto fica
+# como está. Ativação de cada workflow em n8n/manifest.json.
+#
+# Secrets do repositório (Settings → Secrets and variables → Actions):
+#   N8N_URL                      https://n8n-comandada-yuyaki.up.railway.app
+#   N8N_API_KEY                  n8n → Settings → n8n API (a mesma de ~/.config/comandada/n8n-api-key)
+#   N8N_POSTGRES_CREDENTIAL_ID   opcional; sem ele o script procura a credencial "Postgres account"
+#   DATABASE_URL                 opcional; só para as migrations SQL antigas de database/migrations
+
 on:
   push:
     branches: [main]
     paths:
-      - 'n8n/workflows/**'
+      - 'n8n/**'
       - 'src/**'
       - 'database/migrations/**'
+      - 'scripts/n8n-migrate.sh'
+      - 'scripts/n8n_migrate.py'
+      - 'scripts/build-workflow.js'
       - 'package.json'
+      - '.github/workflows/sync-n8n-workflows.yml'
   workflow_dispatch:
+    inputs:
+      dry_run:
+        description: 'Só mostrar o que mudaria, sem alterar o n8n'
+        type: boolean
+        default: false
+
+# Dois merges seguidos não aplicam ao mesmo tempo; o segundo espera o primeiro.
+concurrency:
+  group: sync-n8n-workflows
+  cancel-in-progress: false
 
 jobs:
   validate:
@@ -43,13 +67,16 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - name: Install psql
-        run: sudo apt-get install -y postgresql-client
-
       - name: Run database migrations
         env:
           DATABASE_URL: ${{ secrets.DATABASE_URL }}
-        run: bash scripts/run-migrations.sh
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::notice::DATABASE_URL não configurado; migrations SQL antigas puladas (o banco da API migra sozinho no boot)."
+            exit 0
+          fi
+          sudo apt-get install -y postgresql-client
+          bash scripts/run-migrations.sh
 
   sync:
     runs-on: ubuntu-latest
@@ -69,8 +96,15 @@ jobs:
       - name: Build workflow before sync
         run: npm run build
 
-      - name: Sync workflows to n8n
+      - name: Migrate workflows to n8n
         env:
           N8N_URL: ${{ secrets.N8N_URL }}
           N8N_API_KEY: ${{ secrets.N8N_API_KEY }}
-        run: bash scripts/import-workflows.sh
+          N8N_POSTGRES_CREDENTIAL_ID: ${{ secrets.N8N_POSTGRES_CREDENTIAL_ID }}
+          DRY_RUN: ${{ inputs.dry_run && '1' || '' }}
+        run: |
+          if [ -z "$N8N_URL" ] || [ -z "$N8N_API_KEY" ]; then
+            echo "::error::Configure os secrets N8N_URL e N8N_API_KEY em Settings → Secrets and variables → Actions."
+            exit 1
+          fi
+          bash scripts/n8n-migrate.sh
