@@ -59,6 +59,7 @@ if (Array.isArray(rawCart)) {
     address_street_temp: rawCart.address_street_temp || null,
     browse_category:    rawCart.browse_category || '',
     browse_page:        rawCart.browse_page || 0,
+    browse_cat_page:    rawCart.browse_cat_page || 0,
     pending_item_id:    rawCart.pending_item_id || null,
     pending_item_name:  rawCart.pending_item_name || '',
     pending_group:      rawCart.pending_group || '',
@@ -167,6 +168,10 @@ const routingProvider: RoutingProvider     = new OsrmProviderImplementation(http
 
 // ── Guard de input raw ───────────────────────────────────────────────────────
 const expectingRawInput = ExpectingRawInputStates.includes(currentState);
+
+// ── Provedor do WhatsApp → como o cardápio é desenhado (lista interativa ou texto numerado) ──
+const channelProvider: string = msgData.provider || WhatsAppProvider.META_CLOUD;
+const menuStrategy: MenuChannelStrategy = menuStrategyFor(channelProvider);
 
 // SIM/NÃO da confirmação parcial; null quando a mensagem é outra coisa.
 function partialAnswerOf(input: string): boolean | null {
@@ -406,17 +411,54 @@ function notifBtn(currentOptIn: boolean | null): ButtonMessage {
   return { type: 'buttons', body: status, buttons: [{ id: 'ativar', title: '🔔 Ativar' }, { id: '0', title: '↩️ Voltar' }] };
 }
 
-function categoryList(context: string): ListMessage | string {
+function isNextPageCommand(input: string): boolean {
+  return ['próxima', 'proxima', 'próximo', 'proximo', 'mais', 'ver mais'].includes(input.trim());
+}
+
+function menuCategories(): string[] {
+  return [...new Set(products.map((product: Product) => product.category || 'Outros'))] as string[];
+}
+
+function menuTotalPages(count: number): number {
+  return Math.max(1, Math.ceil(count / MENU_PAGE_SIZE));
+}
+
+function categoryEmoji(categoryName: string): string {
+  const withEmoji = products.find((product: Product) => (product.category || 'Outros') === categoryName && !!product.emoji);
+  return withEmoji?.emoji || menuEmojiFor(categoryName);
+}
+
+function categoryList(context: string, page?: number): ListMessage | string {
   if (!products || products.length === 0) return MessagesConstants.CARDAPIO_INDISPONIVEL;
-  const cats = [...new Set(products.map((product: Product) => product.category || 'Outros'))] as string[];
+  const categories = menuCategories();
+  const totalPages = menuTotalPages(categories.length);
+  const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
+  const start = currentPage * MENU_PAGE_SIZE;
   const prefix = context === 'order' ? 'order_cat:' : 'cat:';
-  const rows = cats.map((categoryName: string) => {
-    const categoryItems = products.filter((product: Product) => (product.category || 'Outros') === categoryName);
-    const catTitle = ((categoryItems[0]?.emoji || '🍽️') + ' ' + categoryName).slice(0, 24);
-    return { id: prefix + categoryName.toLowerCase(), title: catTitle, description: categoryItems.length + ' item(s)' };
+  const options: MenuOption[] = categories.slice(start, start + MENU_PAGE_SIZE).map((categoryName: string, index: number) => {
+    const itemCount = menuEntries(categoryName).length;
+    return {
+      id: prefix + categoryName.toLowerCase(),
+      number: start + index + 1,
+      emoji: categoryEmoji(categoryName),
+      title: categoryName,
+      description: MessagesConstants.MENU_CATEGORIA_ITENS(itemCount),
+    };
   });
-  const body = context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO;
-  return { type: 'list', body, button: MessagesConstants.VER_CATEGORIAS, sections: [{ title: MessagesConstants.CATEGORIAS_TITULO, rows }] };
+  const [heading, subtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
+  return menuStrategy.render({
+    heading,
+    subtitle: subtitle || '',
+    button: MessagesConstants.VER_CATEGORIAS,
+    sectionTitle: MessagesConstants.CATEGORIAS_TITULO,
+    options,
+    page: currentPage,
+    totalPages,
+    hasMore: categories.length > start + MENU_PAGE_SIZE,
+    nextId: 'próxima',
+    backId: '0',
+    backLabel: MessagesConstants.MENU_VOLTAR_INICIO,
+  });
 }
 
 interface MenuEntry {
@@ -466,30 +508,34 @@ function variantMenu(entry: MenuEntry): ButtonMessage | ListMessage {
   return { type: 'list', body, button: 'Ver tamanhos', sections: [{ title: 'Tamanhos', rows: options }] };
 }
 
-function itemsList(categoryName: string, context: string, page: number): TextMenuMessage {
-  page = page || 0;
+function itemsList(categoryName: string, context: string, page: number): ListMessage | string {
   const allEntries = menuEntries(categoryName);
-  const PAGE_SIZE = 9;
-  const start = page * PAGE_SIZE;
-  const slice = allEntries.slice(start, start + PAGE_SIZE);
-  const hasMore = allEntries.length > start + PAGE_SIZE;
-  const lines: string[] = ['🍽️ *' + categoryName + '*\n'];
-  slice.forEach((entry: MenuEntry, index: number) => {
-    const product = entry.product;
-    const descStr = product.description ? ' — _' + String(product.description).slice(0, 60) + '_' : '';
-    lines.push((start + index + 1) + '. ' + (product.emoji ? product.emoji + ' ' : '') + entry.title + ' — ' + entryPriceText(entry) + descStr);
+  const totalPages = menuTotalPages(allEntries.length);
+  const currentPage = Math.min(Math.max(page || 0, 0), totalPages - 1);
+  const start = currentPage * MENU_PAGE_SIZE;
+  // id = número do item na categoria: tocar na lista ou digitar o número dá no mesmo.
+  const options: MenuOption[] = allEntries.slice(start, start + MENU_PAGE_SIZE).map((entry: MenuEntry, index: number) => ({
+    id: String(start + index + 1),
+    number: start + index + 1,
+    emoji: entry.product.emoji || menuEmojiFor(entry.title, categoryName),
+    title: entry.title,
+    price: entryPriceText(entry),
+    description: entry.product.description ? String(entry.product.description) : undefined,
+  }));
+  const isText = channelProvider === WhatsAppProvider.EVOLUTION;
+  return menuStrategy.render({
+    heading: categoryEmoji(categoryName) + ' *' + categoryName + '*',
+    subtitle: isText ? MessagesConstants.MENU_ITENS_SUBTITULO_TEXTO(allEntries.length) : MessagesConstants.MENU_ITENS_SUBTITULO(allEntries.length),
+    button: MessagesConstants.MENU_VER_ITENS,
+    sectionTitle: truncateText(categoryName, 24),
+    options,
+    page: currentPage,
+    totalPages,
+    hasMore: allEntries.length > start + MENU_PAGE_SIZE,
+    nextId: 'próxima',
+    backId: '0',
+    backLabel: MessagesConstants.MENU_VOLTAR_CATEGORIAS,
   });
-  if (hasMore) lines.push(MessagesConstants.PROXIMA_PAGINA(page + 2));
-  lines.push(MessagesConstants.VOLTAR_INSTRUCAO);
-  return {
-    type: 'text_menu',
-    body: lines.join('\n'),
-    items: slice.map((entry: MenuEntry, index: number) => ({ num: start + index + 1, id: entry.product.id, name: entry.title })),
-    categoryName,
-    context,
-    page,
-    hasMore,
-  };
 }
 
 const WEEKDAY_SHORT = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];

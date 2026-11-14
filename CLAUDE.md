@@ -167,6 +167,12 @@ A figurinha é o logo em WebP 512x512 (≤100 KB, fundo transparente) em `GET /p
 (`BrandStickerService`, cache em memória por versão do logo); o contexto do bot traz `establishment.sticker_url` só com
 logo e `API_PUBLIC_URL` em HTTPS. O nó Enviar Resposta manda `{ type: 'sticker' }` como figurinha da Graph API.
 
+**Cardápio por provedor** (`src/shared/channels/MenuChannelStrategy.ts`): `categoryList`/`itemsList` montam um `MenuPage`
+neutro e a strategy do provedor desenha. `meta_cloud` (oficial): lista interativa, 8 opções por página + "➡️ Ver mais" +
+"↩️ Voltar" (limite de 10 linhas, título 24, descrição 72). `evolution`: texto numerado com negrito e "próxima". O id da
+linha é o mesmo número do texto, então tocar ou digitar dá no mesmo. O provedor vem de `provider` no nó Extrair Mensagem
+(payload da Meta = `meta_cloud`; senão `raw.provider` ou `WHATSAPP_PROVIDER`). Emoji sem cadastro: `MenuEmojiConstants`.
+
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
 histórico de status chega pela sincronização. Fora da janela de 24 h vai o template `atualizacao_pedido`

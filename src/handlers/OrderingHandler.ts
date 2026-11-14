@@ -24,20 +24,36 @@ class OrderingHandler extends BaseHandler {
   private _handleCategories(): boolean {
     const catInput = texto.replace(/^(order_cat:|cat:)/, '');
     if (catInput === 'back' || texto === '0' || texto === 'voltar') {
+      newCart.browse_cat_page = 0;
       newState = BotState.START;
       respostas.push(mainMenu());
       return true;
     }
 
-    const allCategories = [...new Set(products.map((product: Product) => product.category || 'Outros'))] as string[];
-    const foundCategory = allCategories.find((category: string) => category.toLowerCase() === catInput.toLowerCase());
+    const allCategories = menuCategories();
+    const currentCatPage = newCart.browse_cat_page || 0;
+
+    if (isNextPageCommand(texto)) {
+      const nextPage = allCategories.length > (currentCatPage + 1) * MENU_PAGE_SIZE ? currentCatPage + 1 : 0;
+      newCart.browse_cat_page = nextPage;
+      respostas.push(categoryList('order', nextPage));
+      return true;
+    }
+
+    // Número digitado (lista em texto) ou id da lista interativa.
+    const categoryNumber = /^\d+$/.test(texto) ? parseInt(texto, 10) : NaN;
+    const foundCategory = !isNaN(categoryNumber)
+      ? allCategories[categoryNumber - 1]
+      : allCategories.find((category: string) => category.toLowerCase() === catInput.toLowerCase());
 
     if (foundCategory) {
       newCart.browse_category = foundCategory;
+      newCart.browse_page = 0;
+      newCart.browse_cat_page = 0;
       newState = BotState.ORDERING_ITEMS;
       respostas.push(itemsList(foundCategory, 'order', 0));
     } else {
-      respostas.push(categoryList('order'));
+      respostas.push(categoryList('order', currentCatPage));
     }
     return true;
   }
@@ -47,7 +63,9 @@ class OrderingHandler extends BaseHandler {
 
     if (texto === 'cat:back' || texto === 'order_cat:back' || texto === '0' || texto === 'voltar') {
       newState = BotState.ORDERING_CAT;
-      respostas.push(categoryList('order'));
+      newCart.browse_page = 0;
+      newCart.browse_cat_page = 0;
+      respostas.push(categoryList('order', 0));
       return true;
     }
 
@@ -63,15 +81,15 @@ class OrderingHandler extends BaseHandler {
     }
 
     const allEntries = menuEntries(currentCategory);
-    const PAGE_SIZE = 9;
     const currentPage = newCart.browse_page || 0;
-    const pageStart = currentPage * PAGE_SIZE;
+    const pageStart = currentPage * MENU_PAGE_SIZE;
 
-    if (texto === 'próxima' || texto === 'proxima' || texto === 'próximo' || texto === 'proximo') {
-      if (allEntries.length > pageStart + PAGE_SIZE) {
+    if (isNextPageCommand(texto)) {
+      if (allEntries.length > pageStart + MENU_PAGE_SIZE) {
         newCart.browse_page = currentPage + 1;
         respostas.push(itemsList(currentCategory, 'order', currentPage + 1));
       } else {
+        newCart.browse_page = 0;
         respostas.push(itemsList(currentCategory, 'order', 0));
       }
       return true;

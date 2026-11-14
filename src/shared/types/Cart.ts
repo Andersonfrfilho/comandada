@@ -32,6 +32,7 @@ interface Cart {
   address_street_temp: string | null;
   browse_category: string;
   browse_page?: number;
+  browse_cat_page?: number;
   pending_item_id: string | null;
   pending_item_name: string;
   pending_group: string;
