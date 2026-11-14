@@ -148,6 +148,10 @@ Atendente assumiu no painel → bot calado; liberou → bot volta na hora.
 Se a API recusa, o cliente recebe um aviso, a sessão volta ao passo anterior com o carrinho e a cozinha não é avisada.
 O pedido gravado volta com `estimatedAt`, que entra na confirmação como previsão.
 
+**Entrada pela API com worker** (`docs/whatsapp-entrada-pela-api.md`): `POST /webhooks/whatsapp` confere a assinatura,
+enfileira (`whatsapp-inbound`) e o serviço worker (`src/worker.ts`, só consome filas) repassa o corpo cru com a assinatura
+original para `/webhook/routing` do n8n. Filas não rodam na API com `API_QUEUE_WORKERS=false`.
+
 **Webhook da Meta no n8n** (nó Extrair Mensagem): com `WHATSAPP_APP_SECRET` no n8n, só passa POST com
 `X-Hub-Signature-256` válido (corpo cru via `rawBody` do nó Webhook, `NODE_FUNCTION_ALLOW_BUILTIN=crypto`), e o
 formato já extraído só entra com `X-Internal-Token`. A mesma mensagem (id da Meta) entregue de novo em 24 h é ignorada.

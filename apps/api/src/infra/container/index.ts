@@ -170,6 +170,9 @@ import { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/Cre
 
 // Webhook
 import { WebhookController } from '@/modules/webhook/infra/http/WebhookController'
+import { WhatsAppInboundController } from '@/modules/webhook/infra/http/WhatsAppInboundController'
+import { EnqueueWhatsAppInboundUseCase } from '@/modules/webhook/application/EnqueueWhatsAppInbound.use-case'
+import { whatsAppInboundQueue } from '@/infra/queue/whatsAppInboundQueue'
 import { PreviewInboundController } from '@/modules/webhook/infra/http/PreviewInboundController'
 import { PreviewMediaController } from '@/modules/webhook/infra/http/PreviewMediaController'
 import { SendPreviewInboundUseCase } from '@/modules/webhook/application/SendPreviewInbound.use-case'
@@ -177,7 +180,6 @@ import { SendPreviewInboundUseCase } from '@/modules/webhook/application/SendPre
 // Conversations — servidas pelo @adatechnology/meta-whatsapp-module
 import { createMetaWhatsAppModuleRegistry } from '@/modules/conversations/infra/whatsapp/metaWhatsAppModule'
 import { createConversationObjectStorage } from '@/modules/conversations/infra/storage/conversationObjectStorage'
-import { startDocumentIngestionWorker } from '@/modules/conversations/application/workers/DocumentIngestionWorker'
 import { isStorageEnabled } from '@/infra/config/storageEnvironment'
 import { ConversationController } from '@/modules/conversations/infra/http/ConversationController'
 import { WhatsAppTemplateProvider } from '@adatechnology/meta-whatsapp-provider'
@@ -198,13 +200,6 @@ import { PrintFiscalCupomUseCase } from '@/modules/fiscal/application/use-cases/
 import { GenerateFiscalPdfUseCase } from '@/modules/fiscal/application/use-cases/GenerateFiscalPdfUseCase'
 import { ThermalPrinterProvider } from '@/modules/fiscal/application/printing/ThermalPrinterProvider'
 import { FiscalController } from '@/modules/fiscal/infra/http/FiscalController'
-import { startFiscalWorker } from '@/modules/fiscal/application/workers/FiscalEmissionProcessor'
-import { startFinanceWorker } from '@/modules/finance/application/workers/AccountDueWorker'
-import { startIfoodWorker } from '@/modules/orders/application/workers/IfoodPollingWorker'
-import { startProductAffinityWorker } from '@/modules/products/application/workers/ProductAffinityWorker'
-import { startStockWorker } from '@/modules/products/application/workers/StockExpiryWorker'
-import { startBullBoard } from '@/infra/queue/bullBoard'
-import type { Worker } from 'bullmq'
 
 // Uploads
 import { LocalStorageProvider } from '@/shared/providers/LocalStorageProvider'
@@ -218,6 +213,7 @@ import { UploadController } from '@/modules/uploads/infra/http/UploadController'
 
 // WebSocket Hub (passed in from server bootstrap to avoid circular dep)
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
+import type { QueueWorkerDependencies } from '@/infra/queue/startQueueWorkers'
 
 export interface AppContainer {
   cache: RedisProvider
@@ -243,6 +239,7 @@ export interface AppContainer {
   orderIssueController: OrderIssueController
   agendaController: AgendaController
   webhookController: WebhookController
+  whatsAppInboundController: WhatsAppInboundController
   paymentController: PaymentController
   expireStaleCharges: ExpireStaleChargesUseCase
   previewInboundController: PreviewInboundController
@@ -258,12 +255,7 @@ export interface AppContainer {
   monthlyAccountController: MonthlyAccountController
   expenseController: ExpenseController
   uploadController: UploadController
-  fiscalWorker?: Worker | undefined
-  financeWorker?: Worker | undefined
-  ifoodWorker?: Worker | undefined
-  productAffinityWorker?: Worker | undefined
-  stockWorker?: Worker | undefined
-  documentIngestionWorker?: Worker | undefined
+  queueWorkerDependencies: QueueWorkerDependencies
 }
 
 export function buildContainer(wsHub: WebSocketHub): AppContainer {
@@ -494,6 +486,9 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
 
   // Webhook — assinatura, replay e persistência ficam no módulo
   const webhookController = new WebhookController(metaWhatsAppModules)
+  const whatsAppInboundController = new WhatsAppInboundController(
+    new EnqueueWhatsAppInboundUseCase(whatsAppInboundQueue, process.env.WHATSAPP_APP_SECRET ?? '')
+  )
 
   // Simulador de cliente — desligado por padrão; o app secret nunca sai daqui para o navegador
   const previewInboundController = new PreviewInboundController(
@@ -645,64 +640,19 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const monthlyAccountController = new MonthlyAccountController(db)
   const expenseController = new ExpenseController(db, uploadFileUseCase)
 
-  // Fiscal emission worker — opt-in per environment (consumes the BullMQ fiscal queue)
-  const fiscalWorker = process.env.FISCAL_WORKER_ENABLED === 'true'
-    ? startFiscalWorker({ database: db, websocketHub: wsHub, botMessages })
-    : undefined
-  if (fiscalWorker) {
-    console.log('[API] Fiscal worker started')
-    startBullBoard()
-  }
-
-  const financeWorker = process.env.FINANCE_WORKER_ENABLED === 'true'
-    ? startFinanceWorker(db)
-    : undefined
-  if (financeWorker) {
-    console.log('[API] Finance worker started')
-    startBullBoard()
-  }
-
-  const ifoodWorker = process.env.IFOOD_ENABLED === 'true'
-    ? startIfoodWorker(db, createOrderUseCase, updateOrderStatusUseCase)
-    : undefined
-  if (ifoodWorker) {
-    console.log('[API] iFood polling worker started')
-    startBullBoard()
-  }
-
-  const productAffinityWorker = process.env.PRODUCT_AFFINITY_WORKER_ENABLED === 'true'
-    ? startProductAffinityWorker(db)
-    : undefined
-  if (productAffinityWorker) {
-    console.log('[API] Product affinity worker started')
-    startBullBoard()
-  }
-
-  const stockWorker = process.env.STOCK_WORKER_ENABLED === 'true'
-    ? startStockWorker(db)
-    : undefined
-  if (stockWorker) {
-    console.log('[API] Stock expiry worker started')
-    startBullBoard()
-  }
-
-  // Ingestão de anexos: só faz sentido com storage, e é o consumidor do hook `onMediaReceived`.
-  const documentIngestionWorker = objectStorage
-    ? startDocumentIngestionWorker({ modules: metaWhatsAppModules })
-    : undefined
-  if (documentIngestionWorker) {
-    console.log('[API] Document ingestion worker started')
-    startBullBoard()
-  }
-
   return {
     notifySyncedOrderStatus,
-    documentIngestionWorker,
-    fiscalWorker,
-    financeWorker,
-    ifoodWorker,
-    productAffinityWorker,
-    stockWorker,
+    // Os consumidores de fila sobem fora daqui (`startQueueWorkers`): no processo da API ou no
+    // serviço worker, conforme o ambiente. O container só entrega o que eles precisam.
+    queueWorkerDependencies: {
+      database: db,
+      websocketHub: wsHub,
+      botMessages,
+      createOrderUseCase,
+      updateOrderStatusUseCase,
+      metaWhatsAppModules,
+      documentIngestionEnabled: Boolean(objectStorage),
+    },
     cache,
     menuController,
     catalogController,
@@ -725,6 +675,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     orderIssueController,
     agendaController,
     webhookController,
+    whatsAppInboundController,
     paymentController,
     expireStaleCharges,
     previewInboundController,
