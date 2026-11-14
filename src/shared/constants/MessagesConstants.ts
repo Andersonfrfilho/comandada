@@ -8,7 +8,13 @@ const MessagesConstants = {
   // Horário / Boas-vindas
   FECHADO:                      (estName: string, dias: string, abre: string, fecha: string) => `Oi! 👋 Que bom receber sua mensagem!\n\nNo momento o *${estName}* está fechado 🌙\n\n🕒 *Nosso horário:* ${dias}, das *${abre}* às *${fecha}*.\n\nAssim que abrirmos é só mandar um *oi* que a gente te atende rapidinho! 😉`,
   BOAS_VINDAS:                  (estName: string) => `👋 Que bom ter você por aqui no *${estName}*! 😊`,
-  MENU_PRINCIPAL:               'O que vai ser hoje? 😋\n\n_Para acompanhar um pedido, digite *meu pedido*._\n_Algum problema com o pedido? Digite *ajuda*._\n_Para recomeçar a conversa, digite *sair*._',
+  MENU_PRINCIPAL:               'O que vai ser hoje? 😋',
+  MENU_PRINCIPAL_COM_PEDIDO:    '📦 Seu pedido está em andamento.\n\nO que você precisa agora?',
+  MENU_MEU_PEDIDO:              '📦 Meu pedido',
+  MENU_AJUDA_PEDIDO:            '🆘 Ajuda com o pedido',
+  MENU_FAZER_PEDIDO:            '🛒 Fazer pedido',
+  MENU_RESERVAR_MESA:           '📋 Reservar mesa',
+  MENU_ATENDENTE:               '👤 Atendente',
 
   // Sessão / Sistema
   SESSION_EXPIRED:              '⏱️ _Faz um tempinho que a gente não se fala, então recomecei a conversa pra você._',
@@ -20,10 +26,10 @@ const MessagesConstants = {
   // Cartão de visita da saudação: mensagem própria, um bloco por assunto (título em negrito e o valor
   // na linha de baixo) com linha em branco entre eles. Cada bloco só entra quando o dado existe.
   INFO_TITULO:                  (estName: string) => `📋 *Sobre o ${estName}*`,
-  INFO_ABERTO_AGORA:            (fecha: string) => `🟢 *Aberto agora* · até as ${fecha}`,
-  INFO_ABERTO_AGORA_24H:        '🟢 *Aberto agora*',
-  INFO_HORARIO:                 (dias: string, abre: string, fecha: string) => `🕒 *Horário*\n${capitalize(dias)}, das ${abre} às ${fecha}`,
-  INFO_HORARIO_24H:             (dias: string) => `🕒 *Horário*\n${capitalize(dias)}, 24 horas`,
+  // Horário e "aberto agora" num bloco só; o endereço vai no pin do mapa (sem repetir no cartão).
+  INFO_HORARIO:                 (aberto: boolean, linha: string) => `🕒 *Horário*${aberto ? ' · 🟢 aberto agora' : ''}\n${linha}`,
+  INFO_HORARIO_LINHA:           (dias: string, abre: string, fecha: string) => `${capitalize(dias)}, das ${abre} às ${fecha}`,
+  INFO_HORARIO_24H_LINHA:       (dias: string) => `${capitalize(dias)}, 24 horas`,
   INFO_ENDERECO:                (endereco: string) => `📍 *Endereço*\n${endereco}`,
   INFO_ENTREGA_E_RETIRADA:      (taxa: string) => `🛵 *Entrega e retirada*\n${capitalize(taxa)}`,
   INFO_SO_ENTREGA:              (taxa: string) => `🛵 *Entrega*\n${capitalize(taxa)}`,

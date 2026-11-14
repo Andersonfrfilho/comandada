@@ -27,7 +27,8 @@ class GreetingHandler extends BaseHandler {
       }
       respostas.push(msgWelcome);
       pushCompanyCard();
-      if (lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
+      // Com pedido em andamento o menu já traz "Meu pedido" e "Ajuda": não oferece repetir o anterior.
+      if (!hasOrderInProgress() && lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
         const lines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) });
         newState = BotState.REPEAT_ORDER;
         respostas.push(lines.join('\n'));

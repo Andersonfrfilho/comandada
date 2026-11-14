@@ -363,14 +363,27 @@ function parsePeople(text: string): number | null {
 }
 
 // ── Builders de mensagens UI ─────────────────────────────────────────────────
+// Pedido do cliente que ainda não foi entregue nem cancelado.
+function hasOrderInProgress(): boolean {
+  return recentOrders.some((order: RecentOrder) => (IssueConstants.OPEN_STATUSES as readonly string[]).includes(order.status));
+}
+
+// Menu principal em botões. "Meu pedido" e "Ajuda com o pedido" só aparecem com pedido em andamento;
+// com mais de 3 opções a strategy do provedor transforma em lista (Meta) ou texto numerado (Evolution).
 function mainMenu(): ButtonMessage {
+  const buttons = [
+    { id: '2', title: MessagesConstants.MENU_FAZER_PEDIDO },
+    { id: '3', title: MessagesConstants.MENU_RESERVAR_MESA },
+    { id: '4', title: MessagesConstants.MENU_ATENDENTE },
+  ];
+  if (!hasOrderInProgress()) return { type: 'buttons', body: MessagesConstants.MENU_PRINCIPAL, buttons };
   return {
     type: 'buttons',
-    body: MessagesConstants.MENU_PRINCIPAL,
+    body: MessagesConstants.MENU_PRINCIPAL_COM_PEDIDO,
     buttons: [
-      { id: '2', title: '🛒 Fazer Pedido' },
-      { id: '3', title: '📋 Reservar Mesa' },
-      { id: '4', title: '👤 Falar com Atendente' }
+      { id: 'meu pedido', title: MessagesConstants.MENU_MEU_PEDIDO },
+      { id: 'ajuda', title: MessagesConstants.MENU_AJUDA_PEDIDO },
+      ...buttons,
     ],
   };
 }
@@ -760,14 +773,13 @@ function buildCompanyInfo(): string {
   const blocks: string[] = [];
   // 00:00 às 23:59 é "o dia todo": vira "24 horas" em vez de "das 0h às 23h59".
   const opensAllDay = openingTime <= '00:00' && closingTime >= '23:59';
-  if (isOpen && !ignoreHours) {
-    blocks.push(opensAllDay ? MessagesConstants.INFO_ABERTO_AGORA_24H : MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
-  }
-  blocks.push(opensAllDay
-    ? MessagesConstants.INFO_HORARIO_24H(formatWorkingDays(workingDays))
-    : MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
+  const hoursLine = opensAllDay
+    ? MessagesConstants.INFO_HORARIO_24H_LINHA(formatWorkingDays(workingDays))
+    : MessagesConstants.INFO_HORARIO_LINHA(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime));
+  blocks.push(MessagesConstants.INFO_HORARIO(isOpen && !ignoreHours, hoursLine));
+  // Com o pin no mapa o WhatsApp já mostra o endereço: no cartão ele só entra quando não há pin.
   const fullAddress = fullEstablishmentAddress();
-  if (fullAddress) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  if (fullAddress && !establishmentLocationCard()) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
   const feeText = describeDeliveryFee();
   if (featureDelivery && featureRetirada) blocks.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
   else if (featureDelivery) blocks.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
