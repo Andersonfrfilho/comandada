@@ -194,6 +194,8 @@ const MessagesConstants = {
   // Ordering
   CARDAPIO_INDISPONIVEL:        '😕 Nosso cardápio está indisponível neste momento. Tenta de novo daqui a pouquinho!',
   CARDAPIO_PEDIDO_TITULO:       '🛒 *Vamos montar seu pedido!*\n\nEscolha uma categoria 👇',
+  // Primeira tela do "Fazer pedido": o jeito mais rápido (escrever ou falar) vem antes da lista.
+  CARDAPIO_PEDIDO_DICA:         (exemplo: string) => `✍️ *Já sabe o que quer? É só escrever*, por exemplo:\n_${exemplo}_\n\n🎤 Ou mande um *áudio* falando o pedido.\n\n📋 Prefere ver as opções? Escolha uma categoria 👇`,
   CARDAPIO_TITULO:              '📖 *Nosso cardápio*\n\nEscolha uma categoria 👇',
   VER_CATEGORIAS:               'Ver categorias',
   CATEGORIAS_TITULO:            'Categorias',

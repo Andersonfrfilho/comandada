@@ -1058,6 +1058,15 @@ async function runTests() {
     });
   }
 
+  await test('"Fazer pedido" abre com a dica de escrever ou mandar áudio antes das categorias', async () => {
+    const r = await exec({ texto: '2', state: 'start' });
+    const body = JSON.stringify(r);
+    const hint = body.indexOf('Já sabe o que quer? É só escrever');
+    const audio = body.indexOf('mande um *áudio*');
+    const pick = body.indexOf('Prefere ver as opções? Escolha uma categoria');
+    assert(hint > -1 && audio > hint && pick > audio, 'ordem da mensagem: ' + body.slice(0, 600));
+  });
+
   await test('texto livre: "2 temaki salmão e 1 sashimi" anota os dois e pede confirmação', async () => {
     const r = await exec({ texto: '2 temaki salmão e 1 sashimi' });
     assertState(r, 'awaiting_text_order_confirm');

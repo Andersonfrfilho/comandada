@@ -619,7 +619,8 @@ function categoryList(context: string, page?: number): ListMessage | TextMenuMes
       description: MessagesConstants.CARDAPIO_PDF_OPCAO_DESCRICAO,
     });
   }
-  const [heading, subtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
+  const [heading, defaultSubtitle] = (context === 'order' ? MessagesConstants.CARDAPIO_PEDIDO_TITULO : MessagesConstants.CARDAPIO_TITULO).split('\n\n');
+  const subtitle = context === 'order' && currentPage === 0 ? MessagesConstants.CARDAPIO_PEDIDO_DICA(orderExample()) : defaultSubtitle;
   return channelStrategy.renderMenu({
     heading,
     subtitle: subtitle || '',
