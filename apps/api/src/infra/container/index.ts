@@ -162,6 +162,7 @@ import { UpsertSettingUseCase } from '@/modules/settings/application/use-cases/U
 import { SettingsController } from '@/modules/settings/infra/http/SettingsController'
 import { BrandingController } from '@/modules/settings/infra/http/BrandingController'
 import { GetBrandingUseCase } from '@/modules/settings/application/use-cases/GetBrandingUseCase'
+import { BrandStickerService } from '@/modules/settings/application/services/BrandStickerService'
 import { DeliveryFeeController } from '@/modules/settings/infra/http/DeliveryFeeController'
 
 // Audit
@@ -426,7 +427,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const getSettingsUseCase = new GetSettingsUseCase(db)
   const upsertSettingUseCase = new UpsertSettingUseCase(db)
   const settingsController = new SettingsController(getSettingsUseCase, upsertSettingUseCase)
-  const brandingController = new BrandingController(new GetBrandingUseCase(db))
+  const getBrandingUseCase = new GetBrandingUseCase(db)
+  const brandingController = new BrandingController(getBrandingUseCase, new BrandStickerService(getBrandingUseCase))
   const deliveryFeeController = new DeliveryFeeController()
   const botCustomerService = new BotCustomerService(db)
   // Agenda: encomendas e reservas ocupam horário no SDK de agendamento.
@@ -462,7 +464,9 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
       botConfigRepository,
       botCustomerService,
       new ListScheduledOrderSlotsUseCase(scheduling, agendaSetupService),
-      paymentAccountService
+      paymentAccountService,
+      // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
+      publicApiUrl.startsWith('https://') ? publicApiUrl : undefined
     ),
     new SaveBotSessionUseCase(db),
     new CreateBotOrderUseCase(

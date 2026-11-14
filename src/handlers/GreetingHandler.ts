@@ -4,10 +4,15 @@ class GreetingHandler extends BaseHandler {
 
     newState = BotState.START;
     newCart = CartConstants.EMPTY();
+    // A saudação abre com a figurinha do logo do restaurante, quando ele tem logo.
+    if (brandSticker) respostas.push(brandSticker);
+
+    const companyInfo = buildCompanyInfo();
+    const welcomeWithInfo = companyInfo ? msgWelcome + '\n\n' + companyInfo : msgWelcome;
 
     if (!customerName) {
       newState = BotState.AWAITING_NAME;
-      respostas.push(MessagesConstants.BOAS_VINDAS_NOME(estName));
+      respostas.push(MessagesConstants.BOAS_VINDAS_NOME(estName, companyInfo));
     } else {
       if (!customerNameFromDB && pushNameFormatted) {
         customerNameToSave = pushNameFormatted;
@@ -16,11 +21,11 @@ class GreetingHandler extends BaseHandler {
       if (lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
         const lines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) });
         newState = BotState.REPEAT_ORDER;
-        respostas.push(msgWelcome);
+        respostas.push(welcomeWithInfo);
         respostas.push(lines.join('\n'));
         respostas.push(yesNo(MessagesConstants.SAUDACAO_REPEAT_PERGUNTA));
       } else {
-        respostas.push(msgWelcome);
+        respostas.push(welcomeWithInfo);
         respostas.push(mainMenu());
       }
     }

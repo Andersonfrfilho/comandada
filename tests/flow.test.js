@@ -220,6 +220,7 @@ async function runTests() {
         marketing_opt_in: args.marketing_opt_in !== undefined ? args.marketing_opt_in : null,
         conversation: args.conversation,
         partial_confirmation: args.partial_confirmation || null,
+        ...(args.establishment ? { establishment: args.establishment } : {}),
       };
 
       const calcHoraData = {
@@ -271,6 +272,25 @@ async function runTests() {
     assertState(r, 'start');
     assertResponseType(r, 'buttons');
     assertNoObjectObject(r);
+  });
+
+  await test('saudação com logo → figurinha primeiro, depois boas-vindas com dados do restaurante', async () => {
+    const stickerUrl = 'https://api.exemplo.com/public/branding/abc/sticker.webp?v=123';
+    const r = await exec({ texto: 'oi', establishment: { sticker_url: stickerUrl } });
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(resps[0] && resps[0].type === 'sticker' && resps[0].link === stickerUrl, 'primeira resposta deve ser a figurinha');
+    const welcome = String(resps[1]);
+    assert(welcome.includes('🕒 Todos os dias, das 18h às 23h'), 'deve trazer o horário: ' + welcome);
+    assert(welcome.includes('Ribeirão Preto'), 'deve trazer a cidade');
+    assert(welcome.includes('Entrega (taxa R$ 5,00) e retirada'), 'deve trazer entrega e taxa');
+    assert(welcome.includes('PIX, Cartão Crédito e Dinheiro'), 'deve trazer as formas de pagamento');
+    assertNoObjectObject(r);
+  });
+
+  await test('saudação sem logo → nenhuma figurinha', async () => {
+    const r = await exec({ texto: 'oi' });
+    const resps = r?.[0]?.json?.respostas || [];
+    assert(!resps.some((resp) => resp && resp.type === 'sticker'), 'não deve mandar figurinha');
   });
 
   await test('saudação sem nome → pede nome (awaiting_name)', async () => {

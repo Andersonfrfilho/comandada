@@ -35,9 +35,15 @@ interface LocationMessage {
   address: string;
 }
 
+interface StickerMessage {
+  type: 'sticker';
+  link: string;
+}
+
 type OutgoingMessage =
   | string
   | ButtonMessage
   | ListMessage
   | TextMenuMessage
-  | LocationMessage;
+  | LocationMessage
+  | StickerMessage;

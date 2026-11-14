@@ -122,6 +122,8 @@ interface EstablishmentConfig {
   name: string;
   phone: string | null;
   logo_url: string | null;
+  /** Figurinha do logo (WebP 512x512) que a API serve; ausente quando o restaurante não tem logo. */
+  sticker_url?: string | null;
   address: string | null;
   lat: number;
   lng: number;

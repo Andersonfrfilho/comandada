@@ -11,7 +11,19 @@ const MessagesConstants = {
   ATENDIMENTO_ENCERRADO:        '✅ Prontinho, conversa encerrada!\n\nObrigado pelo contato e até a próxima! 👋😊',
 
   // Saudação / Nome
-  BOAS_VINDAS_NOME:             (estName: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!\n\nAntes de começar: como posso te chamar? Me diz seu *nome* 😊`,
+  BOAS_VINDAS_NOME:             (estName: string, companyInfo: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!\n\n${companyInfo ? companyInfo + '\n\n' : ''}Antes de começar: como posso te chamar? Me diz seu *nome* 😊`,
+  // Cartão de visita da saudação: cada linha só aparece quando o restaurante tem o dado cadastrado.
+  INFO_ABERTO_AGORA:            (fecha: string) => `🟢 *Aberto agora*, até as ${fecha}`,
+  INFO_HORARIO:                 (dias: string, abre: string, fecha: string) => `🕒 ${dias.charAt(0).toUpperCase() + dias.slice(1)}, das ${abre} às ${fecha}`,
+  INFO_ENDERECO:                (endereco: string) => `📍 ${endereco}`,
+  INFO_ENTREGA_E_RETIRADA:      (taxa: string) => `🛵 Entrega${taxa} e retirada no local`,
+  INFO_SO_ENTREGA:              (taxa: string) => `🛵 Entrega${taxa}`,
+  INFO_SO_RETIRADA:             '🛍️ Retirada no local',
+  INFO_TAXA_FIXA:               (valor: string) => ` (taxa R$ ${valor})`,
+  INFO_TAXA_GRATIS:             ' grátis',
+  INFO_TAXA_DISTANCIA:          ' (taxa conforme a distância)',
+  INFO_FRETE_GRATIS_ACIMA:      (valor: string) => `, grátis acima de R$ ${valor}`,
+  INFO_PAGAMENTO:               (formas: string) => `💳 ${formas}`,
   NOME_INVALIDO_GENERICO:       'Hmm, não consegui entender 😅\n\nPode me dizer seu *nome*? Só o primeiro já está ótimo!',
   NOME_INVALIDO_PALAVRAO:       'Haha, entendo 😄 Mas pra gente te atender direitinho, qual é o seu *nome*?',
   SAUDACAO_REPEAT:              (customerName: string) => `Que bom te ver de novo, *${customerName}*! 🥰\n\n🔄 Seu último pedido foi:`,

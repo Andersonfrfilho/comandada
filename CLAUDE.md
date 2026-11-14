@@ -161,6 +161,12 @@ traz `partial_confirmation` e o `PartialConfirmationHandler` lê SIM/NÃO (antes
 e ajusta total e partes do pagamento; NÃO cancela. **Observação por item:** botão 📝 depois de adicionar, vai em
 `order_items.notes` (cozinha e painel).
 
+**Saudação** (`GreetingHandler`): abre com a figurinha do logo do restaurante (Configurações → Marca) e a boas-vindas
+traz horário, aberto agora, endereço, entrega/retirada com taxa e formas de pagamento, cada linha só quando o dado existe.
+A figurinha é o logo em WebP 512x512 (≤100 KB, fundo transparente) em `GET /public/branding/:establishmentId/sticker.webp`
+(`BrandStickerService`, cache em memória por versão do logo); o contexto do bot traz `establishment.sticker_url` só com
+logo e `API_PUBLIC_URL` em HTTPS. O nó Enviar Resposta manda `{ type: 'sticker' }` como figurinha da Graph API.
+
 **Status do pedido ao cliente** sai da API (`NotifyOrderStatusUseCase`) quando a equipe muda o status: cozinha, painel e
 Entregas ("saiu" → em entrega, "entregue" → concluído). Na loja (`SYNC_ROLE=loja`) não sai nada: a nuvem avisa quando o
 histórico de status chega pela sincronização. Fora da janela de 24 h vai o template `atualizacao_pedido`
