@@ -100,6 +100,8 @@ const msgClosed      = customClosed
 const msgWelcome     = (establishment.msg_welcome  || config['msg_welcome']  || MessagesConstants.BOAS_VINDAS(estName)).replace(/\\n/g, '\n');
 const estCity        = establishment.city          || config['establishment_city']    || '';
 const estAddress     = establishment.address       || config['establishment_address'] || '';
+const estInstagram   = establishment.instagram     || config['establishment_instagram'] || '';
+const estWebsite     = establishment.website       || config['establishment_website']   || '';
 const minOrderValue  = establishment.min_order_value != null ? establishment.min_order_value : parseFloat(config['min_order_value'] || '0');
 const brandSticker: StickerMessage | null = establishment.sticker_url
   ? { type: 'sticker', link: establishment.sticker_url }
@@ -698,22 +700,55 @@ function buildPayload(): N8nResponsePayload {
   };
 }
 
-// Informações do restaurante na saudação, tudo do cadastro dele: só entra a linha cujo dado existe.
+// Cartão de visita da saudação, tudo do cadastro do restaurante: só entra o bloco cujo dado existe.
+// Vai numa mensagem própria, blocos separados por linha em branco, para o cliente ter espaço para ler.
 function buildCompanyInfo(): string {
-  const lines: string[] = [];
-  if (isOpen && !ignoreHours) lines.push(MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
-  lines.push(MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
-  const fullAddress = [estAddress, estCity].filter((part: string) => part && part.trim()).join(' · ');
-  if (fullAddress) lines.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  const blocks: string[] = [];
+  // 00:00 às 23:59 é "o dia todo": vira "24 horas" em vez de "das 0h às 23h59".
+  const opensAllDay = openingTime <= '00:00' && closingTime >= '23:59';
+  if (isOpen && !ignoreHours) {
+    blocks.push(opensAllDay ? MessagesConstants.INFO_ABERTO_AGORA_24H : MessagesConstants.INFO_ABERTO_AGORA(formatHour(closingTime)));
+  }
+  blocks.push(opensAllDay
+    ? MessagesConstants.INFO_HORARIO_24H(formatWorkingDays(workingDays))
+    : MessagesConstants.INFO_HORARIO(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime)));
+  const fullAddress = fullEstablishmentAddress();
+  if (fullAddress) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
   const feeText = describeDeliveryFee();
-  if (featureDelivery && featureRetirada) lines.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
-  else if (featureDelivery) lines.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
-  else if (featureRetirada) lines.push(MessagesConstants.INFO_SO_RETIRADA);
+  if (featureDelivery && featureRetirada) blocks.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
+  else if (featureDelivery) blocks.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
+  else if (featureRetirada) blocks.push(MessagesConstants.INFO_SO_RETIRADA);
   const paymentLabels = paymentTypes
     .map((paymentType: PaymentType) => paymentType.label)
     .filter((label: string, index: number, labels: string[]) => !!label && labels.indexOf(label) === index);
-  if (paymentLabels.length > 0) lines.push(MessagesConstants.INFO_PAGAMENTO(joinWithAnd(paymentLabels)));
-  return lines.join('\n');
+  if (paymentLabels.length > 0) blocks.push(MessagesConstants.INFO_PAGAMENTO(joinWithAnd(paymentLabels)));
+  const instagramLink = toInstagramLink(estInstagram);
+  if (instagramLink) blocks.push(MessagesConstants.INFO_INSTAGRAM(instagramLink));
+  const websiteLink = toWebsiteLink(estWebsite);
+  if (websiteLink) blocks.push(MessagesConstants.INFO_SITE(websiteLink));
+  return [MessagesConstants.INFO_TITULO(estName), ...blocks].join('\n\n');
+}
+
+function fullEstablishmentAddress(): string {
+  return [estAddress, estCity].filter((part: string) => part && part.trim()).join(' · ');
+}
+
+// Pin do restaurante (card de localização do WhatsApp, abre no Maps) quando há coordenadas.
+function establishmentLocationCard(): LocationMessage | null {
+  if (!estLat || !estLng) return null;
+  return locationMsg(estLat, estLng, estName, fullEstablishmentAddress());
+}
+
+// "@yuyaki", "yuyaki" ou o link inteiro → https://instagram.com/yuyaki (o WhatsApp deixa clicável).
+function toInstagramLink(value: string): string {
+  const handle = (value || '').trim().replace(/^https?:\/\/(www\.)?instagram\.com\//i, '').replace(/^@/, '').replace(/\/+$/, '');
+  return handle ? 'https://instagram.com/' + handle : '';
+}
+
+function toWebsiteLink(value: string): string {
+  const site = (value || '').trim();
+  if (!site) return '';
+  return /^https?:\/\//i.test(site) ? site : 'https://' + site;
 }
 
 function describeDeliveryFee(): string {
@@ -725,7 +760,7 @@ function describeDeliveryFee(): string {
     feeText = MessagesConstants.INFO_TAXA_DISTANCIA;
   }
   if (freeDeliveryAbove > 0 && feeText !== MessagesConstants.INFO_TAXA_GRATIS) {
-    feeText = feeText.replace(/\)$/, MessagesConstants.INFO_FRETE_GRATIS_ACIMA(fmtBRL(freeDeliveryAbove)) + ')');
+    feeText += MessagesConstants.INFO_FRETE_GRATIS_ACIMA(fmtBRL(freeDeliveryAbove));
   }
   return feeText;
 }

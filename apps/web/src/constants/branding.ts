@@ -13,7 +13,7 @@ export const BRANDING_SETTING_KEYS = {
   domains: 'brand_domains',
 } as const
 
-export const BRAND_LOGO_MAX_SIZE = 360
+export const BRAND_LOGO_MAX_SIZE = 512
 
 // Atribuição da Ada Technology no rodapé (padrão Ada: ano do relógio, link com rel="noreferrer").
 export const PLATFORM_NAME = 'ComandAdA'
