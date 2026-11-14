@@ -43,6 +43,7 @@ import { registerOrderIssueRoutes } from '@/modules/issues/infra/http/OrderIssue
 import { registerAgendaRoutes } from '@/modules/agenda/infra/http/AgendaRoutes'
 import { LocalStorageProvider } from '@/shared/providers/LocalStorageProvider'
 import { generateOpenAPISpec } from '@/infra/docs/openapi'
+import { startQueueWorkers } from '@/infra/queue/startQueueWorkers'
 
 const PORT = parseInt(process.env.PORT ?? '3333')
 const NODE_ENV = process.env.NODE_ENV ?? 'development'
@@ -78,27 +79,17 @@ export async function createServer() {
   }, STALE_CHARGE_SWEEP_INTERVAL_MS)
   chargeSweep.unref?.()
 
+  // Filas: no processo da API só o que o ambiente pedir; o lugar delas é o serviço worker.
+  const queueWorkers = startQueueWorkers(container.queueWorkerDependencies, 'api')
+
   // Graceful shutdown: drain workers before exiting
   const shutdownWorkers = async (): Promise<void> => {
     await syncModule.stop()
-    if (container.fiscalWorker) await container.fiscalWorker.close()
-    if (container.financeWorker) await container.financeWorker.close()
-    if (container.ifoodWorker) await container.ifoodWorker.close()
-    if (container.productAffinityWorker) await container.productAffinityWorker.close()
-    if (container.stockWorker) await container.stockWorker.close()
-    if (container.documentIngestionWorker) await container.documentIngestionWorker.close()
+    await Promise.all(queueWorkers.map((worker) => worker.close()))
     process.exit(0)
   }
 
-  if (
-    process.env.SYNC_ROLE ||
-    container.fiscalWorker ||
-    container.financeWorker ||
-    container.ifoodWorker ||
-    container.productAffinityWorker ||
-    container.stockWorker ||
-    container.documentIngestionWorker
-  ) {
+  if (process.env.SYNC_ROLE || queueWorkers.length > 0) {
     process.on('SIGTERM', shutdownWorkers)
     process.on('SIGINT', shutdownWorkers)
   }
@@ -130,7 +121,7 @@ export async function createServer() {
   registerSettingsRoutes(router, container.settingsController)
   registerBrandingRoutes(router, container.brandingController)
   registerDeliveryFeeRoutes(router, container.deliveryFeeController)
-  registerWebhookRoutes(router, container.webhookController)
+  registerWebhookRoutes(router, container.webhookController, container.whatsAppInboundController)
   // Antes de `registerConversationRoutes`: "preview" casaria com `/conversations/:whatsapp`.
   registerPreviewInboundRoutes(router, container.previewInboundController, container.previewMediaController)
   registerCustomerRoutes(router, container.customerController)

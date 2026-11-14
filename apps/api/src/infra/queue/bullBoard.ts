@@ -8,6 +8,7 @@ import { stockExpiryQueue } from './stockQueue'
 import { financeDueQueue } from './financeQueue'
 import { ifoodPollingQueue } from './ifoodQueue'
 import { productAffinityQueue } from './productAffinityQueue'
+import { whatsAppInboundQueue } from './whatsAppInboundQueue'
 
 const BULLBOARD_PORT = Number(process.env.BULLBOARD_PORT ?? 4200)
 const BULLBOARD_USER = process.env.BULLBOARD_USER ?? 'admin'
@@ -31,7 +32,13 @@ function basicAuth(request: Request, response: Response, next: NextFunction): vo
 
 // Queue observability dashboard on its own port, protected by basic auth. Never mount it on the
 // public API domain — treat it as an internal ops tool (see queue-bullmq.md).
+let started = false
+
 export function startBullBoard(): void {
+  // Uma porta só: chamado de novo, o segundo listen derrubaria o processo com EADDRINUSE.
+  if (started) return
+  started = true
+
   if (!process.env.BULLBOARD_PASS) {
     console.warn('[BullBoard] disabled — set BULLBOARD_PASS to enable')
     return
@@ -46,6 +53,7 @@ export function startBullBoard(): void {
       new BullMQAdapter(financeDueQueue as unknown as Queue),
       new BullMQAdapter(ifoodPollingQueue as unknown as Queue),
       new BullMQAdapter(productAffinityQueue as unknown as Queue),
+      new BullMQAdapter(whatsAppInboundQueue as unknown as Queue),
     ],
     serverAdapter,
   })

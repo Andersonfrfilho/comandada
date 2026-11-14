@@ -18,6 +18,9 @@ META_APP_ID=123456 bash scripts/ops/03-meta-apontar-webhook.sh
 bash scripts/ops/04-meta-trocar-token.sh
 ```
 
+Entrada pela API com worker (padrão dos outros bots, ver `docs/whatsapp-entrada-pela-api.md`): rode o 3 com
+`META_CALLBACK_URL=https://api-comandada-yuyaki.up.railway.app/webhooks/whatsapp` depois de o serviço worker estar no ar.
+
 Voltar para o QuickCart: rode o 3 com
 `META_CALLBACK_URL=https://quickcart-api-staging.up.railway.app/v1/webhook/whatsapp`.
 
