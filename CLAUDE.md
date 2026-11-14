@@ -136,6 +136,11 @@ no n8n, mínimo 32 caracteres; sem ele as rotas respondem 401):
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/issues` (problema relatado pelo cliente) |
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/partial-confirmation` (SIM/NÃO à confirmação parcial) |
 
+**Cache do contexto no Redis:** o `GET /internal/bot/:whatsapp/context` guarda a parte igual para todo cliente
+(estabelecimento, configurações, cardápio, formas de pagamento, tipos de pedido, mesas, taxa, coordenadas) em
+`bot:context:shared:<instance>` por 30 s (`BOT_CONTEXT_CACHE_TTL_SECONDS`, 0 desliga). Sessão, pedidos, conversa,
+confirmação parcial e horários da agenda vêm sempre do banco. Mudança no cardápio ou nas configurações chega ao bot em até 30 s.
+
 **Ajuda com o pedido** (`src/handlers/IssueHandler.ts`, palavras *problema*/*ajuda*): as opções seguem o momento do pedido
 (em andamento: onde está, atrasado só depois da previsão, alterar só antes do preparo; entregue há até 6 h: faltou item,
 item errado, qualidade, entrega, pagamento; sem pedido: fazer pedido, cardápio). *Falar com atendente* aparece sempre.

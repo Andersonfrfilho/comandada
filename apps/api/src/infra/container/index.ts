@@ -87,6 +87,7 @@ import { OrderReferenceDataController } from '@/modules/orders/infra/http/OrderR
 import { BotConfigRepository } from '@/infra/database/BotConfigRepository'
 import { BotCustomerService } from '@/modules/bot/application/services/BotCustomerService'
 import { GetBotContextUseCase } from '@/modules/bot/application/use-cases/GetBotContextUseCase'
+import { BOT_SHARED_CONTEXT_CACHE_TTL_SECONDS } from '@/modules/bot/shared/bot.constant'
 import { SaveBotSessionUseCase } from '@/modules/bot/application/use-cases/SaveBotSessionUseCase'
 import { CreateBotOrderUseCase } from '@/modules/bot/application/use-cases/CreateBotOrderUseCase'
 import { BotController } from '@/modules/bot/infra/http/BotController'
@@ -257,6 +258,14 @@ export interface AppContainer {
   expenseController: ExpenseController
   uploadController: UploadController
   queueWorkerDependencies: QueueWorkerDependencies
+}
+
+/** BOT_CONTEXT_CACHE_TTL_SECONDS no ambiente; vazio ou inválido usa o padrão, 0 desliga. */
+function botContextCacheTtlSeconds(): number {
+  const configured = Number(process.env.BOT_CONTEXT_CACHE_TTL_SECONDS)
+  return process.env.BOT_CONTEXT_CACHE_TTL_SECONDS !== undefined && Number.isFinite(configured) && configured >= 0
+    ? configured
+    : BOT_SHARED_CONTEXT_CACHE_TTL_SECONDS
 }
 
 export function buildContainer(wsHub: WebSocketHub): AppContainer {
@@ -468,7 +477,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
       paymentAccountService,
       // A Meta só baixa a figurinha de uma URL pública em HTTPS; sem ela o bot segue sem figurinha.
       publicApiUrl.startsWith('https://') ? publicApiUrl : undefined,
-      new EstablishmentLocationService(db, new NominatimProvider())
+      new EstablishmentLocationService(db, new NominatimProvider()),
+      { cache, ttlSeconds: botContextCacheTtlSeconds() }
     ),
     new SaveBotSessionUseCase(db),
     new CreateBotOrderUseCase(
