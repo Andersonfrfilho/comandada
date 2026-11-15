@@ -24,7 +24,7 @@ const KNOWN_SETTINGS: SettingDef[] = [
   { key: BRANDING_SETTING_KEYS.primaryColor, label: 'Cor principal', type: 'color', description: 'Botões, destaques e menu ativo usam esta cor', section: 'marca' },
   { key: BRANDING_SETTING_KEYS.domains, label: 'Domínios do painel', type: 'text', description: 'Separados por vírgula. Quem abrir o painel por um destes endereços já vê a sua marca no login', section: 'marca' },
   { key: 'establishment_name', label: 'Nome do estabelecimento', type: 'text', section: 'estabelecimento' },
-  { key: 'whatsapp_number', label: 'Número WhatsApp', type: 'text', description: 'Formato: 5511999999999', section: 'estabelecimento' },
+  { key: 'whatsapp_number', label: 'Número WhatsApp', type: 'text', description: 'Com DDI e DDD, só números: 5511999999999', section: 'estabelecimento' },
   { key: 'establishment_address', label: 'Endereço completo', type: 'text', description: 'Rua, número e bairro. Aparece na saudação do WhatsApp com o pin no mapa', section: 'estabelecimento' },
   { key: 'establishment_city', label: 'Cidade', type: 'text', description: 'Ex.: Franca - SP. Ajuda a achar o ponto certo no mapa', section: 'estabelecimento' },
   { key: 'establishment_lat', label: 'Latitude (opcional)', type: 'text', description: 'Só se o pin calculado pelo endereço sair no lugar errado. Ex.: -20.5386', section: 'estabelecimento' },
@@ -37,7 +37,7 @@ const KNOWN_SETTINGS: SettingDef[] = [
   { key: 'working_days', label: 'Dias de funcionamento', type: 'text', description: 'Separados por vírgula: seg,ter,qua,qui,sex,sab,dom', section: 'operacao' },
   { key: 'ignore_hours', label: 'Bot atende fora do horário', type: 'boolean', description: 'Ligado, o bot atende a qualquer hora (útil para testes)', section: 'funcionalidades' },
   { key: 'default_preparation_time', label: 'Tempo de preparo padrão (min)', type: 'number', section: 'operacao' },
-  { key: 'minimum_delivery_order', label: 'Pedido mínimo para delivery (R$)', type: 'number', section: 'operacao' },
+  { key: 'min_order_value', label: 'Pedido mínimo (R$)', type: 'number', description: 'O bot não fecha pedido abaixo deste valor. Vazio ou 0: sem mínimo', section: 'operacao' },
   { key: 'currency', label: 'Moeda', type: 'text', section: 'operacao' },
   { key: 'timezone', label: 'Fuso horário', type: 'text', section: 'operacao' },
 
@@ -45,8 +45,6 @@ const KNOWN_SETTINGS: SettingDef[] = [
 
   { key: 'default_printer', label: 'Impressora padrão', type: 'text', section: 'impressao' },
 
-  { key: 'delivery_fee', label: 'Taxa de entrega (R$)', type: 'number', section: 'gerais' },
-  { key: 'min_order_amount', label: 'Pedido mínimo (R$)', type: 'number', section: 'gerais' },
   { key: 'estimated_delivery_time', label: 'Tempo estimado de entrega (min)', type: 'number', section: 'gerais' },
   { key: 'estimated_pickup_time', label: 'Tempo estimado de retirada (min)', type: 'number', section: 'gerais' },
 

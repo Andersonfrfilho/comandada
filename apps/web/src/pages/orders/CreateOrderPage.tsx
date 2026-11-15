@@ -1,3 +1,4 @@
+import { formatDecimal } from '@/lib/listing'
 import { useEffect, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
@@ -374,7 +375,7 @@ export function CreateOrderPage() {
           <p className="text-sm text-gray-600">Taxa de entrega calculada</p>
           <p className="text-xl font-bold text-brand-600">{formatBRL(createdDelivery.feeAmount)}</p>
           {createdDelivery.distanceKm && (
-            <p className="text-xs text-gray-400 mt-1">{Number(createdDelivery.distanceKm).toFixed(1)} km</p>
+            <p className="text-xs text-gray-400 mt-1">{formatDecimal(createdDelivery.distanceKm)} km</p>
           )}
         </div>
         <button

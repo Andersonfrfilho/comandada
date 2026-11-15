@@ -4,6 +4,10 @@ import {
   applyListParamChanges,
   clampPage,
   describePageRange,
+  formatDecimal,
+  formatMinutes,
+  formatPercent,
+  formatUnitCost,
   formatBRL,
   formatDate,
   formatRelativeDays,
@@ -155,5 +159,18 @@ describe('parseListParams e applyListParamChanges', () => {
     const paged = applyListParamChanges(new URLSearchParams('sortBy=name'), { page: '2' })
     expect(paged.toString()).toBe('sortBy=name&page=2')
     expect(applyListParamChanges(paged, { page: '1' }).toString()).toBe('sortBy=name')
+  })
+})
+
+describe('números em pt-BR', () => {
+  const normalize = (text: string) => text.replace(/ /g, ' ')
+  it('decimal, porcentagem e minutos com vírgula', () => {
+    expect(formatDecimal(77.5)).toBe('77,5')
+    expect(formatPercent('95.91')).toBe('95,9%')
+    expect(formatMinutes(77.5)).toBe('77,5 min')
+  })
+  it('custo por unidade sem quatro casas quando passa de um real', () => {
+    expect(normalize(formatUnitCost('3.6166', 'kg'))).toBe('R$ 3,62/kg')
+    expect(normalize(formatUnitCost('0.0125', 'g'))).toBe('R$ 0,0125/g')
   })
 })

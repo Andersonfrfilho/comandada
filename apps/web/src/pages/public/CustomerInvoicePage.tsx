@@ -1,3 +1,4 @@
+import { toast } from '@/stores/toastStore'
 import { useQuery } from '@tanstack/react-query'
 import { useParams } from 'react-router-dom'
 import { QRCodeSVG } from 'qrcode.react'
@@ -82,7 +83,7 @@ export function CustomerInvoicePage() {
   async function handleDownloadXml() {
     const response = await fetch(`${API_URL}/public/fiscal/${token}/xml`)
     if (!response.ok) {
-      window.alert('XML indisponível no momento.')
+      toast.error('XML indisponível no momento. Tente de novo mais tarde.')
       return
     }
     const payload = (await response.json()) as { xml: string }

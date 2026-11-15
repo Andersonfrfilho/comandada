@@ -2,6 +2,7 @@ import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
+import { toast } from '@/stores/toastStore'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_CHANNEL_LABELS, type OrderStatus } from '@/constants/orderLabels'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton, SkeletonList } from '@/components/ui/Skeleton'
@@ -60,6 +61,11 @@ interface CustomerDetails {
     type: string
     receivedAt: string
   }>
+}
+
+interface SavedAddressCoordinates {
+  lat: number | string | null
+  lng: number | string | null
 }
 
 interface AddressItem {
@@ -401,8 +407,9 @@ export function CustomersPage() {
         lng: formData.lng ?? undefined,
         geocode: !formData.lat || !formData.lng,
       }
+      let saved: SavedAddressCoordinates | null = null
       if (editingAddress?.id) {
-        await api.put(
+        saved = await api.put<SavedAddressCoordinates>(
           `/customers/${selectedId}/addresses/${editingAddress.id}`,
           {
             ...payload,
@@ -415,13 +422,18 @@ export function CustomersPage() {
           accessToken ?? undefined
         )
       } else {
-        await api.post(`/customers/${selectedId}/addresses`, payload, accessToken ?? undefined)
+        saved = await api.post<SavedAddressCoordinates>(`/customers/${selectedId}/addresses`, payload, accessToken ?? undefined)
       }
       void queryClient.invalidateQueries({ queryKey: ['customer-addresses', selectedId] })
       setAddressModalOpen(false)
       setEditingAddress(null)
-    } catch {
-      // error handled by api layer
+      if (saved && (saved.lat == null || saved.lng == null)) {
+        toast.info('Endereço salvo, mas não achamos o ponto no mapa. Confira rua e número.')
+      } else {
+        toast.success('Endereço salvo')
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível salvar o endereço')
     }
   }
 
@@ -440,8 +452,8 @@ export function CustomersPage() {
     try {
       await api.put(`/customers/${selectedId}/addresses/${addressId}/default`, {}, accessToken ?? undefined)
       void queryClient.invalidateQueries({ queryKey: ['customer-addresses', selectedId] })
-    } catch {
-      // error handled by api layer
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não foi possível marcar o endereço principal')
     }
   }
 

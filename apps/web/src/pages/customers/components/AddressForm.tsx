@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef } from 'react'
 import { MapPin, Search, Loader2, Trash2, Star, Plus } from 'lucide-react'
-import { API_URL } from '@/lib/apiEndpoints'
+import { api } from '@/lib/api'
+import { useAuthStore } from '@/stores/authStore'
 
 export interface AddressFormData {
   id?: string
@@ -37,6 +38,13 @@ interface CepResult {
   state: string
 }
 
+// A consulta pode voltar erro ou vazio: só preenche com resposta no formato certo.
+function isCepResult(value: unknown): value is CepResult {
+  if (typeof value !== 'object' || value === null) return false
+  const candidate = value as Record<string, unknown>
+  return ['street', 'neighborhood', 'city', 'state'].every((key) => typeof candidate[key] === 'string')
+}
+
 function buildOsmStaticUrl(lat: number, lng: number): string {
   const zoom = 16
   return `https://www.openstreetmap.org/export/embed.html?bbox=${lng - 0.005},${lat - 0.003},${lng + 0.005},${lat + 0.003}&amp;layer=mapnik&amp;marker=${lat},${lng}`
@@ -55,6 +63,7 @@ export function AddressForm({
   const [cepLoading, setCepLoading] = useState(false)
   const [cepError, setCepError] = useState<string | null>(null)
   const cepTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const accessToken = useAuthStore((state) => state.accessToken)
 
   const formatZip = (value: string) => {
     return value
@@ -75,9 +84,9 @@ export function AddressForm({
     cepTimer.current = setTimeout(async () => {
       setCepLoading(true)
       try {
-        const response = await fetch(`${API_URL}/addresses/cep/${clean}`)
-        const data = await response.json() as CepResult | null
-        if (data) {
+        // Sem token a API devolvia 401 e o `state.toUpperCase()` do erro derrubava a tela inteira.
+        const data = await api.get<unknown>(`/addresses/cep/${clean}`, accessToken ?? undefined)
+        if (isCepResult(data)) {
           setForm((f) => ({
             ...f,
             street: data.street,
@@ -89,12 +98,12 @@ export function AddressForm({
           setCepError('CEP não encontrado')
         }
       } catch {
-        setCepError('Erro ao consultar CEP')
+        setCepError('Não deu para consultar o CEP agora. Preencha o endereço à mão.')
       } finally {
         setCepLoading(false)
       }
     }, 400)
-  }, [])
+  }, [accessToken])
 
   const hasCoords = form.lat != null && form.lng != null
 

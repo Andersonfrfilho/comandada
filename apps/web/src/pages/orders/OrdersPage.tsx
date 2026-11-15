@@ -1,3 +1,4 @@
+import { FISCAL_STATUS_COLORS, FISCAL_STATUS_LABELS } from '@/constants/statusLabels'
 import { useEffect, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -52,6 +53,7 @@ interface Order {
   notes: string | null
   receivedAt: string
   customer: { name: string; phone: string } | null
+  customerName?: string | null
   items: Array<{ productName: string; quantity: number }>
   payments: Array<{ paymentTypeName: string; amount: string; changeFor: string | null; splitLabel: string | null }>
   // Pagamento online pelo WhatsApp (Pix/link). `awaiting` ainda não foi para a cozinha.
@@ -106,21 +108,7 @@ interface FiscalDoc {
   danfePdfUrl: string | null
 }
 
-const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
-  pending: 'Pendente',
-  emitting: 'Emitindo...',
-  authorized: 'Autorizada',
-  rejected: 'Rejeitada',
-  cancelled: 'Cancelada',
-}
 
-const FISCAL_STATUS_COLORS: Record<FiscalDocStatus, string> = {
-  pending: 'bg-gray-100 text-gray-600',
-  emitting: 'bg-blue-100 text-blue-800',
-  authorized: 'bg-green-100 text-green-800',
-  rejected: 'bg-red-100 text-red-700',
-  cancelled: 'bg-orange-100 text-orange-700',
-}
 
 const ACTIVE_STATUSES: OrderStatus[] = ['received', 'in_production', 'ready', 'in_delivery', 'picked_up']
 const ALL_STATUSES: OrderStatus[] = [...ACTIVE_STATUSES, 'completed', 'cancelled']
@@ -446,11 +434,13 @@ export function OrdersPage() {
                 </div>
               </div>
 
-              {order.customer && (
+              {order.customer ? (
                 <p className="text-sm text-gray-600 mb-1">
                   {order.customer.name} · {order.customer.phone}
                 </p>
-              )}
+              ) : order.customerName ? (
+                <p className="text-sm text-gray-600 mb-1">{order.customerName}</p>
+              ) : null}
 
               <p className="text-xs text-gray-500 mb-2">
                 {order.items.map((i) => `${i.quantity}× ${i.productName}`).join(', ')}

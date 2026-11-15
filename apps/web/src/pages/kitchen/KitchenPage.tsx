@@ -164,11 +164,15 @@ function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardPro
 
       <ul className="space-y-1">
         {order.items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-2 text-sm text-gray-800">
+          <li key={item.id} className="flex items-center justify-between gap-2 text-base text-gray-900">
             <span className={item.readyAt ? 'line-through text-gray-400' : undefined}>
               <span className="font-bold text-lg mr-2">{item.quantity}×</span>
               {item.productName}
-              {item.notes && <span className="text-gray-500 ml-1">({item.notes})</span>}
+              {item.notes && (
+                <span className="mt-0.5 block rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">
+                  {item.notes}
+                </span>
+              )}
             </span>
             {item.readyAt ? (
               <span className="shrink-0 inline-flex items-center gap-1 text-xs text-green-600">
@@ -190,7 +194,9 @@ function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardPro
         ))}
       </ul>
 
-      {order.notes && <p className="text-xs text-gray-500 italic">{order.notes}</p>}
+      {order.notes && (
+        <p className="rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-sm font-medium text-amber-900">{order.notes}</p>
+      )}
 
       <button
         onClick={() => onAdvance(order.id, nextStatus)}

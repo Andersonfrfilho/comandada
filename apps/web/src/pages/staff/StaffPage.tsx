@@ -185,7 +185,7 @@ export function StaffPage() {
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Funcionários</h1>
           <p className="text-sm text-gray-500 mt-0.5">
@@ -249,14 +249,14 @@ export function StaffPage() {
           // Funcionário com mais acesso que o seu: a API recusa editar, desativar ou excluir.
           const manageable = roles.find((role) => role.id === member.roleId)?.assignable !== false
           return (
-          <div key={member.id} className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
+          <div key={member.id} className="bg-white rounded-xl shadow-sm p-4 flex flex-wrap items-center gap-3 sm:gap-4">
             <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
               {member.name.charAt(0).toUpperCase()}
             </div>
 
-            <div className="flex-1 min-w-0">
+            <div className="flex-1 min-w-0 basis-48">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="font-semibold text-gray-900 truncate">{member.name}</span>
+                <span className="font-semibold text-gray-900 break-words">{member.name}</span>
                 <span className="text-xs px-2 py-0.5 bg-brand-100 text-brand-700 rounded-full font-medium">
                   {member.roleName}
                 </span>
@@ -276,7 +276,7 @@ export function StaffPage() {
             </div>
 
             {manageable && (
-            <div className="flex items-center gap-1.5 flex-shrink-0">
+            <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto pl-14 sm:pl-0">
               <button
                 onClick={() => openEdit(member)}
                 className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"

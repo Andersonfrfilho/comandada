@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/stores/confirmStore'
 import { useState, useRef } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -270,8 +271,15 @@ export function FiscalSettingsPage() {
                 Homologação
               </button>
               <button
-                onClick={() => {
-                  if (form.environment !== 'producao' && !window.confirm('Tem certeza que deseja mudar para Produção? As notas serão emitidas oficialmente.')) return
+                onClick={async () => {
+                  if (
+                    form.environment !== 'producao' &&
+                    !(await confirmDialog({
+                      title: 'Mudar para Produção?',
+                      message: 'As notas passam a ser emitidas oficialmente na Receita.',
+                      confirmLabel: 'Mudar para Produção',
+                    }))
+                  ) return
                   setForm((prev) => ({ ...prev, environment: 'producao' }))
                 }}
                 className={`px-3 py-1.5 text-xs font-medium rounded-lg border transition-colors ${

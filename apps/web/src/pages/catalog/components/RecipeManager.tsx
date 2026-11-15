@@ -1,3 +1,4 @@
+import { formatBRL, formatDecimal, formatUnitCost } from '@/lib/listing'
 import { useState, useMemo } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -149,7 +150,7 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
           <h3 className="text-sm font-semibold text-gray-700">Ficha técnica</h3>
           {recipeEntries.length > 0 && (
             <p className="text-xs font-medium text-brand-600">
-              Custo da receita: R$ {theoreticalCost.toFixed(2)}
+              Custo da receita: {formatBRL(theoreticalCost)}
             </p>
           )}
         </div>
@@ -179,11 +180,11 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
                 <tr key={entry.id} className="border-t border-gray-100">
                   <td className="px-3 py-2 text-gray-800">{entry.ingredientName}</td>
                   <td className="px-3 py-2 text-gray-600">
-                    {toNumber(entry.quantity).toFixed(4)} {UNIT_LABELS[entry.unit] ?? entry.unit}
+                    {formatDecimal(toNumber(entry.quantity), 3)} {UNIT_LABELS[entry.unit] ?? entry.unit}
                   </td>
                   <td className="px-3 py-2 text-gray-400 max-w-[120px] truncate">{entry.notes || '-'}</td>
                   <td className="px-3 py-2 text-gray-600 text-right">
-                    R$ {(toNumber(entry.quantity) * toNumber(entry.ingredientCostPerUnit ?? '0')).toFixed(4)}
+                    {formatBRL(toNumber(entry.quantity) * toNumber(entry.ingredientCostPerUnit ?? '0'))}
                   </td>
                   <td className="px-3 py-2">
                     <button
@@ -203,7 +204,7 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
 
       {recipeEntries.length > 0 && (
         <p className="text-xs font-medium text-brand-600 mb-3">
-          Custo teórico: R$ {theoreticalCost.toFixed(4)}
+          Custo teórico: {formatBRL(theoreticalCost)}
         </p>
       )}
 
@@ -229,7 +230,7 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
               <option value="">Selecionar ingrediente...</option>
               {ingredients.map((ing) => (
                 <option key={ing.id} value={ing.id}>
-                  {ing.name} (R$ {toNumber(ing.costPerUnit).toFixed(4)}/{ing.unit})
+                  {ing.name} ({formatUnitCost(toNumber(ing.costPerUnit), ing.unit)})
                 </option>
               ))}
             </select>
@@ -281,10 +282,6 @@ interface RecipeCostBadgeProps {
   productId: string
   productPrice: string
   costPrice?: string | null
-}
-
-function formatBRL(value: string | number) {
-  return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
 
 export function RecipeCostBadge({ productId, productPrice, costPrice }: RecipeCostBadgeProps) {

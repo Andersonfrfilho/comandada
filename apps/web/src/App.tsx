@@ -29,6 +29,7 @@ import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGu
 import { AccessDeniedBanner } from '@/components/layout/AccessDeniedBanner'
 import { PWAInstallBanner } from '@/components/pwa/PWAInstallBanner'
 import { Toaster } from '@/components/ui/Toaster'
+import { ConfirmHost } from '@/components/ui/ConfirmHost'
 import { useOperationAlerts } from '@/hooks/useOperationAlerts'
 import { useEffect } from 'react'
 import { AppFooter } from '@/components/brand/AppFooter'
@@ -249,6 +250,7 @@ export default function App() {
       </Routes>
       <PWAInstallBanner />
       <Toaster />
+      <ConfirmHost />
     </BrowserRouter>
   )
 }

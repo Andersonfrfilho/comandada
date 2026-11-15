@@ -1,3 +1,4 @@
+import { formatDecimal, formatBRL } from '@/lib/listing'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -127,9 +128,9 @@ export function StockBatchList({ ingredientId, ingredientName }: StockBatchListP
                 return (
                   <tr key={batch.id} className="border-t border-gray-100">
                     <td className="px-3 py-1.5 text-gray-800">{batch.batchNumber}</td>
-                    <td className="px-3 py-1.5 text-gray-800">{toNumber(batch.quantity).toFixed(4)}</td>
-                    <td className="px-3 py-1.5 text-gray-600">{toNumber(batch.remainingQuantity).toFixed(4)}</td>
-                    <td className="px-3 py-1.5 text-gray-600">R$ {toNumber(batch.costPerUnit).toFixed(4)}</td>
+                    <td className="px-3 py-1.5 text-gray-800">{formatDecimal(toNumber(batch.quantity), 3)}</td>
+                    <td className="px-3 py-1.5 text-gray-600">{formatDecimal(toNumber(batch.remainingQuantity), 3)}</td>
+                    <td className="px-3 py-1.5 text-gray-600">{formatBRL(toNumber(batch.costPerUnit))}</td>
                     <td className="px-3 py-1.5">
                       {badge ? (
                         <span className={`text-xs px-1.5 py-0.5 rounded-full font-medium ${badge.color}`}>
