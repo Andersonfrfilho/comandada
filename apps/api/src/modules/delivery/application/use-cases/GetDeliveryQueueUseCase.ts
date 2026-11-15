@@ -13,11 +13,18 @@ export class GetDeliveryQueueUseCase {
         eq(schema.deliveries.establishmentId, establishmentId),
         inArray(schema.deliveries.status, ['pending', 'dispatched'])
       ),
-      with: { order: { with: { items: true } }, deliverer: true },
+      // Entregador precisa de quem recebe, como cobrar e o troco, além do endereço.
+      with: { order: { with: { items: true, customer: true, payments: true } }, deliverer: true },
     })
 
     return rows.map((delivery) => ({
       ...delivery,
+      order: {
+        ...delivery.order,
+        customer: delivery.order.customer
+          ? { name: delivery.order.customer.name, whatsappNumber: delivery.order.customer.whatsappNumber }
+          : null,
+      },
       deliverer: delivery.deliverer
         ? { id: delivery.deliverer.id, name: delivery.deliverer.name }
         : null,

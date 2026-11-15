@@ -1,7 +1,23 @@
+import { useState } from 'react'
+import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { Banknote, Clock, ExternalLink, Map as MapIcon, MapPin, MessageCircle, Navigation, Phone, Route, StickyNote } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
+import { buildConversationLink } from '@/constants/conversationLinks'
+import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import {
+  formatBrl,
+  formatDistance,
+  formatDuration,
+  formatPhoneBr,
+  googleMapsDirectionsUrl,
+  googleMapsEmbedUrl,
+  googleMapsSearchUrl,
+  splitLocationNote,
+  type MapPoint,
+} from '@/pages/orders/orderDetailFormat'
 
 interface DeliveryOrder {
   id: string
@@ -10,9 +26,24 @@ interface DeliveryOrder {
   deliverer: { id: string; name: string } | null
   order: {
     id: string
+    code: string | null
     totalAmount: string
-    items: Array<{ productName: string; quantity: number }>
+    notes: string | null
+    estimatedAt: string | null
+    scheduledFor: string | null
+    items: Array<{ productName: string; quantity: number; notes: string | null }>
+    customer: { name: string; whatsappNumber: string } | null
+    payments?: Array<{ id: string; paymentTypeName: string; amount: string; changeFor: string | null; splitLabel: string | null }>
+    paymentStatus?: string | null
   }
+}
+
+interface OrderRoute {
+  origin: MapPoint | null
+  destination: MapPoint | null
+  distanceKm: number | null
+  durationMin: number | null
+  source: 'route' | 'straight_line' | null
 }
 
 const STATUS_LABELS: Record<string, string> = {
@@ -36,6 +67,12 @@ function formatDeliveryAddress(snapshot: Record<string, string>): string {
   return [snapshot['street'], snapshot['number']].filter(Boolean).join(', ')
 }
 
+function formatTime(value: string): string {
+  return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(
+    new Date(value)
+  )
+}
+
 export function DeliveryPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
@@ -47,7 +84,7 @@ export function DeliveryPage() {
   })
 
   useWebSocket((message) => {
-    if (message.type.startsWith('delivery:') || message.type === 'order:status_changed') {
+    if (message.type.startsWith('delivery:') || message.type.startsWith('order:')) {
       void queryClient.invalidateQueries({ queryKey: ['delivery', 'queue'] })
     }
   })
@@ -58,64 +95,223 @@ export function DeliveryPage() {
   }
 
   return (
-    <div className="p-4 md:p-6">
+    <div className="p-4 md:p-6 max-w-3xl mx-auto">
       <h1 className="text-xl font-bold text-gray-900 mb-4">Entregas</h1>
       <div className="space-y-3">
         {deliveries.map((delivery) => (
-          <div key={delivery.id} className="bg-white rounded-xl shadow-sm p-4">
-            <div className="flex items-center justify-between mb-2">
-              <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[delivery.status]}`}>
-                {STATUS_LABELS[delivery.status]}
-              </span>
-              <span className="text-sm font-bold">R$ {parseFloat(delivery.order.totalAmount).toFixed(2)}</span>
-            </div>
-
-            <div className="text-sm text-gray-600 mb-3">
-              {formatDeliveryAddress(delivery.addressSnapshot)}
-              {delivery.addressSnapshot['complement'] && ` - ${delivery.addressSnapshot['complement']}`}
-            </div>
-
-            <div className="text-xs text-gray-500 mb-3">
-              {delivery.order.items.map((item) => `${item.quantity}× ${item.productName}`).join(', ')}
-            </div>
-
-            {delivery.deliverer && (
-              <div className="text-xs text-gray-500 mb-3">
-                Entregador: <span className="font-medium text-gray-700">{delivery.deliverer.name}</span>
-              </div>
-            )}
-
-            <div className="flex gap-2">
-              {delivery.status === 'pending' && (
-                <button
-                  onClick={() => handleUpdateStatus(delivery.id, 'dispatched')}
-                  className="w-full py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
-                >
-                  Sair para entrega
-                </button>
-              )}
-              {delivery.status === 'dispatched' && (
-                <>
-                  <button
-                    onClick={() => handleUpdateStatus(delivery.id, 'delivered')}
-                    className="flex-1 py-2 bg-green-600 text-white text-sm font-medium rounded-lg"
-                  >
-                    Entregue
-                  </button>
-                  <button
-                    onClick={() => handleUpdateStatus(delivery.id, 'failed')}
-                    className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg"
-                  >
-                    Falhou
-                  </button>
-                </>
-              )}
-            </div>
-          </div>
+          <DeliveryCard key={delivery.id} delivery={delivery} onUpdateStatus={handleUpdateStatus} />
         ))}
-        {deliveries.length === 0 && (
-          <p className="text-gray-400 text-center py-12">Nenhuma entrega ativa</p>
+        {deliveries.length === 0 && <p className="text-gray-400 text-center py-12">Nenhuma entrega ativa</p>}
+      </div>
+    </div>
+  )
+}
+
+function DeliveryCard({
+  delivery,
+  onUpdateStatus,
+}: {
+  delivery: DeliveryOrder
+  onUpdateStatus: (deliveryId: string, status: string) => Promise<void>
+}) {
+  const accessToken = useAuthStore((state) => state.accessToken)
+  const [showMap, setShowMap] = useState(false)
+  const { order } = delivery
+  const address = formatDeliveryAddress(delivery.addressSnapshot)
+  const complement = delivery.addressSnapshot['complement']
+  const notes = splitLocationNote(order.notes).notes
+  const payments = order.payments ?? []
+  const paidOnline = order.paymentStatus === 'paid'
+
+  const { data: route } = useQuery({
+    queryKey: ['order-route', order.id],
+    queryFn: () => api.get<OrderRoute>(`/orders/${order.id}/route`, accessToken ?? undefined),
+    // Endereço do pedido não muda: uma consulta por pedido basta.
+    staleTime: Infinity,
+    retry: false,
+  })
+  const destination = route?.destination ?? null
+  const distance = formatDistance(route?.distanceKm)
+  const duration = formatDuration(route?.durationMin)
+
+  return (
+    <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[delivery.status]}`}>
+              {STATUS_LABELS[delivery.status]}
+            </span>
+            <Link to={`/orders/${order.id}`} className="text-xs text-gray-400 hover:text-gray-600 truncate">
+              Pedido {order.code ?? order.id.slice(0, 8).toUpperCase()}
+            </Link>
+          </div>
+          <span className="text-base font-bold text-gray-900 whitespace-nowrap">{formatBrl(order.totalAmount)}</span>
+        </div>
+
+        {order.customer && (
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <div className="min-w-0">
+              <p className="text-sm font-semibold text-gray-900 truncate">{order.customer.name}</p>
+              <a
+                href={`tel:+${order.customer.whatsappNumber.replace(/\D/g, '')}`}
+                className="inline-flex items-center gap-1 text-sm text-gray-600 hover:text-gray-800"
+              >
+                <Phone className="h-3.5 w-3.5" />
+                {formatPhoneBr(order.customer.whatsappNumber)}
+              </a>
+            </div>
+            <Link
+              to={buildConversationLink(order.customer.whatsappNumber)}
+              className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-brand-600 px-2.5 py-1.5 text-xs font-medium text-brand-600 hover:bg-brand-50"
+            >
+              <MessageCircle className="h-3.5 w-3.5" />
+              Conversar
+            </Link>
+          </div>
         )}
+
+        <div className="mb-3 flex items-start gap-2">
+          <MapPin className="h-4 w-4 text-brand-600 mt-0.5 flex-shrink-0" />
+          <div className="min-w-0 text-sm">
+            <p className="text-gray-800">{address}</p>
+            {complement && <p className="text-gray-600 font-medium">{complement}</p>}
+            {(distance || duration) && (
+              <p className="mt-1 flex flex-wrap gap-x-3 text-xs text-gray-500">
+                {distance && (
+                  <span className="inline-flex items-center gap-1">
+                    <Route className="h-3 w-3" />
+                    {distance}
+                    {route?.source === 'straight_line' ? ' em linha reta' : ''}
+                  </span>
+                )}
+                {duration && (
+                  <span className="inline-flex items-center gap-1">
+                    <Clock className="h-3 w-3" />~{duration} de carro
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+        </div>
+
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <a
+            href={googleMapsDirectionsUrl(address, destination)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1 rounded-lg bg-brand-600 px-2 py-2 text-xs font-medium text-white hover:bg-brand-700"
+          >
+            <Navigation className="h-3.5 w-3.5" />
+            Rota
+          </a>
+          <button
+            type="button"
+            onClick={() => setShowMap((current) => !current)}
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <MapIcon className="h-3.5 w-3.5" />
+            {showMap ? 'Esconder mapa' : 'Ver mapa'}
+          </button>
+          <a
+            href={googleMapsSearchUrl(address, destination)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center justify-center gap-1 rounded-lg border border-gray-300 px-2 py-2 text-xs font-medium text-gray-700 hover:bg-gray-50"
+          >
+            <ExternalLink className="h-3.5 w-3.5" />
+            Maps
+          </a>
+        </div>
+
+        {showMap && (
+          <iframe
+            title={`Mapa: ${address}`}
+            src={googleMapsEmbedUrl(address, destination)}
+            className="mb-3 block h-52 w-full rounded-lg border-0 bg-gray-100"
+            loading="lazy"
+            referrerPolicy="no-referrer-when-downgrade"
+          />
+        )}
+
+        <div className="mb-3 rounded-lg bg-gray-50 px-3 py-2">
+          <p className="mb-1 inline-flex items-center gap-1 text-xs font-semibold text-gray-500">
+            <Banknote className="h-3.5 w-3.5" />
+            {paidOnline ? 'Pago online, não cobrar' : 'Cobrar na entrega'}
+          </p>
+          {payments.length === 0 && <p className="text-sm text-gray-500">Forma de pagamento não informada</p>}
+          {payments.map((payment) => (
+            <div key={payment.id} className="text-sm">
+              <div className="flex justify-between gap-2">
+                <span className="text-gray-800">
+                  {paymentMethodLabel(payment.paymentTypeName)}
+                  {payment.splitLabel ? ` · ${payment.splitLabel}` : ''}
+                </span>
+                <span className="text-gray-700 whitespace-nowrap">{formatBrl(payment.amount)}</span>
+              </div>
+              {!paidOnline && paymentChangeText(payment) && (
+                <p className="text-xs font-semibold text-amber-700">{paymentChangeText(payment)}</p>
+              )}
+            </div>
+          ))}
+        </div>
+
+        <ul className="mb-3 space-y-0.5 text-sm text-gray-700">
+          {order.items.map((item, index) => (
+            <li key={`${item.productName}-${index}`}>
+              <span className="font-semibold">{item.quantity}×</span> {item.productName}
+              {item.notes && <span className="text-xs italic text-gray-400"> · {item.notes}</span>}
+            </li>
+          ))}
+        </ul>
+
+        {notes && (
+          <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+            <StickyNote className="h-4 w-4 mt-0.5 flex-shrink-0" />
+            <span className="whitespace-pre-line">{notes}</span>
+          </p>
+        )}
+
+        {(order.scheduledFor || order.estimatedAt) && (
+          <p className="mb-3 text-xs text-gray-500">
+            {order.scheduledFor
+              ? `Encomenda para ${formatTime(order.scheduledFor)}`
+              : `Previsão prometida ao cliente: ${formatTime(order.estimatedAt!)}`}
+          </p>
+        )}
+
+        {delivery.deliverer && (
+          <div className="text-xs text-gray-500 mb-3">
+            Entregador: <span className="font-medium text-gray-700">{delivery.deliverer.name}</span>
+          </div>
+        )}
+
+        <div className="flex gap-2">
+          {delivery.status === 'pending' && (
+            <button
+              onClick={() => void onUpdateStatus(delivery.id, 'dispatched')}
+              className="w-full py-2.5 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
+            >
+              Sair para entrega
+            </button>
+          )}
+          {delivery.status === 'dispatched' && (
+            <>
+              <button
+                onClick={() => void onUpdateStatus(delivery.id, 'delivered')}
+                className="flex-1 py-2 bg-green-600 text-white text-sm font-medium rounded-lg"
+              >
+                Entregue
+              </button>
+              <button
+                onClick={() => void onUpdateStatus(delivery.id, 'failed')}
+                className="flex-1 py-2 bg-red-600 text-white text-sm font-medium rounded-lg"
+              >
+                Falhou
+              </button>
+            </>
+          )}
+        </div>
       </div>
     </div>
   )

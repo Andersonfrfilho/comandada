@@ -44,3 +44,11 @@ const STATUS_TRANSITIONS: Record<OrderStatus, OrderStatus[]> = {
 export function canTransitionTo(current: OrderStatus, next: OrderStatus): boolean {
   return STATUS_TRANSITIONS[current]?.includes(next) ?? false
 }
+
+/**
+ * Mudança manual pelo detalhe do pedido: a equipe corrige um status errado (volta, pula etapa,
+ * reabre um cancelado). Só não aceita ficar no mesmo status.
+ */
+export function canMoveManually(current: OrderStatus, next: OrderStatus): boolean {
+  return current !== next && next in STATUS_TRANSITIONS
+}

@@ -287,6 +287,17 @@ const MessagesConstants = {
 
   // Confirmação parcial (itens que acabaram)
   PARCIAL_ACEITO:               (code: string, total: string) => `✅ *Combinado, seguimos com o pedido ${code}!*\n\nTiramos os itens que acabaram e o novo total ficou *R$ ${total}*.\n\nObrigado pela compreensão 🧡`,
+  PARCIAL_TROCA_ACEITA:         (code: string, swaps: string, total: string) => `✅ *Combinado, seguimos com o pedido ${code}!*\n\n${swaps}\n\nO novo total ficou *R$ ${total}*.\n\nObrigado pela compreensão 🧡`,
+  PARCIAL_TROCA_LINHA:          (qty: number, from: string, to: string) => `🔄 ${qty}× *${to}* no lugar de ${from}`,
+  PARCIAL_SEM_LINHA:            (qty: number, from: string) => `➖ Sem ${qty}× ${from}`,
+  PARCIAL_SEM_ITEM:             (code: string, total: string) => `✅ *Combinado, seguimos com o pedido ${code}!*\n\nTiramos os itens que acabaram e o novo total ficou *R$ ${total}*.\n\nObrigado pela compreensão 🧡`,
+  PARCIAL_ESCOLHA:              (from: string, step: string) => `🔄 *No lugar de ${from}*${step}, qual você prefere?`,
+  PARCIAL_ESCOLHA_PASSO:        (current: number, total: number) => ` (${current} de ${total})`,
+  PARCIAL_ESCOLHA_BOTAO:        'Ver opções',
+  PARCIAL_ESCOLHA_SECAO:        'Opções do mesmo tipo',
+  PARCIAL_ESCOLHA_SUGERIDO:     '⭐ sugestão da casa',
+  PARCIAL_ESCOLHA_SEM:          '➖ Sem este item',
+  PARCIAL_ESCOLHA_SEM_DESC:     'Tira do pedido, sem trocar',
   PARCIAL_RECUSADO:             (code: string) => `Tudo bem, cancelamos o pedido *${code}* 😕\n\nSentimos muito pelo transtorno! Quando quiser fazer outro, é só mandar *oi* 🧡`,
 
   // Fallback / Geral

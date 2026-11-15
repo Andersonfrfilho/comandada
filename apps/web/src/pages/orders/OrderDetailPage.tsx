@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import {
@@ -10,12 +11,15 @@ import {
   type OrderStatus,
 } from '@/constants/orderLabels'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { ArrowLeft, MessageCircle } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Phone, StickyNote } from 'lucide-react'
 import { buildConversationLink } from '@/constants/conversationLinks'
-import { CONVERSATION_LINK_LABEL } from '@/constants/partialConfirmation'
+import { CONVERSATION_LINK_LABEL, PARTIAL_CONFIRMATION_LABELS } from '@/constants/partialConfirmation'
 import { OrderProgressBar } from './OrderProgressBar'
-import { OrderPartialConfirmation } from './OrderPartialConfirmation'
+import { OrderStatusControl } from './OrderStatusControl'
+import { OrderItemsCard, type OrderPartialConfirmationState } from './OrderItemsCard'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import { OrderDeliveryCard } from './OrderDeliveryCard'
+import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
 
 /** Pedido encerrado não negocia mais itens com o cliente — a API recusa, a tela nem oferece. */
 const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['completed', 'cancelled']
@@ -67,6 +71,7 @@ interface OrderDetail {
   type: string
   status: OrderStatus
   totalAmount: string
+  deliveryFee?: string | null
   notes: string | null
   receivedAt: string
   scheduledFor: string | null
@@ -80,6 +85,7 @@ interface OrderDetail {
   delivery?: OrderDelivery[]
   fiscalDocument?: FiscalDocument | null
   statusLogs?: OrderStatusLog[]
+  partialConfirmation?: OrderPartialConfirmationState | null
 }
 
 const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
@@ -93,12 +99,23 @@ const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const accessToken = useAuthStore((state) => state.accessToken)
+  const queryClient = useQueryClient()
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', id],
     queryFn: () => api.get<OrderDetail>(`/orders/${id}`, accessToken ?? undefined),
     enabled: Boolean(id),
+    // Esperando o cliente responder a falta de item: confere a cada 15 s caso o aviso em tempo real se perca.
+    refetchInterval: (query) => (query.state.data?.partialConfirmation?.status === 'pending' ? 15_000 : false),
   })
+
+  // Resposta do cliente no WhatsApp, mudança de status: a tela atualiza sozinha.
+  useWebSocket((message) => {
+    if (message.type.startsWith('order:')) void queryClient.invalidateQueries({ queryKey: ['order', id] })
+  })
+
+  // O link do mapa antigo ("Localização: https://maps…") vira o mapa da entrega, não observação.
+  const visibleNotes = splitLocationNote(order?.notes).notes
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -130,13 +147,18 @@ export function OrderDetailPage() {
                 >
                   {ORDER_STATUS_LABELS[order.status]}
                 </span>
+                {order.partialConfirmation?.status === 'pending' && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                    {PARTIAL_CONFIRMATION_LABELS.waitingBadge}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400 uppercase">
                   {ORDER_CHANNEL_LABELS[order.channel] ?? order.channel} ·{' '}
                   {ORDER_TYPE_LABELS[order.type as keyof typeof ORDER_TYPE_LABELS] ?? order.type}
                 </span>
               </div>
-              <span className="text-lg font-bold text-gray-900">
-                R$ {parseFloat(order.totalAmount).toFixed(2)}
+              <span className="text-lg font-bold text-gray-900 whitespace-nowrap">
+                {formatBrl(order.totalAmount)}
               </span>
             </div>
               {order.scheduledFor && (
@@ -165,9 +187,18 @@ export function OrderDetailPage() {
             </p>
             {order.customer && (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-gray-600">
-                  {order.customer.name} · {order.customer.whatsappNumber}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">{order.customer.name}</p>
+                  {order.customer.whatsappNumber && (
+                    <a
+                      href={`tel:+${order.customer.whatsappNumber.replace(/\D/g, '')}`}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      <Phone className="h-3 w-3" />
+                      {formatPhoneBr(order.customer.whatsappNumber)}
+                    </a>
+                  )}
+                </div>
                 {order.customer.whatsappNumber && (
                   <Link
                     to={buildConversationLink(order.customer.whatsappNumber)}
@@ -179,48 +210,47 @@ export function OrderDetailPage() {
                 )}
               </div>
             )}
-            {order.notes && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-2 italic">
-                📝 {order.notes}
+            {visibleNotes && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <StickyNote className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span className="whitespace-pre-line">{visibleNotes}</span>
               </p>
             )}
           </div>
 
-          {order.status !== 'cancelled' && (
-            <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
+            {order.status === 'cancelled' ? (
+              <p className="text-sm font-medium text-red-700">Pedido cancelado</p>
+            ) : (
               <OrderProgressBar
                 type={order.type}
                 status={order.status}
                 statusLogs={order.statusLogs ?? []}
                 variant="full"
               />
-            </section>
-          )}
-
-          <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Itens</h2>
-            <div className="space-y-2">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-start justify-between text-sm">
-                  <div>
-                    <p className="text-gray-800">
-                      {item.quantity}× {item.productName}
-                    </p>
-                    {item.notes && <p className="text-xs text-gray-400 italic">{item.notes}</p>}
-                  </div>
-                  <span className="text-gray-600">R$ {parseFloat(item.totalPrice).toFixed(2)}</span>
-                </div>
-              ))}
-            </div>
+            )}
+            <OrderStatusControl orderId={order.id} orderType={order.type} status={order.status} />
           </section>
 
-          {order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status) && (
-            <OrderPartialConfirmation
+          {order.type === 'delivery' && order.delivery?.[0] && (
+            <OrderDeliveryCard
               orderId={order.id}
-              items={order.items}
-              customerWhatsappNumber={order.customer?.whatsappNumber}
+              address={order.delivery[0].addressSnapshot.address}
+              complement={order.delivery[0].addressSnapshot.complement}
+              feeAmount={order.delivery[0].feeAmount}
+              savedDistanceKm={order.delivery[0].distanceKm}
             />
           )}
+
+          <OrderItemsCard
+            orderId={order.id}
+            items={order.items}
+            totalAmount={order.totalAmount}
+            deliveryFee={order.deliveryFee}
+            canNegotiate={order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status)}
+            customerWhatsappNumber={order.customer?.whatsappNumber}
+            partialConfirmation={order.partialConfirmation}
+          />
 
           <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Pagamento</h2>
@@ -232,7 +262,7 @@ export function OrderDetailPage() {
                       {paymentMethodLabel(payment.paymentTypeName)}
                       {payment.splitLabel ? ` · ${payment.splitLabel}` : ''}
                     </span>
-                    <span className="text-gray-600">R$ {parseFloat(payment.amount).toFixed(2)}</span>
+                    <span className="text-gray-600 whitespace-nowrap">{formatBrl(payment.amount)}</span>
                   </div>
                   {paymentChangeText(payment) && (
                     <p className="text-xs font-medium text-amber-700">{paymentChangeText(payment)}</p>
@@ -241,20 +271,6 @@ export function OrderDetailPage() {
               ))}
             </div>
           </section>
-
-          {order.type === 'delivery' && order.delivery?.[0] && (
-            <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">Entrega</h2>
-              <p className="text-sm text-gray-800">{order.delivery[0].addressSnapshot.address}</p>
-              {order.delivery[0].addressSnapshot.complement && (
-                <p className="text-xs text-gray-500">{order.delivery[0].addressSnapshot.complement}</p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">
-                Taxa: R$ {parseFloat(order.delivery[0].feeAmount).toFixed(2)}
-                {order.delivery[0].distanceKm ? ` · ${parseFloat(order.delivery[0].distanceKm).toFixed(1)} km` : ''}
-              </p>
-            </section>
-          )}
 
           {order.fiscalDocument && (
             <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
