@@ -12,12 +12,12 @@
       "version": "0.0.1",
       "dependencies": {
         "@adatechnology/fiscal-provider": "0.4.0",
-        "@adatechnology/mercadopago-payment-provider": "0.1.0",
+        "@adatechnology/mercadopago-payment-provider": "0.2.0",
         "@adatechnology/meta-whatsapp-contracts": "0.6.0",
         "@adatechnology/meta-whatsapp-module": "0.6.0",
         "@adatechnology/meta-whatsapp-provider": "0.3.1",
         "@adatechnology/object-storage-provider": "0.3.1",
-        "@adatechnology/payment-contracts": "0.3.0",
+        "@adatechnology/payment-contracts": "0.4.0",
         "@adatechnology/scheduling-contracts": "0.1.0",
         "@adatechnology/scheduling-module": "0.1.1",
         "@bull-board/api": "^8.1.2",
@@ -84,7 +84,7 @@
 
     "@adatechnology/image-cutout": ["@adatechnology/image-cutout@0.1.0", "", { "peerDependencies": { "react": "^18 || ^19", "react-dom": "^18 || ^19" } }, "sha512-jYczeZrl/SdgOWGpFSVBwSIeKbRToDo+fj/iugxjmCCARixSlHO/QD2mbrvYsjkIBsQEZxjwx6w4KjGliRB1+g=="],
 
-    "@adatechnology/mercadopago-payment-provider": ["@adatechnology/mercadopago-payment-provider@0.1.0", "", { "dependencies": { "@adatechnology/payment-contracts": "0.3.0" } }, "sha512-VLCKInsafv+GYWUdI4+NxDJOXv/jbOiaG1BAH2GyvBcJEnCZ3lGzAovxxP8gZr4H7bLJyqGZvyrCkCxNJTa9PQ=="],
+    "@adatechnology/mercadopago-payment-provider": ["@adatechnology/mercadopago-payment-provider@0.2.0", "", { "dependencies": { "@adatechnology/payment-contracts": "0.4.0" } }, "sha512-N5H8riirFguBJ0AsmFiIuYxSq7E1UmT8pUqIUB0d5rdCc0qY3pJVAEVC2gDMQlD9sjsJ/XRv/xnFMMJeU4B+tA=="],
 
     "@adatechnology/meta-graph-core": ["@adatechnology/meta-graph-core@0.3.0", "", { "dependencies": { "zod": "^3.24.1" } }, "sha512-A9pkmtbeItNN/LjZmu22gGdX5S3mHXWxX5sHT36VTDDAMDNie0YZyyT4sVAIIhDue2JG+jGuLMs/PKIKaTlqRw=="],
 
@@ -98,7 +98,7 @@
 
     "@adatechnology/object-storage-provider": ["@adatechnology/object-storage-provider@0.3.1", "", { "dependencies": { "@aws-sdk/client-s3": "3.1091.0", "@aws-sdk/s3-request-presigner": "3.1091.0" } }, "sha512-+R7mjbvzuPUj9zQC6KCCMYfbSo4oILyEyN0o/5//A5Z3Ov9egnVtc2lB7zv+5jydY+hs6DGSlfW0DHVBS6SR0A=="],
 
-    "@adatechnology/payment-contracts": ["@adatechnology/payment-contracts@0.3.0", "", { "dependencies": { "zod": "^3.24.1" } }, "sha512-jGkSkPBWOK9gDJeQuAZgMW9kgQwxtP3LubTS9Rm5hy4F2+mFZdCpSmgbccMo9htVqqr1f4PE4n6YcKuTAoh9QA=="],
+    "@adatechnology/payment-contracts": ["@adatechnology/payment-contracts@0.4.0", "", { "dependencies": { "zod": "^3.24.1" } }, "sha512-a2JtVMFeKiID8HvHE6vD8GEJBljsKAbtcoNeenULCYo4TGWYSClGL0q8OJGVSfuiZxQ6ZSnOTr14zUwEcohz+g=="],
 
     "@adatechnology/products-ui": ["@adatechnology/products-ui@0.1.0", "", { "dependencies": { "@adatechnology/image-cutout": "0.1.0", "lucide-react": "^1.21.0" }, "peerDependencies": { "react": "^18 || ^19", "react-dom": "^18 || ^19" } }, "sha512-6OWHU6L+ZG+gtLTTSWyI0OYheqRNpBgoh7XTMp3D+j80+wLMKFcOBtnnpSyobaeuKokwHtYNCVbbDRpicmydcg=="],
 
