@@ -1,5 +1,6 @@
 import { useBrandingStore } from '@/stores/brandingStore'
 import { initialsOfBrand } from '@/lib/branding'
+import { DEFAULT_BRANDING } from '@/constants/branding'
 
 interface BrandIdentityProps {
   size?: 'small' | 'large'
@@ -34,7 +35,23 @@ export function BrandIdentity({ size = 'small', tone = 'light', layout = 'inline
           {initialsOfBrand(branding.name)}
         </span>
       )}
-      <span className={`${nameClass} ${nameColor} font-bold leading-tight truncate max-w-full`}>{branding.name}</span>
+      <span className={`${nameClass} ${nameColor} font-bold leading-tight truncate max-w-full`}>
+        {branding.name === DEFAULT_BRANDING.name ? <PlatformWordmark tone={tone} /> : branding.name}
+      </span>
     </div>
+  )
+}
+
+// Nome da plataforma com o "AdA" destacado, no mesmo tom do A do monograma.
+const PLATFORM_HIGHLIGHT = 'AdA'
+
+function PlatformWordmark({ tone }: { tone: 'light' | 'dark' }) {
+  const highlightColor = tone === 'light' ? 'text-amber-400' : 'text-brand-600'
+  const prefix = DEFAULT_BRANDING.name.slice(0, -PLATFORM_HIGHLIGHT.length)
+  return (
+    <>
+      {prefix}
+      <span className={highlightColor}>{PLATFORM_HIGHLIGHT}</span>
+    </>
   )
 }
