@@ -234,6 +234,11 @@ histórico de status chega pela sincronização. Fora da janela de 24 h vai o te
 `Oi! Temos novidades sobre o seu pedido *{{1}}*: {{2}} Qualquer dúvida, é só responder esta mensagem. 😊`). A nota
 fiscal vai pelo mesmo WhatsApp (sem n8n).
 
+**Endereço e complemento:** endereço achado no mapa → pin (`location`) + botões "Tem complemento?" (⏭️ Sem complemento /
+✏️ Corrigir endereço / ↩️ Voltar); sem coordenadas → texto com o link do Google Maps e os mesmos botões. O nó Enviar
+Resposta manda todo texto com link com `preview_url: true` (a Meta mostra a prévia da primeira URL; mensagem interativa
+não tem prévia). Endereço pelo CEP que o Nominatim não acha tenta de novo sem o bairro.
+
 **Total do pedido = itens + taxa de entrega** (`orders.delivery_fee` guarda a taxa; a nota fiscal leva só os itens).
 Pago na entrega/retirada entra no caixa ao concluir (`RecordOrderPaymentsUseCase`, uma entrada por parte). Encomenda só
 aparece na fila da cozinha 40 min (retirada) ou 60 min (entrega) antes da hora marcada.
