@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
+import { formatBRL } from '@/lib/listing'
 
 interface DashboardMetrics {
   ordersToday: number
@@ -37,7 +38,7 @@ export function DashboardPage() {
         <MetricCard label="Pedidos hoje" value={metrics?.ordersToday ?? 0} />
         <MetricCard
           label="Faturamento hoje"
-          value={`R$ ${parseFloat(metrics?.revenuToday ?? '0').toFixed(2)}`}
+          value={formatBRL(metrics?.revenuToday)}
           accent
         />
         <MetricCard label="Pedidos em aberto" value={metrics?.pendingOrders ?? 0} />
