@@ -1,4 +1,4 @@
-import { eq, count, ilike, or, asc, desc, and, sum, max, min, getTableColumns, type SQL } from 'drizzle-orm'
+import { eq, ne, count, ilike, or, asc, desc, and, sum, max, min, getTableColumns, type SQL } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type {
   CustomerRepository,
@@ -65,7 +65,9 @@ export class DrizzleCustomerRepository implements CustomerRepository {
           schema.orders,
           and(
             eq(schema.orders.customerId, schema.customers.id),
-            eq(schema.orders.status, 'completed')
+            // Pedido aberto também conta: só o concluído deixava quem acabou de pedir com 0 / R$ 0,00
+            // até a entrega. Cancelado não é compra.
+            ne(schema.orders.status, 'cancelled')
           )
         )
         .where(whereClause)
@@ -168,7 +170,7 @@ export class DrizzleCustomerRepository implements CustomerRepository {
         .where(
           and(
             eq(schema.orders.customerId, id),
-            eq(schema.orders.status, 'completed')
+            ne(schema.orders.status, 'cancelled')
           )
         ),
 
