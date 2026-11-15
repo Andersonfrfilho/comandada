@@ -14,9 +14,42 @@ export const ORDER_PAYMENT_STATUS = {
   AWAITING: 'awaiting',
   PAID: 'paid',
   FAILED: 'failed',
+  PARTIALLY_REFUNDED: 'partially_refunded',
   REFUNDED: 'refunded',
 } as const
 export type OrderPaymentStatus = (typeof ORDER_PAYMENT_STATUS)[keyof typeof ORDER_PAYMENT_STATUS]
+
+// Pagamento online que ainda tem dinheiro para devolver.
+export const REFUNDABLE_ONLINE_STATUSES: readonly OrderPaymentStatus[] = [
+  ORDER_PAYMENT_STATUS.PAID,
+  ORDER_PAYMENT_STATUS.PARTIALLY_REFUNDED,
+]
+
+// Estorno: `online` passa pelo provedor; `manual` é a equipe devolvendo no balcão.
+export const REFUND_METHOD = { ONLINE: 'online', MANUAL: 'manual' } as const
+export type RefundMethod = (typeof REFUND_METHOD)[keyof typeof REFUND_METHOD]
+
+// `processing` reserva o valor no pedido enquanto o provedor responde.
+export const PAYMENT_REFUND_STATUS = {
+  PROCESSING: 'processing',
+  APPROVED: 'approved',
+  PENDING: 'pending',
+  FAILED: 'failed',
+} as const
+export type PaymentRefundStatus = (typeof PAYMENT_REFUND_STATUS)[keyof typeof PAYMENT_REFUND_STATUS]
+
+// Motivos gravados no estorno quando não foi a equipe que pediu.
+export const REFUND_REASONS = {
+  provider: 'Estorno feito no provedor',
+  chargeback: 'Contestação (chargeback)',
+  paidAfterCancellation: 'Pago depois do cancelamento',
+  partialConfirmation: 'Itens em falta',
+  partialConfirmationDeclined: 'Cliente recusou o pedido sem os itens em falta',
+  cancelled: 'Pedido cancelado',
+} as const
+
+// Diferença de centavos que ainda conta como "tudo devolvido".
+export const REFUND_CENTS_TOLERANCE = 0.005
 
 // Pedido nessas situações não aparece na fila da cozinha.
 export const PAYMENT_STATUSES_HELD_FROM_KITCHEN: readonly OrderPaymentStatus[] = [
@@ -64,6 +97,8 @@ export const PAYMENT_CUSTOMER_MESSAGES = {
   expired: (code: string) =>
     `⌛ *O prazo para pagar o pedido ${code} acabou* e ele foi cancelado.\n\nSe ainda quiser, é só mandar um *oi* que a gente monta de novo rapidinho! 😊`,
   refunded: (code: string) => `↩️ O pagamento do pedido *${code}* foi estornado. O valor volta pelo mesmo meio que você pagou. 🧡`,
+  partiallyRefunded: (code: string, amount: string) =>
+    `↩️ Devolvemos *${amount}* do pedido *${code}*. O valor volta pelo mesmo meio que você pagou. 🧡`,
 } as const
 
 // Mesmos avisos em uma linha, para o template de fora da janela de 24 h.
@@ -71,10 +106,16 @@ export const PAYMENT_TEMPLATE_TEXTS = {
   paid: 'Recebemos o pagamento e ele já foi pra cozinha! 👨‍🍳',
   expired: 'O prazo para pagar acabou e ele foi cancelado. Se quiser, é só pedir de novo. 😊',
   refunded: 'O pagamento foi estornado e volta pelo mesmo meio que você pagou. 🧡',
+  partiallyRefunded: 'Devolvemos parte do valor, que volta pelo mesmo meio que você pagou. 🧡',
 } as const
 
 export const PAYMENT_ERROR_MESSAGES = {
   providerUnsupported: 'Payment provider not supported',
   accountNotFound: 'Payment account not configured',
   credentialsRequired: 'Access token and webhook secret are required to connect the account',
+  nothingToRefund: 'Este pedido não tem pagamento para devolver',
+  refundExceeds: (available: string) => `O valor passa do que ainda pode ser devolvido (${available})`,
+  refundUnsupported: 'O provedor desta conta não faz estorno pela API: devolva pelo painel do provedor',
+  refundRejected: (message: string) => `O provedor recusou o estorno: ${message}`,
+  refundForbidden: 'Sem permissão para estornar',
 } as const

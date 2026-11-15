@@ -19,7 +19,15 @@ const NOW = new Date('2026-11-13T13:10:00Z')
 
 type MercadoPagoPayment = { status: string; payment_method_id?: string; payment_type_id?: string }
 
-function buildHarness(options: { paymentStatus?: string; orderStatus?: string; payment?: MercadoPagoPayment; accountActive?: boolean } = {}) {
+function buildHarness(
+  options: {
+    paymentStatus?: string
+    orderStatus?: string
+    payment?: MercadoPagoPayment
+    accountActive?: boolean
+    refundable?: number
+  } = {}
+) {
   const order = {
     id: ORDER_ID,
     establishmentId: ESTABLISHMENT_ID,
@@ -98,15 +106,37 @@ function buildHarness(options: { paymentStatus?: string; orderStatus?: string; p
   const messages: string[] = []
   const cash: Array<{ amount: number; paymentMethod?: string | undefined }> = []
   const broadcasts: string[] = []
+  const ledgerCompletions: Array<{ amount: number; chargeStatus: string | undefined; reason: string | null | undefined }> = []
+  const refundsAfterCancellation: string[] = []
+  const ledger = {
+    summary: async () => ({
+      paid: 50.4,
+      refunded: 50.4 - (options.refundable ?? 50.4),
+      refundable: options.refundable ?? 50.4,
+      onlineCharge: charge as never,
+      cashMethod: null,
+    }),
+    reserve: async (input: { amount: number; reason?: string | null | undefined }) =>
+      ({ id: 'refund-1', amount: input.amount.toFixed(2), reason: input.reason }) as never,
+    complete: async (_order: unknown, refund: { amount: string; reason: string | null }, result: { chargeStatus?: string | undefined }) => {
+      ledgerCompletions.push({ amount: Number(refund.amount), chargeStatus: result.chargeStatus, reason: refund.reason })
+      order.paymentStatus = 'refunded'
+      return {} as never
+    },
+  }
   const transitions = new OrderPaymentTransitions({
     db: database as never,
     wsHub: { publishBroadcast: async (_establishmentId: string, event: string) => { broadcasts.push(event) } } as never,
     botMessages: { sendText: async ({ body }) => { messages.push(body) } },
     addCashMovement: { execute: async (input) => { cash.push(input); return {} as never } },
+    ledger,
+    refundAfterCancellation: async (paidOrder) => {
+      refundsAfterCancellation.push(paidOrder.id)
+    },
   })
   const useCase = new HandlePaymentWebhookUseCase(database as never, accounts, transitions)
   const sweep = new ExpireStaleChargesUseCase(database as never, accounts, transitions)
-  return { useCase, sweep, order, charge, messages, cash, broadcasts, apiCalls, chargeUpdates }
+  return { useCase, sweep, order, charge, messages, cash, broadcasts, apiCalls, chargeUpdates, ledgerCompletions, refundsAfterCancellation }
 }
 
 function signedWebhook(secret: string = SECRET) {
@@ -182,11 +212,39 @@ describe('HandlePaymentWebhookUseCase', () => {
     expect(harness.cash[0]?.paymentMethod).toBe('card_credit')
   })
 
-  it('marks a refund on a paid order', async () => {
+  it('records a refund made at the provider panel in the refund ledger (and so the cash register)', async () => {
     const harness = buildHarness({ paymentStatus: 'paid', payment: { status: 'refunded' } })
     await harness.useCase.execute({ establishmentId: ESTABLISHMENT_ID, provider: 'mercadopago', webhook: signedWebhook(), now: NOW })
     expect(harness.order.paymentStatus).toBe('refunded')
-    expect(harness.messages[0]).toContain('estornado')
+    expect(harness.ledgerCompletions).toEqual([{ amount: 50.4, chargeStatus: 'refunded', reason: 'Estorno feito no provedor' }])
+  })
+
+  it('records a chargeback with its own reason', async () => {
+    const harness = buildHarness({ paymentStatus: 'paid', payment: { status: 'charged_back' } })
+    await harness.useCase.execute({ establishmentId: ESTABLISHMENT_ID, provider: 'mercadopago', webhook: signedWebhook(), now: NOW })
+    expect(harness.ledgerCompletions).toEqual([{ amount: 50.4, chargeStatus: 'chargeback', reason: 'Contestação (chargeback)' }])
+  })
+
+  it('does not count again a refund that already went through the panel', async () => {
+    const harness = buildHarness({ paymentStatus: 'refunded', payment: { status: 'refunded' } })
+    const result = await harness.useCase.execute({ establishmentId: ESTABLISHMENT_ID, provider: 'mercadopago', webhook: signedWebhook(), now: NOW })
+    expect(result.applied).toBe(false)
+    expect(harness.ledgerCompletions).toHaveLength(0)
+    expect(harness.messages).toHaveLength(0)
+  })
+
+  it('closes a partial refund when the provider says the rest was refunded too', async () => {
+    const harness = buildHarness({ paymentStatus: 'partially_refunded', refundable: 20.4, payment: { status: 'refunded' } })
+    await harness.useCase.execute({ establishmentId: ESTABLISHMENT_ID, provider: 'mercadopago', webhook: signedWebhook(), now: NOW })
+    expect(harness.ledgerCompletions).toEqual([{ amount: 20.4, chargeStatus: 'refunded', reason: 'Estorno feito no provedor' }])
+  })
+
+  it('refunds by itself when the payment lands after the order was cancelled', async () => {
+    const harness = buildHarness({ paymentStatus: 'failed', orderStatus: 'cancelled' })
+    await harness.useCase.execute({ establishmentId: ESTABLISHMENT_ID, provider: 'mercadopago', webhook: signedWebhook(), now: NOW })
+    expect(harness.refundsAfterCancellation).toEqual([ORDER_ID])
+    expect(harness.broadcasts).not.toContain('kitchen:order_queued')
+    expect(harness.messages.some((message) => message.includes('cozinha'))).toBe(false)
   })
 })
 

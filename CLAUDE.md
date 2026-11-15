@@ -268,6 +268,17 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
   aprovado → `paid`, movimento no caixa aberto, cozinha avisada, cliente avisado; expirado/cancelado → pedido cancelado.
 - Link de cartão vencido não gera webhook: a varredura a cada 5 min (`ExpireStaleChargesUseCase`) cancela.
 - `API_PUBLIC_URL` (HTTPS) monta o `notification_url`.
+- **Cancelamento:** cancelar pedido com Pix em aberto cancela a cobrança no Mercado Pago (`OrderCancellationPayments`,
+  hook do `UpdateOrderStatusUseCase`). Link de cartão não cancela pela API; pago depois de cancelado → estorno automático.
+- **Estorno** (`RefundOrderPaymentUseCase`, `POST /orders/:id/refunds`, permissão `orders:delete` = gerente/admin): total
+  ou parcial. Pago online → `refundCharge` do SDK; pago no balcão → devolução manual (só registro + caixa). Livro em
+  `payment_refunds`; `orders.refunded_amount` é reservado antes de chamar o provedor (`OrderRefundLedger`), então dois
+  cliques ou o webhook do mesmo estorno não devolvem duas vezes. Recusa do provedor desfaz a reserva.
+- Estorno feito direto no painel do Mercado Pago chega pelo webhook e entra no mesmo livro. Toda devolução vira
+  lançamento `refund` no caixa (saída) e relatórios somam `payment - refund` (`netCashAmount`).
+- Item em falta com pedido pago online: a diferença é estornada sozinha (`refundedOnline` na resposta do bot); recusa do
+  cliente cancela e devolve tudo. Painel: quadro **Pagamento** no detalhe do pedido (`GET /orders/:id/payments`).
+- Teste de banco: `TEST_DATABASE_URL=postgres://… bun test integration` (inclui o livro de estornos).
 
 ## Agenda (encomendas e reservas)
 

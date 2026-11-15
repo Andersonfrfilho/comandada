@@ -37,7 +37,9 @@ export class UpdateOrderStatusUseCase {
     private readonly triggerFiscal?: TriggerFiscalEmissionUseCase,
     private readonly deductStock?: DeductStockForOrderUseCase,
     private readonly notifyCustomer?: Pick<NotifyOrderStatusUseCase, 'execute'>,
-    private readonly recordPayments?: Pick<RecordOrderPaymentsUseCase, 'execute'>
+    private readonly recordPayments?: Pick<RecordOrderPaymentsUseCase, 'execute'>,
+    // Cancelado com Pix em aberto: cancela a cobrança no provedor (pagamentos). Falha não desfaz o cancelamento.
+    private readonly onCancelled?: (order: schema.Order) => Promise<unknown>
   ) {}
 
   async execute(input: UpdateStatusInput) {
@@ -97,6 +99,12 @@ export class UpdateOrderStatusUseCase {
       .returning()
 
     await this.stampItemPreparation(input.orderId, input.newStatus, now)
+
+    if (input.newStatus === 'cancelled' && this.onCancelled && updated) {
+      await this.onCancelled(updated).catch((error: unknown) =>
+        console.error('[Orders] payment release on cancel failed', error instanceof Error ? error.message : error)
+      )
+    }
 
     // Histórico: quem mudou, de qual status para qual e quando.
     await this.db.insert(schema.orderStatusLogs).values({

@@ -17,7 +17,7 @@ import { CONVERSATION_LINK_LABEL, PARTIAL_CONFIRMATION_LABELS } from '@/constant
 import { OrderProgressBar } from './OrderProgressBar'
 import { OrderStatusControl } from './OrderStatusControl'
 import { OrderItemsCard, type OrderPartialConfirmationState } from './OrderItemsCard'
-import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import { OrderPaymentCard } from './OrderPaymentCard'
 import { OrderDeliveryCard } from './OrderDeliveryCard'
 import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
 
@@ -252,25 +252,11 @@ export function OrderDetailPage() {
             partialConfirmation={order.partialConfirmation}
           />
 
-          <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Pagamento</h2>
-            <div className="space-y-2">
-              {(order.payments ?? []).map((payment) => (
-                <div key={payment.id} className="text-sm">
-                  <div className="flex items-center justify-between">
-                    <span className="text-gray-800">
-                      {paymentMethodLabel(payment.paymentTypeName)}
-                      {payment.splitLabel ? ` · ${payment.splitLabel}` : ''}
-                    </span>
-                    <span className="text-gray-600 whitespace-nowrap">{formatBrl(payment.amount)}</span>
-                  </div>
-                  {paymentChangeText(payment) && (
-                    <p className="text-xs font-medium text-amber-700">{paymentChangeText(payment)}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-          </section>
+          <OrderPaymentCard
+            orderId={order.id}
+            orderCancelled={order.status === 'cancelled'}
+            payments={order.payments ?? []}
+          />
 
           {order.fiscalDocument && (
             <section className="bg-white rounded-xl shadow-sm p-4 mb-4">

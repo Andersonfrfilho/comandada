@@ -61,7 +61,7 @@ export class CashierController {
       .reduce((s, m) => s + Number(m.amount), 0)
 
     const totalOut = movements
-      .filter((m) => m.type === 'withdrawal')
+      .filter((m) => m.type === 'withdrawal' || m.type === 'refund')
       .reduce((s, m) => s + Number(m.amount), 0)
 
     const balance = Number(register.openingAmount) + totalIn - totalOut
