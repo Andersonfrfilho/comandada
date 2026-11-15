@@ -28,6 +28,15 @@ import {
   type ProductSuggestion,
 } from '@adatechnology/products-ui'
 import { productsApiAdapter } from '@/lib/productsApiAdapter'
+import { FilterSelect, SearchField, FilterField } from '@/components/ui/ListFilters'
+import {
+  NO_SECTION,
+  PRODUCT_SORT_OPTIONS,
+  PRODUCT_STATUS_OPTIONS,
+  filterAndSortProducts,
+  type ProductSort,
+  type ProductStatusFilter,
+} from './productListing'
 
 const MONEY_FORMAT: MoneyFormat = { currency: 'BRL', locale: 'pt-BR' }
 
@@ -167,11 +176,24 @@ function CatalogPageContent() {
     queryFn: () => api.get('/sections', accessToken ?? undefined) as Promise<Section[]>,
   })
 
-  const visibleProducts = selectedCatId === null
+  const [productSearch, setProductSearch] = useState('')
+  const [productStatus, setProductStatus] = useState<ProductStatusFilter | ''>('')
+  const [productSectionId, setProductSectionId] = useState('')
+  const [productSort, setProductSort] = useState<ProductSort>('menu')
+
+  const catalogProducts = selectedCatId === null
     ? allProducts
     : selectedCatId === '__none__'
     ? allProducts.filter((p) => p.catalogId === null)
     : allProducts.filter((p) => p.catalogId === selectedCatId)
+
+  const visibleProducts = filterAndSortProducts(catalogProducts, {
+    search: productSearch,
+    status: productStatus,
+    sectionId: productSectionId,
+    sort: productSort,
+  })
+  const hasProductFilters = !!productSearch.trim() || !!productStatus || !!productSectionId
 
   // Mutations de catálogo
   const createCat = useMutation({
@@ -515,7 +537,11 @@ function CatalogPageContent() {
                 ? 'Sem catálogo'
                 : (catalogs.find((c) => c.id === selectedCatId)?.name ?? '')}
             </h1>
-            <p className="text-sm text-gray-400">{visibleProducts.length} produto{visibleProducts.length !== 1 ? 's' : ''}</p>
+            <p className="text-sm text-gray-400">
+              {hasProductFilters
+                ? `${visibleProducts.length} de ${catalogProducts.length} produto${catalogProducts.length !== 1 ? 's' : ''}`
+                : `${catalogProducts.length} produto${catalogProducts.length !== 1 ? 's' : ''}`}
+            </p>
             <ExpiringBatchBadge className="mt-1" />
           </div>
           <button
@@ -527,9 +553,53 @@ function CatalogPageContent() {
           </button>
         </div>
 
+        <div className="flex flex-wrap items-end gap-3 px-6 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+          <SearchField value={productSearch} onChange={setProductSearch} placeholder="Nome, descrição ou código de barras" />
+          <FilterField label="Status" className="w-full sm:w-32">
+            <FilterSelect value={productStatus} onChange={setProductStatus} options={PRODUCT_STATUS_OPTIONS} />
+          </FilterField>
+          <FilterField label="Seção" className="w-full sm:w-40">
+            <FilterSelect
+              value={productSectionId}
+              onChange={setProductSectionId}
+              options={[
+                ...sections.map((section) => ({ value: section.id, label: section.name })),
+                { value: NO_SECTION, label: 'Sem seção' },
+              ]}
+              allLabel="Todas"
+            />
+          </FilterField>
+          <FilterField label="Ordenar por" className="w-full sm:w-44">
+            <select
+              value={productSort}
+              onChange={(event) => setProductSort(event.target.value as ProductSort)}
+              className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+            >
+              {PRODUCT_SORT_OPTIONS.map((option) => (
+                <option key={option.value} value={option.value}>{option.label}</option>
+              ))}
+            </select>
+          </FilterField>
+          {hasProductFilters && (
+            <button
+              type="button"
+              onClick={() => {
+                setProductSearch('')
+                setProductStatus('')
+                setProductSectionId('')
+              }}
+              className="px-3 py-2 text-sm text-gray-500 hover:text-gray-800"
+            >
+              Limpar filtros
+            </button>
+          )}
+        </div>
+
         <div className="flex-1 overflow-y-auto p-6">
           {visibleProducts.length === 0 ? (
-            <p className="text-gray-400 text-center py-16">Nenhum produto neste catálogo</p>
+            <p className="text-gray-400 text-center py-16">
+              {hasProductFilters ? 'Nenhum produto com esses filtros' : 'Nenhum produto neste catálogo'}
+            </p>
           ) : (
             <div className="grid gap-3">
               {visibleProducts.map((prod) => {

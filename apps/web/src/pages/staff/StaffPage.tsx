@@ -6,6 +6,14 @@ import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
 import { Plus, Pencil, ToggleRight, Lock, Trash2 } from 'lucide-react'
+import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
+import { matchesSearch, sortRows } from '@/lib/listing'
+
+const STAFF_STATUS_OPTIONS = [
+  { value: 'active', label: 'Ativos' },
+  { value: 'inactive', label: 'Inativos' },
+] as const
+type StaffStatusFilter = (typeof STAFF_STATUS_OPTIONS)[number]['value']
 
 interface StaffMember {
   id: string
@@ -44,6 +52,9 @@ export function StaffPage() {
   const [selected, setSelected] = useState<StaffMember | null>(null)
   const [form, setForm] = useState<FormData>(EMPTY_FORM)
   const [error, setError] = useState<string | null>(null)
+  const [staffSearch, setStaffSearch] = useState('')
+  const [staffRoleFilter, setStaffRoleFilter] = useState('')
+  const [staffStatusFilter, setStaffStatusFilter] = useState<StaffStatusFilter | ''>('')
 
   const { data: staff = [], isLoading } = useQuery({
     queryKey: ['staff'],
@@ -152,12 +163,27 @@ export function StaffPage() {
     resetPasswordMutation.isPending ||
     deleteMutation.isPending
 
+  const visibleStaff = sortRows(
+    staff.filter(
+      (member) =>
+        (!staffRoleFilter || member.roleId === staffRoleFilter) &&
+        (staffStatusFilter !== 'active' || member.active) &&
+        (staffStatusFilter !== 'inactive' || !member.active) &&
+        matchesSearch(staffSearch, [member.name, member.email])
+    ),
+    (member) => member.name,
+    'asc'
+  )
+  const hasStaffFilters = !!staffSearch.trim() || !!staffRoleFilter || !!staffStatusFilter
+
   return (
     <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-4">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Funcionários</h1>
-          <p className="text-sm text-gray-500 mt-0.5">{staff.length} cadastrado{staff.length !== 1 ? 's' : ''}</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {hasStaffFilters ? `${visibleStaff.length} de ${staff.length}` : staff.length} cadastrado{staff.length !== 1 ? 's' : ''}
+          </p>
         </div>
         <button
           onClick={openCreate}
@@ -167,6 +193,29 @@ export function StaffPage() {
           Novo funcionário
         </button>
       </div>
+
+      {staff.length > 0 && (
+        <FilterBar
+          hasActiveFilters={hasStaffFilters}
+          onClear={() => {
+            setStaffSearch('')
+            setStaffRoleFilter('')
+            setStaffStatusFilter('')
+          }}
+        >
+          <SearchField value={staffSearch} onChange={setStaffSearch} placeholder="Nome ou e-mail" />
+          <FilterField label="Cargo">
+            <FilterSelect
+              value={staffRoleFilter}
+              onChange={setStaffRoleFilter}
+              options={roles.map((role) => ({ value: role.id, label: role.name }))}
+            />
+          </FilterField>
+          <FilterField label="Situação" className="w-full sm:w-32">
+            <FilterSelect value={staffStatusFilter} onChange={setStaffStatusFilter} options={STAFF_STATUS_OPTIONS} />
+          </FilterField>
+        </FilterBar>
+      )}
 
       {isLoading && (
         <div className="grid gap-3">
@@ -183,7 +232,10 @@ export function StaffPage() {
       )}
 
       <div className="grid gap-3">
-        {staff.map((member) => (
+        {hasStaffFilters && visibleStaff.length === 0 && (
+          <p className="text-gray-400 text-center py-10">Nenhum funcionário com esses filtros</p>
+        )}
+        {visibleStaff.map((member) => (
           <div key={member.id} className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
               {member.name.charAt(0).toUpperCase()}

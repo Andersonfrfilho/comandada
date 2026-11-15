@@ -6,7 +6,8 @@
     "dev": "vite --port 4000",
     "build": "tsc && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "bun test src"
   },
   "dependencies": {
     "@adatechnology/conversations-ui": "0.14.0",

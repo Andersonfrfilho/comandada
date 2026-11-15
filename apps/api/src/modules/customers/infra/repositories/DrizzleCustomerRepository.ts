@@ -1,4 +1,4 @@
-import { eq, count, ilike, or, asc, desc, and, sum, max, min, getTableColumns, type SQL } from 'drizzle-orm'
+import { eq, count, ilike, or, asc, desc, and, sum, max, min, gte, sql, getTableColumns, type SQL } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type {
   CustomerRepository,
@@ -9,16 +9,98 @@ import type {
   ListCustomersByEstablishmentParams,
   CustomerSortField,
   SortDirection,
+  CustomerSegment,
 } from '../../domain/repositories/CustomerRepository'
+import { CUSTOMER_INACTIVE_DAYS } from '../../domain/repositories/CustomerRepository'
+import { containsPattern } from '@/shared/utils/listQuery'
 import * as schema from '@/infra/database/schema'
 import type { Customer } from '@/infra/database/schema'
 
-function buildCustomerOrderBy(sortBy: CustomerSortField, sortDirection: SortDirection): SQL {
+const orderCountExpression = count(schema.orders.id)
+const totalSpentExpression = sql<string>`coalesce(sum(${schema.orders.totalAmount}), 0)`
+const averageTicketExpression = sql<string>`coalesce(round(sum(${schema.orders.totalAmount}) / nullif(count(${schema.orders.id}), 0), 2), 0)`
+const lastOrderAtExpression = max(schema.orders.receivedAt)
+
+function buildCustomerOrderBy(sortBy: CustomerSortField, sortDirection: SortDirection): SQL[] {
   const direction = sortDirection === 'asc' ? asc : desc
-  if (sortBy === 'name') return direction(schema.customers.name)
-  if (sortBy === 'orderCount') return direction(count(schema.orders.id))
-  if (sortBy === 'totalSpent') return direction(sum(schema.orders.totalAmount))
-  return direction(schema.customers.createdAt)
+  // Desempate pelo id: com a mesma contagem/valor, a ordem entre páginas fica estável.
+  const tieBreaker = asc(schema.customers.id)
+  if (sortBy === 'name') return [direction(schema.customers.name), tieBreaker]
+  if (sortBy === 'orderCount') return [direction(orderCountExpression), tieBreaker]
+  if (sortBy === 'totalSpent') return [direction(totalSpentExpression), tieBreaker]
+  if (sortBy === 'averageTicket') return [direction(averageTicketExpression), tieBreaker]
+  if (sortBy === 'lastOrderAt') {
+    // Quem nunca pediu fica no fim nos dois sentidos.
+    return [sql`${lastOrderAtExpression} ${sql.raw(sortDirection === 'asc' ? 'asc' : 'desc')} nulls last`, tieBreaker]
+  }
+  return [direction(schema.customers.createdAt), tieBreaker]
+}
+
+// Filtros que dependem dos pedidos (contagem, último pedido) só existem depois do GROUP BY: vão no HAVING.
+function buildSegmentHaving(segment: CustomerSegment | undefined, now: Date): SQL | undefined {
+  if (segment === 'with_orders') return sql`${orderCountExpression} > 0`
+  if (segment === 'without_orders') return sql`${orderCountExpression} = 0`
+  if (segment === 'inactive') {
+    const cutoff = new Date(now.getTime() - CUSTOMER_INACTIVE_DAYS * 24 * 60 * 60 * 1000)
+    return sql`${orderCountExpression} > 0 and ${lastOrderAtExpression} < ${cutoff.toISOString()}`
+  }
+  return undefined
+}
+
+export function buildCustomerListQueries(
+  db: NodePgDatabase<typeof schema>,
+  params: ListCustomersByEstablishmentParams,
+  now: Date = new Date()
+) {
+  const page = params.page ?? 1
+  const pageSize = params.pageSize ?? 20
+  const offset = (page - 1) * pageSize
+
+  const searchPattern = params.search ? containsPattern(params.search) : undefined
+  const searchDigits = params.search?.replace(/\D/g, '') ?? ''
+  const searchCondition = searchPattern
+    ? or(
+        ilike(schema.customers.name, searchPattern),
+        ilike(schema.customers.whatsappNumber, searchPattern),
+        ilike(schema.customers.document, searchPattern),
+        // "(11) 98888-7777" acha o número salvo só com dígitos.
+        searchDigits.length >= 4 ? ilike(schema.customers.whatsappNumber, `%${searchDigits}%`) : undefined
+      )
+    : undefined
+
+  const whereClause = and(
+    eq(schema.customers.establishmentId, params.establishmentId),
+    searchCondition,
+    params.minRating ? gte(schema.customers.rating, params.minRating) : undefined,
+    params.segment === 'birthday_month'
+      ? sql`extract(month from ${schema.customers.birthDate}) = ${now.getMonth() + 1}`
+      : undefined
+  )
+  const havingClause = buildSegmentHaving(params.segment, now)
+
+  const groupedQuery = db
+    .select({
+      ...getTableColumns(schema.customers),
+      orderCount: orderCountExpression,
+      totalSpent: totalSpentExpression,
+      averageTicket: averageTicketExpression,
+      lastOrderAt: lastOrderAtExpression,
+    })
+    .from(schema.customers)
+    .leftJoin(
+      schema.orders,
+      and(eq(schema.orders.customerId, schema.customers.id), eq(schema.orders.status, 'completed'))
+    )
+    .where(whereClause)
+    .groupBy(schema.customers.id)
+    .having(havingClause)
+
+  const rowsQuery = groupedQuery
+    .orderBy(...buildCustomerOrderBy(params.sortBy ?? 'createdAt', params.sortDirection ?? 'desc'))
+    .limit(pageSize)
+    .offset(offset)
+
+  return { page, pageSize, groupedQuery, rowsQuery }
 }
 
 export class DrizzleCustomerRepository implements CustomerRepository {
@@ -31,59 +113,24 @@ export class DrizzleCustomerRepository implements CustomerRepository {
     pageSize: number
     totalPages: number
   }> {
-    const page = params.page ?? 1
-    const pageSize = params.pageSize ?? 20
-    const offset = (page - 1) * pageSize
+    const { page, pageSize, groupedQuery, rowsQuery } = buildCustomerListQueries(this.db, params)
 
-    const searchCondition = params.search
-      ? or(
-          ilike(schema.customers.name, `%${params.search}%`),
-          ilike(schema.customers.whatsappNumber, `%${params.search}%`)
-        )
-      : undefined
-
-    const whereClause = and(
-      eq(schema.customers.establishmentId, params.establishmentId),
-      searchCondition
-    )
-
+    // O total conta sobre o resultado agrupado, para respeitar os filtros do HAVING.
     const [totalResult, rows] = await Promise.all([
-      this.db
-        .select({ count: count() })
-        .from(schema.customers)
-        .where(whereClause),
-
-      this.db
-        .select({
-          ...getTableColumns(schema.customers),
-          orderCount: count(schema.orders.id),
-          totalSpent: sum(schema.orders.totalAmount),
-          lastOrderAt: max(schema.orders.receivedAt),
-        })
-        .from(schema.customers)
-        .leftJoin(
-          schema.orders,
-          and(
-            eq(schema.orders.customerId, schema.customers.id),
-            eq(schema.orders.status, 'completed')
-          )
-        )
-        .where(whereClause)
-        .groupBy(schema.customers.id)
-        .orderBy(buildCustomerOrderBy(params.sortBy ?? 'createdAt', params.sortDirection ?? 'desc'))
-        .limit(pageSize)
-        .offset(offset),
+      this.db.select({ count: count() }).from(groupedQuery.as('filtered_customers')),
+      rowsQuery,
     ])
 
     const total = totalResult[0]?.count ?? 0
     const totalPages = Math.ceil(total / pageSize)
 
     return {
-      data: rows.map((r) => ({
-        ...r,
-        orderCount: Number(r.orderCount ?? 0),
-        totalSpent: r.totalSpent ?? '0',
-        lastOrderAt: r.lastOrderAt ? r.lastOrderAt.toISOString() : null,
+      data: rows.map((row) => ({
+        ...row,
+        orderCount: Number(row.orderCount ?? 0),
+        totalSpent: String(row.totalSpent ?? '0'),
+        averageTicket: String(row.averageTicket ?? '0'),
+        lastOrderAt: row.lastOrderAt ? new Date(row.lastOrderAt).toISOString() : null,
       })),
       total,
       page,

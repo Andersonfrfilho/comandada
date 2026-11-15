@@ -1,10 +1,14 @@
-import { useMemo, useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { Receipt, FileDown, Printer, Trash2, RefreshCw, X } from 'lucide-react'
 import { API_URL } from '@/lib/apiEndpoints'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Pagination } from '@/components/ui/Pagination'
+import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
+import { useListParams } from '@/hooks/useListParams'
+import { formatBRL, formatDateTime, plural } from '@/lib/listing'
 
 
 type FiscalDocStatus = 'pending' | 'emitting' | 'authorized' | 'rejected' | 'cancelled'
@@ -50,21 +54,62 @@ const FILTERABLE_STATUSES: FiscalDocStatus[] = [
   'cancelled',
 ]
 
-function formatCurrency(value: string | null): string {
-  return `R$ ${Number(value ?? 0).toFixed(2)}`
+interface FiscalDocsPage {
+  data: FiscalDoc[]
+  total: number
+  page: number
+  pageSize: number
+  totalPages: number
+}
+
+const FISCAL_SORT_FIELDS = ['createdAt', 'totalLiquido', 'numeroDocumento'] as const
+type FiscalSortField = (typeof FISCAL_SORT_FIELDS)[number]
+
+type FiscalModel = 'nfce' | 'nfe' | 'sat'
+const MODEL_OPTIONS: ReadonlyArray<{ value: FiscalModel; label: string }> = [
+  { value: 'nfce', label: 'NFC-e' },
+  { value: 'nfe', label: 'NF-e' },
+  { value: 'sat', label: 'SAT' },
+]
+
+function parseStatusList(value: string): FiscalDocStatus[] {
+  return value.split(',').filter((item): item is FiscalDocStatus => FILTERABLE_STATUSES.some((status) => status === item))
 }
 
 export function FiscalDocumentsPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
 
-  const [statusFilter, setStatusFilter] = useState<Set<FiscalDocStatus>>(new Set())
-  const [search, setSearch] = useState('')
-
-  const { data: documents = [], isLoading } = useQuery({
-    queryKey: ['fiscal-documents'],
-    queryFn: () => api.get<FiscalDoc[]>('/fiscal-documents', accessToken ?? undefined),
+  const list = useListParams<FiscalSortField>({
+    sortFields: FISCAL_SORT_FIELDS,
+    defaultSort: { field: 'createdAt', direction: 'desc' },
   })
+  const statusFilter = parseStatusList(list.filter('status'))
+  const modelParam = list.filter('model')
+  const modelFilter: FiscalModel | '' = MODEL_OPTIONS.some((option) => option.value === modelParam) ? (modelParam as FiscalModel) : ''
+  const dateFrom = list.filter('dateFrom')
+  const dateTo = list.filter('dateTo')
+  const hasActiveFilter = statusFilter.length > 0 || !!modelFilter || !!dateFrom || !!dateTo || !!list.search
+
+  const fiscalQueryParams = new URLSearchParams({
+    page: String(list.page),
+    pageSize: String(list.pageSize),
+    sortBy: list.sort.field,
+    sortDirection: list.sort.direction,
+  })
+  if (statusFilter.length) fiscalQueryParams.set('status', statusFilter.join(','))
+  if (modelFilter) fiscalQueryParams.set('model', modelFilter)
+  if (dateFrom) fiscalQueryParams.set('dateFrom', dateFrom)
+  if (dateTo) fiscalQueryParams.set('dateTo', dateTo)
+  if (list.search) fiscalQueryParams.set('search', list.search)
+
+  const { data, isLoading } = useQuery({
+    queryKey: ['fiscal-documents', fiscalQueryParams.toString()],
+    queryFn: () => api.get<FiscalDocsPage>(`/fiscal-documents?${fiscalQueryParams.toString()}`, accessToken ?? undefined),
+    placeholderData: (previous) => previous,
+  })
+  const documents = data?.data ?? []
+  const total = data?.total ?? 0
 
   useWebSocket((message) => {
     if (message.type.startsWith('fiscal:')) {
@@ -131,35 +176,11 @@ export function FiscalDocumentsPage() {
     URL.revokeObjectURL(objectUrl)
   }
 
-  const hasActiveFilter = statusFilter.size > 0 || search.trim().length > 0
-
-  const filteredDocuments = useMemo(() => {
-    const term = search.trim().toLowerCase()
-    return documents.filter((doc) => {
-      if (statusFilter.size > 0 && !statusFilter.has(doc.status)) return false
-      if (term.length === 0) return true
-      const chave = doc.chaveAcesso?.toLowerCase() ?? ''
-      const numero = String(doc.numeroDocumento ?? '')
-      const orderId = doc.orderId.toLowerCase()
-      return chave.includes(term) || numero.includes(term) || orderId.includes(term)
-    })
-  }, [documents, statusFilter, search])
-
   function handleToggleStatus(status: FiscalDocStatus) {
-    setStatusFilter((current) => {
-      const next = new Set(current)
-      if (next.has(status)) {
-        next.delete(status)
-      } else {
-        next.add(status)
-      }
-      return next
-    })
-  }
-
-  function handleClearFilters() {
-    setStatusFilter(new Set())
-    setSearch('')
+    const next = statusFilter.includes(status)
+      ? statusFilter.filter((current) => current !== status)
+      : [...statusFilter, status]
+    list.setFilter('status', next.join(',') || null)
   }
 
   function handleCancel(documentId: string) {
@@ -168,6 +189,145 @@ export function FiscalDocumentsPage() {
     cancelMutation.mutate({ documentId, justificativa: justificativa.trim() })
   }
 
+  function renderActions(doc: FiscalDoc) {
+    return (
+      <div className="flex flex-wrap gap-2">
+        {doc.status === 'authorized' && (
+          <>
+            {doc.danfePdfUrl ? (
+              <a
+                href={doc.danfePdfUrl}
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center gap-1 text-blue-600 hover:underline"
+              >
+                <FileDown className="h-4 w-4" />
+                PDF
+              </a>
+            ) : doc.xmlAutorizado ? (
+              <button
+                type="button"
+                onClick={() => handleDownloadPdf(doc.id)}
+                className="flex items-center gap-1 text-blue-600 hover:underline"
+              >
+                <FileDown className="h-4 w-4" />
+                PDF
+              </button>
+            ) : (
+              <span className="flex items-center gap-1 text-gray-300" title="PDF não disponível para este documento">
+                <FileDown className="h-4 w-4" />
+                PDF
+              </span>
+            )}
+            <button
+              type="button"
+              onClick={() => handleDownloadXml(doc.id)}
+              className="flex items-center gap-1 text-blue-600 hover:underline"
+            >
+              <FileDown className="h-4 w-4" />
+              XML
+            </button>
+            <button
+              type="button"
+              onClick={() => printMutation.mutate(doc.orderId)}
+              disabled={printMutation.isPending}
+              className="flex items-center gap-1 text-gray-600 hover:underline disabled:opacity-50"
+            >
+              <Printer className="h-4 w-4" />
+              Imprimir
+            </button>
+            <button
+              type="button"
+              onClick={() => handleCancel(doc.id)}
+              disabled={cancelMutation.isPending}
+              className="flex items-center gap-1 text-red-600 hover:underline disabled:opacity-50"
+            >
+              <Trash2 className="h-4 w-4" />
+              Cancelar
+            </button>
+          </>
+        )}
+        {doc.status === 'rejected' && (
+          <button
+            type="button"
+            onClick={() => retryMutation.mutate(doc.id)}
+            disabled={retryMutation.isPending}
+            className="flex items-center gap-1 text-amber-600 hover:underline disabled:opacity-50"
+            title={doc.errorMessage ?? undefined}
+          >
+            <RefreshCw className="h-4 w-4" />
+            Reprocessar
+          </button>
+        )}
+        {(doc.status === 'pending' || doc.status === 'emitting') && (
+          <span className="flex items-center gap-1 text-blue-600">
+            <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
+            Emitindo...
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  const columns: ReadonlyArray<DataTableColumn<FiscalDoc, FiscalSortField>> = [
+    {
+      key: 'numero',
+      header: 'Nº / Série',
+      sortField: 'numeroDocumento',
+      defaultDirection: 'desc',
+      render: (doc) => (
+        <span className="font-medium text-gray-900 whitespace-nowrap">
+          {doc.numeroDocumento ? `${doc.numeroDocumento} / ${doc.serie ?? '-'}` : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'order',
+      header: 'Pedido',
+      className: 'hidden sm:table-cell',
+      render: (doc) => <span className="font-mono text-gray-600">#{doc.orderId.slice(0, 8)}</span>,
+    },
+    {
+      key: 'model',
+      header: 'Modelo',
+      className: 'hidden md:table-cell',
+      render: (doc) => <span className="uppercase text-gray-600">{doc.model}</span>,
+    },
+    {
+      key: 'status',
+      header: 'Status',
+      render: (doc) => (
+        <span
+          className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${STATUS_BADGE[doc.status]}`}
+          title={doc.status === 'rejected' ? doc.errorMessage ?? undefined : undefined}
+        >
+          {STATUS_LABELS[doc.status]}
+        </span>
+      ),
+    },
+    {
+      key: 'value',
+      header: 'Valor',
+      align: 'right',
+      sortField: 'totalLiquido',
+      defaultDirection: 'desc',
+      render: (doc) => <span className="text-gray-900 whitespace-nowrap">{formatBRL(doc.totalLiquido)}</span>,
+    },
+    {
+      key: 'createdAt',
+      header: 'Data',
+      sortField: 'createdAt',
+      defaultDirection: 'desc',
+      className: 'hidden lg:table-cell',
+      render: (doc) => <span className="text-gray-600 whitespace-nowrap">{formatDateTime(doc.createdAt)}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      render: renderActions,
+    },
+  ]
+
   return (
     <div className="p-4 md:p-6">
       <div className="mb-5 flex items-center gap-3">
@@ -175,169 +335,74 @@ export function FiscalDocumentsPage() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-900">Notas Fiscais</h1>
           <p className="text-sm text-gray-500">
-            {documents.length} {documents.length === 1 ? 'nota emitida' : 'notas emitidas'}
+            {hasActiveFilter ? plural(total, 'nota encontrada', 'notas encontradas') : plural(total, 'nota emitida', 'notas emitidas')}
           </p>
         </div>
       </div>
 
-      <div className="mb-4 flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-        <div className="flex flex-wrap gap-2">
-          {FILTERABLE_STATUSES.map((status) => (
-            <button
-              key={status}
-              type="button"
-              onClick={() => handleToggleStatus(status)}
-              className={`rounded-full px-3 py-1 text-sm font-medium transition ${
-                statusFilter.has(status)
-                  ? 'bg-gray-900 text-white'
-                  : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-              }`}
-            >
-              {STATUS_LABELS[status]}
-            </button>
-          ))}
-          {hasActiveFilter && (
-            <button
-              type="button"
-              onClick={handleClearFilters}
-              className="flex items-center gap-1 rounded-full px-3 py-1 text-sm font-medium text-red-600 hover:bg-red-50"
-            >
-              <X className="h-4 w-4" />
-              Limpar filtros
-            </button>
-          )}
-        </div>
-        <input
-          type="search"
-          aria-label="Buscar nota fiscal por chave ou número"
-          value={search}
-          onChange={(event) => setSearch(event.target.value)}
-          placeholder="Buscar por chave ou número..."
-          className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm md:w-64"
-        />
+      <div className="mb-3 flex flex-wrap gap-2" role="group" aria-label="Filtrar por status">
+        {FILTERABLE_STATUSES.map((status) => (
+          <button
+            key={status}
+            type="button"
+            onClick={() => handleToggleStatus(status)}
+            aria-pressed={statusFilter.includes(status)}
+            className={`rounded-full px-3 py-1 text-sm font-medium transition ${
+              statusFilter.includes(status) ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+            }`}
+          >
+            {STATUS_LABELS[status]}
+          </button>
+        ))}
       </div>
 
-      {isLoading ? (
-        <p className="text-gray-500">Carregando...</p>
-      ) : filteredDocuments.length === 0 ? (
-        <p className="text-gray-500">Nenhuma nota fiscal emitida ainda</p>
-      ) : (
-        <div className="overflow-x-auto rounded-lg border border-gray-200">
-          <table className="min-w-full whitespace-nowrap text-sm">
-            <thead className="bg-gray-50 text-left text-xs uppercase tracking-wide text-gray-500">
-              <tr>
-                <th className="px-4 py-3">Nº / Série</th>
-                <th className="px-4 py-3">Pedido</th>
-                <th className="px-4 py-3">Modelo</th>
-                <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Valor</th>
-                <th className="px-4 py-3">Data</th>
-                <th className="px-4 py-3">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {filteredDocuments.map((doc) => (
-                <tr key={doc.id} className="border-t border-gray-100 odd:bg-white even:bg-gray-50">
-                  <td className="px-4 py-3 font-medium text-gray-900">
-                    {doc.numeroDocumento ? `${doc.numeroDocumento} / ${doc.serie ?? '-'}` : '-'}
-                  </td>
-                  <td className="px-4 py-3 text-gray-600">{doc.orderId.slice(0, 8)}</td>
-                  <td className="px-4 py-3 uppercase text-gray-600">{doc.model}</td>
-                  <td className="px-4 py-3">
-                    <span
-                      className={`rounded-full px-2 py-1 text-xs font-semibold ${STATUS_BADGE[doc.status]}`}
-                      title={doc.status === 'rejected' ? doc.errorMessage ?? undefined : undefined}
-                    >
-                      {STATUS_LABELS[doc.status]}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-gray-900">{formatCurrency(doc.totalLiquido)}</td>
-                  <td className="px-4 py-3 text-gray-600">
-                    {new Date(doc.createdAt).toLocaleString('pt-BR')}
-                  </td>
-                  <td className="px-4 py-3">
-                    <div className="flex flex-wrap gap-2">
-                      {doc.status === 'authorized' && (
-                        <>
-                          {doc.danfePdfUrl ? (
-                            <a
-                              href={doc.danfePdfUrl}
-                              target="_blank"
-                              rel="noreferrer"
-                              className="flex items-center gap-1 text-blue-600 hover:underline"
-                            >
-                              <FileDown className="h-4 w-4" />
-                              PDF
-                            </a>
-                          ) : doc.xmlAutorizado ? (
-                            <button
-                              type="button"
-                              onClick={() => handleDownloadPdf(doc.id)}
-                              className="flex items-center gap-1 text-blue-600 hover:underline"
-                            >
-                              <FileDown className="h-4 w-4" />
-                              PDF
-                            </button>
-                          ) : (
-                            <span className="flex items-center gap-1 text-gray-300" title="PDF não disponível para este documento">
-                              <FileDown className="h-4 w-4" />
-                              PDF
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={() => handleDownloadXml(doc.id)}
-                            className="flex items-center gap-1 text-blue-600 hover:underline"
-                          >
-                            <FileDown className="h-4 w-4" />
-                            XML
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => printMutation.mutate(doc.orderId)}
-                            disabled={printMutation.isPending}
-                            className="flex items-center gap-1 text-gray-600 hover:underline disabled:opacity-50"
-                          >
-                            <Printer className="h-4 w-4" />
-                            Imprimir
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => handleCancel(doc.id)}
-                            disabled={cancelMutation.isPending}
-                            className="flex items-center gap-1 text-red-600 hover:underline disabled:opacity-50"
-                          >
-                            <Trash2 className="h-4 w-4" />
-                            Cancelar
-                          </button>
-                        </>
-                      )}
-                      {doc.status === 'rejected' && (
-                        <button
-                          type="button"
-                          onClick={() => retryMutation.mutate(doc.id)}
-                          disabled={retryMutation.isPending}
-                          className="flex items-center gap-1 text-amber-600 hover:underline disabled:opacity-50"
-                          title={doc.errorMessage ?? undefined}
-                        >
-                          <RefreshCw className="h-4 w-4" />
-                          Reprocessar
-                        </button>
-                      )}
-                      {(doc.status === 'pending' || doc.status === 'emitting') && (
-                        <span className="flex items-center gap-1 text-blue-600">
-                          <span className="h-3 w-3 animate-spin rounded-full border-2 border-blue-300 border-t-blue-600" />
-                          Emitindo...
-                        </span>
-                      )}
-                    </div>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-      )}
+      <FilterBar hasActiveFilters={hasActiveFilter} onClear={list.clearAll}>
+        <SearchField value={list.searchInput} onChange={list.setSearchInput} placeholder="Chave, número ou pedido" />
+        <FilterField label="Modelo" className="w-full sm:w-36">
+          <FilterSelect
+            value={modelFilter}
+            onChange={(value) => list.setFilter('model', value || null)}
+            options={MODEL_OPTIONS}
+          />
+        </FilterField>
+        <FilterField label="De" className="w-full sm:w-auto">
+          <input
+            type="date"
+            value={dateFrom}
+            onChange={(event) => list.setFilter('dateFrom', event.target.value || null)}
+            className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </FilterField>
+        <FilterField label="Até" className="w-full sm:w-auto">
+          <input
+            type="date"
+            value={dateTo}
+            onChange={(event) => list.setFilter('dateTo', event.target.value || null)}
+            className="w-full rounded-lg border border-gray-300 px-2 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          />
+        </FilterField>
+      </FilterBar>
+
+      <DataTable
+        caption="Notas fiscais"
+        columns={columns}
+        rows={documents}
+        rowKey={(doc) => doc.id}
+        isLoading={isLoading}
+        emptyMessage={hasActiveFilter ? 'Nenhuma nota encontrada com esses filtros' : 'Nenhuma nota fiscal emitida ainda'}
+        sort={list.sort}
+        onSort={list.setSort}
+        minWidthClassName="min-w-[560px]"
+        footer={
+          <Pagination
+            page={list.page}
+            pageSize={list.pageSize}
+            total={total}
+            onPageChange={list.setPage}
+            onPageSizeChange={list.setPageSize}
+          />
+        }
+      />
     </div>
   )
 }
