@@ -34,6 +34,9 @@ const channelStrategy: ChannelMessageStrategy = channelStrategyFor(channelProvid
 function resolveMenuChoice(input: string): string {
   if (channelProvider !== WhatsAppProvider.EVOLUTION || !/^\d+$/.test(input.trim())) return input;
   if (NumericInputStates.includes(currentState)) return input;
+  // Troca de item em falta: "1", "2", "3" respondem à mensagem da equipe, não ao último menu do bot.
+  if (partialConfirmation && (partialConfirmation.substitutions || []).length > 0
+    && currentState !== BotState.AWAITING_PARTIAL_CHOICE) return input;
   const savedCart = sessionRaw.cart && !Array.isArray(sessionRaw.cart) ? sessionRaw.cart : null;
   const choices = (savedCart && savedCart.menu_choices) || {};
   return choices[input.trim()] || input;
@@ -86,6 +89,8 @@ if (Array.isArray(rawCart)) {
     issue_category:     rawCart.issue_category || '',
     text_order:         rawCart.text_order || null,
     edit_index:         typeof rawCart.edit_index === 'number' ? rawCart.edit_index : null,
+    partial_picks:      rawCart.partial_picks && typeof rawCart.partial_picks === 'object' ? rawCart.partial_picks : null,
+    partial_pick_index: typeof rawCart.partial_pick_index === 'number' ? rawCart.partial_pick_index : null,
   };
 } else {
   currentCart = CartConstants.EMPTY();
@@ -196,6 +201,24 @@ const routingProvider: RoutingProvider     = new OsrmProviderImplementation(http
 
 // ── Guard de input raw ───────────────────────────────────────────────────────
 const expectingRawInput = ExpectingRawInputStates.includes(currentState);
+
+// Resposta à troca sugerida pela equipe: 1 aceitar, 2 escolher outro, 3 sem o item, NÃO cancelar.
+type PartialSubstituteReply = 'accept' | 'choose' | 'without' | 'decline';
+function partialSubstituteReplyOf(input: string): PartialSubstituteReply | null {
+  const answer = input.trim().toLowerCase().replace(/[!.]+$/, '');
+  if (['1', 'sim', 's', 'aceito', 'aceitar', 'pode trocar', 'pode', 'ok', 'partial:accept', 'partial:yes'].includes(answer)) return 'accept';
+  if (['2', 'outro', 'escolher outro', 'quero outro', 'trocar', 'partial:choose'].includes(answer)) return 'choose';
+  if (['3', 'sem', 'sem o item', 'sem item', 'tira', 'tirar', 'remover', 'partial:without'].includes(answer)) return 'without';
+  if (['não', 'nao', 'n', 'cancela', 'cancelar', 'pode cancelar', 'partial:no'].includes(answer)) return 'decline';
+  return null;
+}
+
+// Mensagem que pertence à confirmação parcial pendente (passa mesmo com a loja fechada).
+function isPartialReply(input: string): boolean {
+  if (!partialConfirmation) return false;
+  if ((partialConfirmation.substitutions || []).length === 0) return partialAnswerOf(input) !== null;
+  return currentState === BotState.AWAITING_PARTIAL_CHOICE || partialSubstituteReplyOf(input) !== null;
+}
 
 // SIM/NÃO da confirmação parcial; null quando a mensagem é outra coisa.
 function partialAnswerOf(input: string): boolean | null {

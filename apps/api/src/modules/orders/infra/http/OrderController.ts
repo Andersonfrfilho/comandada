@@ -7,6 +7,7 @@ import type { GetOrderUseCase } from '../../application/use-cases/GetOrderUseCas
 import type { ListOrdersUseCase } from '../../application/use-cases/ListOrdersUseCase'
 import type { RequestPartialOrderConfirmationUseCase } from '../../application/use-cases/RequestPartialOrderConfirmationUseCase'
 import type { GetOrderRouteUseCase } from '../../application/use-cases/GetOrderRouteUseCase'
+import type { ListOrderItemSubstitutesUseCase } from '../../application/use-cases/ListOrderItemSubstitutesUseCase'
 import { ValidationError, UnauthorizedError } from '@/shared/errors/AppError'
 import { IfoodProvider } from '@/shared/providers/IfoodProvider'
 
@@ -56,6 +57,7 @@ const updateNotesSchema = z.object({
 
 const partialConfirmationSchema = z.object({
   unavailableItemIds: z.array(z.string().uuid()).min(1),
+  substitutions: z.array(z.object({ itemId: z.string().uuid(), productId: z.string().uuid() })).optional(),
 })
 
 const ifoodRejectSchema = z.object({
@@ -102,8 +104,21 @@ export class OrderController {
     private readonly getOrderUseCase: GetOrderUseCase,
     private readonly listOrdersUseCase: ListOrdersUseCase,
     private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase,
-    private readonly getOrderRouteUseCase?: GetOrderRouteUseCase
+    private readonly getOrderRouteUseCase?: GetOrderRouteUseCase,
+    private readonly listItemSubstitutesUseCase?: ListOrderItemSubstitutesUseCase
   ) {}
+
+  /** Produtos do mesmo tipo para oferecer no lugar de cada item, caso falte. */
+  substitutes: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    if (!this.listItemSubstitutesUseCase) {
+      response.json({ items: [] })
+      return
+    }
+    response.json(
+      await this.listItemSubstitutesUseCase.execute(request.params['id']!, request.user.establishmentId)
+    )
+  }
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
@@ -198,6 +213,7 @@ export class OrderController {
       establishmentId: request.user.establishmentId,
       userId: request.user.id,
       unavailableItemIds: parsed.data.unavailableItemIds,
+      substitutions: parsed.data.substitutions,
     })
     response.json(result)
   }

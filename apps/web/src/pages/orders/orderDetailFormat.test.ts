@@ -9,6 +9,7 @@ import {
   googleMapsEmbedUrl,
   googleMapsSearchUrl,
   splitLocationNote,
+  totalAfterShortage,
 } from './orderDetailFormat'
 
 describe('formatBrl', () => {
@@ -102,5 +103,24 @@ describe('formatDuration', () => {
     expect(formatDuration(75)).toBe('1 h 15 min')
     expect(formatDuration(120)).toBe('2 h')
     expect(formatDuration(null)).toBeNull()
+  })
+})
+
+describe('totalAfterShortage', () => {
+  const items = [
+    { id: 'a', quantity: 1, totalPrice: '60.00' },
+    { id: 'b', quantity: 2, totalPrice: '75.00' },
+  ]
+
+  it('tira o item em falta sem troca', () => {
+    expect(totalAfterShortage(items, '0', new Map([['a', null]]))).toBe(75)
+  })
+
+  it('soma o substituto pela quantidade', () => {
+    expect(totalAfterShortage(items, '5.00', new Map([['b', { unitPrice: 30 }]]))).toBe(125)
+  })
+
+  it('sem falta, total dos itens mais taxa', () => {
+    expect(totalAfterShortage(items, 7, new Map())).toBe(142)
   })
 })

@@ -13,6 +13,7 @@ export function registerOrderRoutes(
   router.get('/orders', authenticate, authorize('orders', 'read'), controller.list)
   router.post('/orders', authenticate, authorize('orders', 'write'), controller.create)
   router.get('/orders/:id', authenticate, authorize('orders', 'read'), controller.get)
+  router.get('/orders/:id/substitutes', authenticate, authorize('orders', 'read'), controller.substitutes)
   router.get('/orders/:id/route', authenticate, authorize('orders', 'read'), controller.route)
   router.patch('/orders/:id/status', authenticate, authorize('orders', 'write'), controller.updateStatus)
   router.patch('/orders/:id/notes', authenticate, authorize('orders', 'write'), controller.updateNotes)

@@ -81,3 +81,27 @@ export function formatDuration(minutes: number | null | undefined): string | nul
   const rest = rounded % 60
   return rest ? `${hours} h ${rest} min` : `${hours} h`
 }
+
+export interface ShortageItem {
+  id: string
+  quantity: number
+  totalPrice: string
+}
+
+/**
+ * Total depois da falta: tira os itens em falta e soma o substituto escolhido (preço × quantidade).
+ * Taxa de entrega entra igual.
+ */
+export function totalAfterShortage(
+  items: readonly ShortageItem[],
+  deliveryFee: string | number | null | undefined,
+  unavailable: ReadonlyMap<string, { unitPrice: number } | null>
+): number {
+  const itemsTotal = items.reduce((sum, item) => {
+    if (!unavailable.has(item.id)) return sum + parseFloat(item.totalPrice)
+    const substitute = unavailable.get(item.id)
+    return substitute ? sum + substitute.unitPrice * item.quantity : sum
+  }, 0)
+  const fee = typeof deliveryFee === 'number' ? deliveryFee : parseFloat(deliveryFee ?? '0')
+  return Math.round((itemsTotal + (Number.isFinite(fee) ? fee : 0)) * 100) / 100
+}

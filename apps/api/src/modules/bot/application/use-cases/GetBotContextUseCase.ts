@@ -238,13 +238,37 @@ export class GetBotContextUseCase {
     if (!pending) return null
     const items = await this.db.query.orderItems.findMany({ where: eq(schema.orderItems.orderId, pending.order.id) })
     const unavailableIds = pending.confirmation.unavailableItemIds
+    const deliveryFee = Number(pending.order.deliveryFee ?? 0)
     const remainingTotal = items
       .filter((item) => !unavailableIds.includes(item.id))
       .reduce((sum, item) => sum + Number(item.totalPrice), 0)
+    // Troca sugerida pela equipe: o cliente aceita, escolhe outra opção da lista ou segue sem o item.
+    const substitutions = (pending.confirmation.substitutions ?? []).flatMap((substitution) => {
+      const item = items.find((candidate) => candidate.id === substitution.itemId)
+      if (!item) return []
+      const toBot = (product: { productId: string; productName: string; unitPrice: number }) => ({
+        product_id: product.productId,
+        name: product.productName,
+        price: product.unitPrice,
+      })
+      return [{
+        item_id: item.id,
+        item_name: item.productName,
+        quantity: item.quantity,
+        suggested: toBot(substitution.suggested),
+        alternatives: substitution.alternatives.map(toBot),
+      }]
+    })
+    const suggestedTotal = substitutions.reduce((sum, substitution) => sum + substitution.suggested.price * substitution.quantity, 0)
+    const roundCents = (value: number) => Math.round(value * 100) / 100
     return {
       order_code: pending.order.code ?? pending.order.id.slice(0, 8).toUpperCase(),
       unavailable: items.filter((item) => unavailableIds.includes(item.id)).map((item) => item.productName),
-      new_total: Math.round((remainingTotal + Number(pending.order.deliveryFee ?? 0)) * 100) / 100,
+      // Com troca: total aceitando as sugestões. Sem troca: total sem os itens em falta.
+      new_total: roundCents(remainingTotal + suggestedTotal + deliveryFee),
+      total_without: roundCents(remainingTotal + deliveryFee),
+      items_kept: items.filter((item) => !unavailableIds.includes(item.id)).length,
+      substitutions,
     }
   }
 

@@ -54,6 +54,9 @@ interface Cart {
   issue_category?: string;
   // Pedido escrito ou falado ("2 combo tradicional e 1 hot roll") esperando escolha ou confirmação.
   text_order?: TextOrderDraft | null;
+  // Troca de item em falta: o que o cliente já escolheu (item → produto ou null) e qual item está na vez.
+  partial_picks?: Record<string, string | null> | null;
+  partial_pick_index?: number | null;
 }
 
 // Item do texto que bateu com mais de um produto: o cliente escolhe numa lista.

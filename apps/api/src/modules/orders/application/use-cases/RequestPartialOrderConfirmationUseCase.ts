@@ -9,9 +9,12 @@
 import { and, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
+import type { PartialSubstitution } from '@/infra/database/schema'
+import { MAX_SUBSTITUTES } from '../../domain/substituteRanking'
 import { NotFoundError, ValidationError } from '@/shared/errors/AppError'
 import type { CustomerMessageProvider } from '@/shared/providers/CustomerMessageProvider'
 import type { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/CreateAuditLogUseCase'
+import { OrderSubstituteCatalog } from '../services/OrderSubstituteCatalog'
 import {
   ORDER_CLOSED_STATUSES,
   ORDER_ERROR_MESSAGES,
@@ -28,6 +31,8 @@ export type RequestPartialOrderConfirmationParams = {
   readonly establishmentId: string
   readonly userId: string
   readonly unavailableItemIds: readonly string[]
+  /** Troca sugerida para itens em falta; item sem entrada aqui só sai do pedido. */
+  readonly substitutions?: ReadonlyArray<{ readonly itemId: string; readonly productId: string }> | undefined
 }
 
 export type RequestPartialOrderConfirmationResult = {
@@ -48,15 +53,47 @@ function formatItemLine(item: OrderItemLine): string {
   return `• ${item.quantity}× ${item.productName}`
 }
 
+export type MessageSubstitute = { readonly productName: string; readonly unitPrice: number }
+
 export function buildPartialConfirmationMessage(params: {
   readonly customerName: string | null
   readonly unavailableItems: readonly OrderItemLine[]
   readonly remainingItems: readonly OrderItemLine[]
+  /** Item em falta (id) → produto sugerido no lugar. */
+  readonly substitutes?: ReadonlyMap<string, MessageSubstitute> | undefined
 }): string {
-  const remainingTotal = params.remainingItems.reduce(
-    (total, item) => total + Number.parseFloat(item.totalPrice),
-    0
-  )
+  const substitutes = params.substitutes ?? new Map<string, MessageSubstitute>()
+  const substitutedTotal = params.unavailableItems.reduce((total, item) => {
+    const substitute = substitutes.get(item.id)
+    return substitute ? total + substitute.unitPrice * item.quantity : total
+  }, 0)
+  const remainingTotal =
+    params.remainingItems.reduce((total, item) => total + Number.parseFloat(item.totalPrice), 0) + substitutedTotal
+
+  if (substitutes.size > 0) {
+    const unavailableLines = params.unavailableItems.map((item) => {
+      const substitute = substitutes.get(item.id)
+      return substitute
+        ? PARTIAL_CONFIRMATION_MESSAGES.substituteLine(
+            item.quantity,
+            item.productName,
+            substitute.productName,
+            currencyFormatter.format(substitute.unitPrice)
+          )
+        : formatItemLine(item)
+    })
+    return [
+      params.customerName
+        ? PARTIAL_CONFIRMATION_MESSAGES.greetingWithName(params.customerName)
+        : PARTIAL_CONFIRMATION_MESSAGES.greetingWithoutName,
+      [PARTIAL_CONFIRMATION_MESSAGES.unavailableIntro, ...unavailableLines].join('\n'),
+      ...(params.remainingItems.length > 0
+        ? [[PARTIAL_CONFIRMATION_MESSAGES.remainingIntro, ...params.remainingItems.map(formatItemLine)].join('\n')]
+        : []),
+      PARTIAL_CONFIRMATION_MESSAGES.newTotalWithSubstitutes(currencyFormatter.format(remainingTotal)),
+      PARTIAL_CONFIRMATION_MESSAGES.substituteOptions,
+    ].join('\n\n')
+  }
 
   const blocks = [
     params.customerName
@@ -110,7 +147,9 @@ export class RequestPartialOrderConfirmationUseCase {
     if (unavailableItems.length !== unavailableIds.size) {
       throw new ValidationError(ORDER_ERROR_MESSAGES.unknownItems)
     }
-    if (remainingItems.length === 0) {
+
+    const substitutions = await this.buildSubstitutions(params, order.items, unavailableIds)
+    if (remainingItems.length === 0 && substitutions.length === 0) {
       throw new ValidationError(ORDER_ERROR_MESSAGES.allItemsUnavailable)
     }
 
@@ -118,6 +157,7 @@ export class RequestPartialOrderConfirmationUseCase {
       customerName: order.customer?.name ?? null,
       unavailableItems,
       remainingItems,
+      substitutes: new Map(substitutions.map((substitution) => [substitution.itemId, substitution.suggested])),
     })
 
     await this.customerMessages.sendText({
@@ -141,6 +181,7 @@ export class RequestPartialOrderConfirmationUseCase {
       establishmentId: params.establishmentId,
       orderId: order.id,
       unavailableItemIds: [...unavailableIds],
+      substitutions,
       status: PARTIAL_CONFIRMATION_STATUS.PENDING,
       requestedByUserId: params.userId,
     })
@@ -156,9 +197,46 @@ export class RequestPartialOrderConfirmationUseCase {
         unavailableItemIds: [...unavailableIds],
         unavailableItemNames: unavailableItems.map((item) => item.productName),
         remainingItemCount: remainingItems.length,
+        substitutions: substitutions.map((substitution) => ({
+          itemId: substitution.itemId,
+          productName: substitution.suggested.productName,
+        })),
       },
     })
 
     return { message, whatsappNumber }
+  }
+
+  /**
+   * Troca sugerida → produto ativo do cardápio, com preço do cadastro e as outras opções do mesmo tipo
+   * (o cliente pode responder "escolher outro"). A sugestão da equipe vem sempre primeiro na lista.
+   */
+  private async buildSubstitutions(
+    params: RequestPartialOrderConfirmationParams,
+    items: ReadonlyArray<{ id: string; productId: string | null; productName: string; unitPrice: string }>,
+    unavailableIds: ReadonlySet<string>
+  ): Promise<PartialSubstitution[]> {
+    const requested = params.substitutions ?? []
+    if (requested.length === 0) return []
+
+    const catalog = await OrderSubstituteCatalog.load(this.db, params.establishmentId)
+    const unavailableProductIds = new Set(
+      items.filter((item) => unavailableIds.has(item.id) && item.productId).map((item) => item.productId as string)
+    )
+    const substitutions: PartialSubstitution[] = []
+    for (const { itemId, productId } of requested) {
+      const item = items.find((candidate) => candidate.id === itemId)
+      if (!item || !unavailableIds.has(itemId)) {
+        throw new ValidationError(ORDER_ERROR_MESSAGES.substituteForAvailableItem)
+      }
+      const product = catalog.findOfferable(productId)
+      if (!product || unavailableProductIds.has(productId)) throw new ValidationError(ORDER_ERROR_MESSAGES.unknownSubstitute)
+      const suggested = { productId: product.productId, productName: product.productName, unitPrice: product.unitPrice }
+      const others = catalog
+        .substitutesFor(item, new Set([...unavailableProductIds, product.productId]))
+        .map((candidate) => ({ productId: candidate.productId, productName: candidate.productName, unitPrice: candidate.unitPrice }))
+      substitutions.push({ itemId, suggested, alternatives: [suggested, ...others].slice(0, MAX_SUBSTITUTES) })
+    }
+    return substitutions
   }
 }

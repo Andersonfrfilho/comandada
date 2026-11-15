@@ -1,5 +1,6 @@
 import { useParams, Link } from 'react-router-dom'
-import { useQuery } from '@tanstack/react-query'
+import { useQuery, useQueryClient } from '@tanstack/react-query'
+import { useWebSocket } from '@/hooks/useWebSocket'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import {
@@ -12,9 +13,9 @@ import {
 import { Skeleton } from '@/components/ui/Skeleton'
 import { ArrowLeft, MessageCircle, Phone, StickyNote } from 'lucide-react'
 import { buildConversationLink } from '@/constants/conversationLinks'
-import { CONVERSATION_LINK_LABEL } from '@/constants/partialConfirmation'
+import { CONVERSATION_LINK_LABEL, PARTIAL_CONFIRMATION_LABELS } from '@/constants/partialConfirmation'
 import { OrderProgressBar } from './OrderProgressBar'
-import { OrderPartialConfirmation } from './OrderPartialConfirmation'
+import { OrderItemsCard, type OrderPartialConfirmationState } from './OrderItemsCard'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
 import { OrderDeliveryCard } from './OrderDeliveryCard'
 import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
@@ -83,6 +84,7 @@ interface OrderDetail {
   delivery?: OrderDelivery[]
   fiscalDocument?: FiscalDocument | null
   statusLogs?: OrderStatusLog[]
+  partialConfirmation?: OrderPartialConfirmationState | null
 }
 
 const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
@@ -96,11 +98,19 @@ const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
   const accessToken = useAuthStore((state) => state.accessToken)
+  const queryClient = useQueryClient()
 
   const { data: order, isLoading } = useQuery({
     queryKey: ['order', id],
     queryFn: () => api.get<OrderDetail>(`/orders/${id}`, accessToken ?? undefined),
     enabled: Boolean(id),
+    // Esperando o cliente responder a falta de item: confere a cada 15 s caso o aviso em tempo real se perca.
+    refetchInterval: (query) => (query.state.data?.partialConfirmation?.status === 'pending' ? 15_000 : false),
+  })
+
+  // Resposta do cliente no WhatsApp, mudança de status: a tela atualiza sozinha.
+  useWebSocket((message) => {
+    if (message.type.startsWith('order:')) void queryClient.invalidateQueries({ queryKey: ['order', id] })
   })
 
   // O link do mapa antigo ("Localização: https://maps…") vira o mapa da entrega, não observação.
@@ -136,12 +146,17 @@ export function OrderDetailPage() {
                 >
                   {ORDER_STATUS_LABELS[order.status]}
                 </span>
+                {order.partialConfirmation?.status === 'pending' && (
+                  <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                    {PARTIAL_CONFIRMATION_LABELS.waitingBadge}
+                  </span>
+                )}
                 <span className="text-xs text-gray-400 uppercase">
                   {ORDER_CHANNEL_LABELS[order.channel] ?? order.channel} ·{' '}
                   {ORDER_TYPE_LABELS[order.type as keyof typeof ORDER_TYPE_LABELS] ?? order.type}
                 </span>
               </div>
-              <span className="text-lg font-bold text-gray-900">
+              <span className="text-lg font-bold text-gray-900 whitespace-nowrap">
                 {formatBrl(order.totalAmount)}
               </span>
             </div>
@@ -223,51 +238,15 @@ export function OrderDetailPage() {
             />
           )}
 
-          <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
-            <h2 className="text-sm font-semibold text-gray-900 mb-3">Itens</h2>
-            <div className="space-y-2">
-              {order.items.map((item) => (
-                <div key={item.id} className="flex items-start justify-between text-sm">
-                  <div>
-                    <p className="text-gray-800">
-                      <span className="font-semibold">{item.quantity}×</span> {item.productName}
-                    </p>
-                    {item.quantity > 1 && (
-                      <p className="text-xs text-gray-400">{formatBrl(item.unitPrice)} cada</p>
-                    )}
-                    {item.notes && <p className="text-xs text-gray-400 italic">{item.notes}</p>}
-                  </div>
-                  <span className="text-gray-600 whitespace-nowrap">{formatBrl(item.totalPrice)}</span>
-                </div>
-              ))}
-            </div>
-            <dl className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-sm">
-              {parseFloat(order.deliveryFee ?? '0') > 0 && (
-                <>
-                  <div className="flex justify-between text-gray-500">
-                    <dt>Subtotal</dt>
-                    <dd>{formatBrl(parseFloat(order.totalAmount) - parseFloat(order.deliveryFee ?? '0'))}</dd>
-                  </div>
-                  <div className="flex justify-between text-gray-500">
-                    <dt>Taxa de entrega</dt>
-                    <dd>{formatBrl(order.deliveryFee)}</dd>
-                  </div>
-                </>
-              )}
-              <div className="flex justify-between font-semibold text-gray-900">
-                <dt>Total</dt>
-                <dd>{formatBrl(order.totalAmount)}</dd>
-              </div>
-            </dl>
-          </section>
-
-          {order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status) && (
-            <OrderPartialConfirmation
-              orderId={order.id}
-              items={order.items}
-              customerWhatsappNumber={order.customer?.whatsappNumber}
-            />
-          )}
+          <OrderItemsCard
+            orderId={order.id}
+            items={order.items}
+            totalAmount={order.totalAmount}
+            deliveryFee={order.deliveryFee}
+            canNegotiate={order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status)}
+            customerWhatsappNumber={order.customer?.whatsappNumber}
+            partialConfirmation={order.partialConfirmation}
+          />
 
           <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Pagamento</h2>

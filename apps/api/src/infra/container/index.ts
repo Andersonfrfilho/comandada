@@ -80,6 +80,7 @@ import { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/use-c
 import { UpdateOrderNotesUseCase } from '@/modules/orders/application/use-cases/UpdateOrderNotesUseCase'
 import { GetOrderUseCase } from '@/modules/orders/application/use-cases/GetOrderUseCase'
 import { GetOrderRouteUseCase } from '@/modules/orders/application/use-cases/GetOrderRouteUseCase'
+import { ListOrderItemSubstitutesUseCase } from '@/modules/orders/application/use-cases/ListOrderItemSubstitutesUseCase'
 import { OsrmRoutingProviderImplementation } from '@/infra/geocoding/OsrmRoutingProviderImplementation'
 import { ListOrdersUseCase } from '@/modules/orders/application/use-cases/ListOrdersUseCase'
 import { OrderController } from '@/modules/orders/infra/http/OrderController'
@@ -400,7 +401,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     getOrderUseCase,
     listOrdersUseCase,
     requestPartialOrderConfirmationUseCase,
-    getOrderRouteUseCase
+    getOrderRouteUseCase,
+    new ListOrderItemSubstitutesUseCase(db)
   )
 
   // Kitchen
