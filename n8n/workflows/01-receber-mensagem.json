@@ -172,7 +172,7 @@
         1300
       ],
       "parameters": {
-        "jsCode": "// O cadastro de clientes da API ainda não guarda consentimento de marketing; a resposta do bot segue normal.\nreturn [{ json: { skipped: true, reason: 'marketing_opt_in_not_stored' } }];\n"
+        "jsCode": "// A resposta do cliente à pergunta de novidades libera (ou não) o lembrete do workflow 04.\nconst apiUrl = ($env.ORDER_HUB_API_URL || 'http://order_hub_api:3333').replace(/\\/$/, '');\nconst headers = { 'Content-Type': 'application/json', 'X-Internal-Token': $env.ORDER_HUB_N8N_INTERNAL_TOKEN || '' };\nconst establishmentId = ($('Buscar Dados').first().json.establishment || {}).id;\ntry {\n  await this.helpers.httpRequest({\n    method: 'PUT',\n    url: `${apiUrl}/internal/bot/${encodeURIComponent($json.tel)}/marketing-opt-in`,\n    headers,\n    body: { establishmentId, optIn: $json.marketing_opt_in === true },\n    json: true,\n  });\n  return [{ json: { saved: true } }];\n} catch (e) {\n  // A resposta ao cliente já saiu; sem gravar, o bot só pergunta de novo na próxima conversa.\n  return [{ json: { saved: false, error: e.message } }];\n}"
       }
     },
     {

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp, date, integer } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, timestamp, date, integer, boolean } from 'drizzle-orm/pg-core'
 import { establishments } from './establishments'
 
 export const customers = pgTable('customers', {
@@ -13,6 +13,11 @@ export const customers = pgTable('customers', {
   document: varchar('document', { length: 20 }),
   birthDate: date('birth_date'),
   rating: integer('rating'),
+  // Resposta do cliente à pergunta do bot sobre novidades; nulo enquanto não foi perguntado.
+  marketingOptIn: boolean('marketing_opt_in'),
+  marketingOptInAt: timestamp('marketing_opt_in_at', { withTimezone: true }),
+  // Último lembrete de marketing enviado (workflow 04): segura o intervalo mínimo entre lembretes.
+  lastMarketingAt: timestamp('last_marketing_at', { withTimezone: true }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

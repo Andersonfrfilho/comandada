@@ -155,7 +155,8 @@ export class GetBotContextUseCase {
       schedule_slots: scheduleSlots,
       delivery_fee_rule: deliveryFeeRule ? toBotFeeRule(deliveryFeeRule) : null,
       customer_name: customer && customer.name !== customer.whatsappNumber ? customer.name : null,
-      marketing_opt_in: null,
+      // Nulo enquanto o cliente não respondeu: o bot pergunta uma vez e para de perguntar.
+      marketing_opt_in: customer?.marketingOptIn ?? null,
       conversation,
       partial_confirmation: partialConfirmation,
     }
