@@ -3,7 +3,7 @@ import { ORDER_STATUS_LABELS, type OrderStatus } from '@/constants/orderLabels'
 
 type OrderProgressType = 'table' | 'delivery' | 'pickup'
 
-const STEPS_BY_TYPE: Record<OrderProgressType, OrderStatus[]> = {
+export const STEPS_BY_TYPE: Record<OrderProgressType, OrderStatus[]> = {
   table: ['received', 'in_production', 'ready', 'completed'],
   delivery: ['received', 'in_production', 'ready', 'in_delivery', 'completed'],
   pickup: ['received', 'in_production', 'ready', 'picked_up', 'completed'],
@@ -21,12 +21,13 @@ interface OrderProgressBarProps {
   variant?: 'full' | 'compact'
 }
 
-function resolveSteps(type: string): OrderStatus[] {
+export function resolveSteps(type: string): OrderStatus[] {
   return STEPS_BY_TYPE[type as OrderProgressType] ?? STEPS_BY_TYPE.pickup
 }
 
 function findStepTime(statusLogs: OrderStatusLogEntry[] | undefined, step: OrderStatus): string | null {
-  const log = statusLogs?.find((entry) => entry.status === step)
+  // Depois de uma correção manual o status pode aparecer duas vezes: vale a última vez.
+  const log = [...(statusLogs ?? [])].reverse().find((entry) => entry.status === step)
   if (!log) return null
   return new Date(log.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }

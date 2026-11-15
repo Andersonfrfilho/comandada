@@ -15,6 +15,7 @@ import { ArrowLeft, MessageCircle, Phone, StickyNote } from 'lucide-react'
 import { buildConversationLink } from '@/constants/conversationLinks'
 import { CONVERSATION_LINK_LABEL, PARTIAL_CONFIRMATION_LABELS } from '@/constants/partialConfirmation'
 import { OrderProgressBar } from './OrderProgressBar'
+import { OrderStatusControl } from './OrderStatusControl'
 import { OrderItemsCard, type OrderPartialConfirmationState } from './OrderItemsCard'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
 import { OrderDeliveryCard } from './OrderDeliveryCard'
@@ -217,16 +218,19 @@ export function OrderDetailPage() {
             )}
           </div>
 
-          {order.status !== 'cancelled' && (
-            <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
+          <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
+            {order.status === 'cancelled' ? (
+              <p className="text-sm font-medium text-red-700">Pedido cancelado</p>
+            ) : (
               <OrderProgressBar
                 type={order.type}
                 status={order.status}
                 statusLogs={order.statusLogs ?? []}
                 variant="full"
               />
-            </section>
-          )}
+            )}
+            <OrderStatusControl orderId={order.id} orderType={order.type} status={order.status} />
+          </section>
 
           {order.type === 'delivery' && order.delivery?.[0] && (
             <OrderDeliveryCard

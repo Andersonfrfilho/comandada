@@ -49,6 +49,9 @@ const createOrderSchema = z.object({
 const updateStatusSchema = z.object({
   status: z.enum(['received', 'in_production', 'ready', 'in_delivery', 'picked_up', 'completed', 'cancelled']),
   cancellationReason: z.string().max(500).optional(),
+  // Detalhe do pedido: mover para qualquer status (voltar, pular etapa, reabrir).
+  manual: z.boolean().optional(),
+  note: z.string().trim().max(500).optional(),
 })
 
 const updateNotesSchema = z.object({
@@ -183,6 +186,8 @@ export class OrderController {
       newStatus: parsed.data.status,
       cancellationReason: parsed.data.cancellationReason,
       userId: request.user.id,
+      manual: parsed.data.manual,
+      note: parsed.data.note,
     })
     response.json(order)
   }

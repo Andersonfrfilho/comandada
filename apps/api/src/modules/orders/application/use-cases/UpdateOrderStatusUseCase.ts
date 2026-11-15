@@ -5,7 +5,7 @@ import type { NewOrder } from '@/infra/database/schema'
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import { WS_EVENTS } from '@/infra/websocket/WebSocketEvents'
 import { NotFoundError, UnprocessableError } from '@/shared/errors/AppError'
-import { canTransitionTo } from '../../domain/entities/Order'
+import { canMoveManually, canTransitionTo } from '../../domain/entities/Order'
 import { MessagesConstants } from '@/shared/constants/MessagesConstants'
 import type { OrderStatus } from '@/shared/types'
 import type { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/use-cases/TriggerFiscalEmissionUseCase'
@@ -15,13 +15,19 @@ import type { DeductStockForOrderUseCase } from '@/modules/products/application/
 
 type Database = NodePgDatabase<typeof schema>
 
-interface UpdateStatusInput {
+export interface UpdateStatusInput {
   orderId: string
   establishmentId: string
   newStatus: OrderStatus
   cancellationReason?: string | undefined
   userId?: string | undefined
+  /** Mudança manual pelo detalhe do pedido: aceita voltar ou pular etapas. */
+  manual?: boolean | undefined
+  /** Motivo escrito pela equipe; vai para o histórico de status. */
+  note?: string | undefined
 }
+
+export const MANUAL_STATUS_NOTE = 'Alterado manualmente no painel'
 
 
 export class UpdateOrderStatusUseCase {
@@ -44,7 +50,9 @@ export class UpdateOrderStatusUseCase {
 
     if (!order) throw new NotFoundError('Order')
 
-    if (!canTransitionTo(order.status, input.newStatus)) {
+    const isNaturalStep = canTransitionTo(order.status, input.newStatus)
+    const allowed = isNaturalStep || (input.manual === true && canMoveManually(order.status, input.newStatus))
+    if (!allowed) {
       throw new UnprocessableError(
         MessagesConstants.order.invalidStatusTransition(order.status, input.newStatus)
       )
@@ -71,6 +79,11 @@ export class UpdateOrderStatusUseCase {
       updateValues.cancelledAt = now
       if (input.cancellationReason) updateValues.cancellationReason = input.cancellationReason
     }
+    // Reaberto: deixa de contar como cancelado.
+    if (order.status === 'cancelled' && input.newStatus !== 'cancelled') {
+      updateValues.cancelledAt = null
+      updateValues.cancellationReason = null
+    }
 
     const [updated] = await this.db
       .update(schema.orders)
@@ -91,7 +104,7 @@ export class UpdateOrderStatusUseCase {
       establishmentId: input.establishmentId,
       status: input.newStatus,
       previousStatus: order.status,
-      note: input.newStatus === 'cancelled' ? (input.cancellationReason ?? null) : null,
+      note: statusLogNote(input, isNaturalStep),
       changedByUserId: input.userId ?? null,
       createdAt: now,
       updatedAt: now,
@@ -104,7 +117,9 @@ export class UpdateOrderStatusUseCase {
     })
 
     // Fire-and-forget: a fiscal hiccup must never block the order status change.
-    if (input.newStatus === 'completed' && this.triggerFiscal) {
+    // Concluído de novo depois de uma correção manual não emite outra nota.
+    const firstCompletion = !order.completedAt
+    if (input.newStatus === 'completed' && firstCompletion && this.triggerFiscal) {
       this.triggerFiscal
         .execute({ orderId: input.orderId, establishmentId: input.establishmentId, event: 'on_completed' })
         .catch((error) => console.error('[Fiscal] trigger on_completed failed', error))
@@ -118,7 +133,9 @@ export class UpdateOrderStatusUseCase {
     }
 
     // Fire-and-forget too: a WhatsApp outage must not undo what the kitchen just did.
-    if (this.notifyCustomer && input.userId) {
+    // Correção manual (voltar, pular) não manda mensagem: o cliente não precisa ver o vai e volta.
+    // Cancelamento sempre avisa.
+    if (this.notifyCustomer && input.userId && (isNaturalStep || input.newStatus === 'cancelled')) {
       this.notifyCustomer
         .execute({ orderId: input.orderId, establishmentId: input.establishmentId, newStatus: input.newStatus, agentUserId: input.userId })
         .catch((error) => console.error('[Orders] customer status notification failed', error instanceof Error ? error.message : error))
@@ -149,4 +166,10 @@ export class UpdateOrderStatusUseCase {
         .where(and(eq(schema.orderItems.orderId, orderId), isNull(schema.orderItems.readyAt)))
     }
   }
+}
+
+export function statusLogNote(input: UpdateStatusInput, isNaturalStep: boolean): string | null {
+  const reason = input.newStatus === 'cancelled' ? input.cancellationReason ?? input.note : input.note
+  if (isNaturalStep) return reason ?? null
+  return reason ? `${MANUAL_STATUS_NOTE}: ${reason}` : MANUAL_STATUS_NOTE
 }
