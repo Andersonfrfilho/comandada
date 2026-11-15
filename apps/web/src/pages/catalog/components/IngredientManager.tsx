@@ -1,3 +1,4 @@
+import { formatDecimal, formatUnitCost } from '@/lib/listing'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -244,13 +245,13 @@ export function IngredientManager() {
                 </div>
                 <div className="flex items-center gap-2 mt-1 pl-5">
                   <span className="text-xs text-gray-500">
-                    R$ {toNumber(ingredient.costPerUnit).toFixed(4)}/{ingredient.unit}
+                    {formatUnitCost(toNumber(ingredient.costPerUnit), ingredient.unit)}
                   </span>
                   <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${getStockColor(ingredient.stockQuantity, ingredient.minimumStock)}`}>
-                    {toNumber(ingredient.stockQuantity).toFixed(2)}
+                    {formatDecimal(toNumber(ingredient.stockQuantity), 2)}
                   </span>
                   {ingredient.minimumStock && (
-                    <span className="text-xs text-gray-400">mín. {toNumber(ingredient.minimumStock).toFixed(2)}</span>
+                    <span className="text-xs text-gray-400">mín. {formatDecimal(toNumber(ingredient.minimumStock), 2)}</span>
                   )}
                 </div>
               </div>

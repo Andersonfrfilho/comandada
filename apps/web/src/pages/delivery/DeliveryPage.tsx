@@ -1,3 +1,5 @@
+import { DELIVERY_STATUS_COLORS, DELIVERY_STATUS_LABELS } from '@/constants/statusLabels'
+import { formatDeliveryAddress } from '@/lib/deliveryAddress'
 import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
@@ -50,26 +52,8 @@ interface OrderRoute {
   source: 'route' | 'straight_line' | null
 }
 
-const STATUS_LABELS: Record<string, string> = {
-  pending: 'Aguardando',
-  dispatched: 'Em rota',
-  delivered: 'Entregue',
-  failed: 'Não entregue',
-}
 
-const STATUS_COLORS: Record<string, string> = {
-  pending: 'bg-yellow-100 text-yellow-800',
-  dispatched: 'bg-blue-100 text-blue-800',
-  delivered: 'bg-green-100 text-green-800',
-  failed: 'bg-red-100 text-red-800',
-}
 
-// Pedidos novos (painel e WhatsApp) gravam o endereço numa linha só em `address`; os antigos
-// vinham em `street` e `number`.
-function formatDeliveryAddress(snapshot: Record<string, string>): string {
-  if (snapshot['address']) return snapshot['address']
-  return [snapshot['street'], snapshot['number']].filter(Boolean).join(', ')
-}
 
 function formatTime(value: string): string {
   return new Intl.DateTimeFormat('pt-BR', { timeZone: 'America/Sao_Paulo', hour: '2-digit', minute: '2-digit' }).format(
@@ -242,8 +226,8 @@ function DeliveryCard({
       <div className="p-4">
         <div className="flex items-center justify-between gap-2 mb-3">
           <div className="flex items-center gap-2 min-w-0">
-            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${STATUS_COLORS[delivery.status]}`}>
-              {STATUS_LABELS[delivery.status]}
+            <span className={`text-xs font-semibold px-2 py-1 rounded-full ${DELIVERY_STATUS_COLORS[delivery.status]}`}>
+              {DELIVERY_STATUS_LABELS[delivery.status]}
             </span>
             {canOpenOrder ? (
               <Link to={`/orders/${order.id}`} className="text-base font-extrabold text-gray-900 hover:underline truncate">

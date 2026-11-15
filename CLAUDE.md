@@ -325,6 +325,16 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - `PATCH /comandas/:id/close` só encerra sem nada a receber; comanda encerrada não reabre. `PATCH /comandas/:id/transfer`
   troca de mesa (comanda + pedidos). Card da mesa mostra consumo e tempo; Mesas aparece para o caixa (`notHome`).
 
+## Painel: base comum
+
+- Status de entrega e de nota em `constants/statusLabels.ts` (pedido em `orderLabels.ts`): mesmo nome e cor em toda tela.
+- Números e datas em pt-BR com `formatBRL`/`formatDecimal`/`formatPercent`/`formatMinutes`/`formatUnitCost` (`lib/listing.ts`);
+  nada de `toFixed` na tela. Endereço da entrega por `formatDeliveryAddress` (aceita o formato antigo rua/número).
+- Confirmação com `confirmDialog` (`stores/confirmStore.ts`, desenhado pelo `ConfirmHost`), erro com `toast`; nunca
+  `window.confirm`/`prompt`/`alert`. Botão novo usa `components/ui/Button.tsx`.
+- Configurações: nome e WhatsApp do restaurante gravam em `establishments` (`ESTABLISHMENT_PROFILE_KEYS`); pedido mínimo
+  é `min_order_value` (o que o bot lê). Nome digitado no pedido do painel vai em `orders.customer_name` (migration `0051`).
+
 ## Agenda (encomendas e reservas)
 
 `@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.

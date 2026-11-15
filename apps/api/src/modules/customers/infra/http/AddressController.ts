@@ -5,7 +5,7 @@ import type { CreateAddressUseCase } from '../../application/use-cases/CreateAdd
 import type { UpdateAddressUseCase } from '../../application/use-cases/UpdateAddressUseCase'
 import type { DeleteAddressUseCase } from '../../application/use-cases/DeleteAddressUseCase'
 import type { SetDefaultAddressUseCase } from '../../application/use-cases/SetDefaultAddressUseCase'
-import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
+import { AppError, UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 import { NominatimProvider } from '@/shared/providers/NominatimProvider'
 import { ViaCepProvider } from '@/shared/providers/ViaCepProvider'
 
@@ -34,6 +34,7 @@ const updateSchema = z.object({
   label: z.string().max(50).nullable().optional(),
   lat: z.number().nullable().optional(),
   lng: z.number().nullable().optional(),
+  geocode: z.boolean().optional(),
 })
 
 export class AddressController {
@@ -65,8 +66,7 @@ export class AddressController {
     let lng = parsed.data.lng
 
     if (parsed.data.geocode && (!lat || !lng)) {
-      const query = `${parsed.data.street} ${parsed.data.number}, ${parsed.data.neighborhood}, ${parsed.data.city} - ${parsed.data.state}`
-      const result = await this.geocodingProvider.search(query)
+      const result = await this.tryGeocode(parsed.data)
       if (result) {
         lat = result.lat
         lng = result.lng
@@ -110,6 +110,13 @@ export class AddressController {
     if (d.label !== undefined) input.label = d.label
     if (d.lat !== undefined) input.lat = d.lat
     if (d.lng !== undefined) input.lng = d.lng
+    if (d.geocode && (d.lat == null || d.lng == null) && d.street && d.number && d.neighborhood && d.city && d.state) {
+      const result = await this.tryGeocode({ street: d.street, number: d.number, neighborhood: d.neighborhood, city: d.city, state: d.state })
+      if (result) {
+        input.lat = result.lat
+        input.lng = result.lng
+      }
+    }
 
     const address = await this.updateAddressUseCase.execute(addressId, customerId, input as never)
     response.json(address)
@@ -138,7 +145,26 @@ export class AddressController {
       response.json(null)
       return
     }
-    const result = await this.viaCepProvider.lookup(clean)
-    response.json(result)
+    try {
+      response.json(await this.viaCepProvider.lookup(clean))
+    } catch (error) {
+      // Serviço de CEP fora do ar não é "CEP não encontrado": a tela pede para digitar o endereço.
+      console.warn('[Addresses] CEP lookup failed', error instanceof Error ? error.message : error)
+      throw new AppError('A consulta de CEP está fora do ar agora. Preencha o endereço à mão.', 'cep_unavailable', 503)
+    }
+  }
+
+  /**
+   * Localização no mapa é um extra: se o serviço de mapa cair ou não achar, o endereço salva sem
+   * coordenadas em vez de dar erro 500 (a entrega usa o texto do endereço).
+   */
+  private async tryGeocode(address: { street: string; number: string; neighborhood: string; city: string; state: string }) {
+    const query = `${address.street} ${address.number}, ${address.neighborhood}, ${address.city} - ${address.state}`
+    try {
+      return await this.geocodingProvider.search(query)
+    } catch (error) {
+      console.warn('[Addresses] geocoding failed', error instanceof Error ? error.message : error)
+      return null
+    }
   }
 }

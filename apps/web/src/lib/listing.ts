@@ -21,6 +21,36 @@ export function formatBRL(value: string | number | null | undefined): string {
   return currencyFormatter.format(Number.isFinite(amount) ? amount : 0)
 }
 
+/** Número com vírgula: 77,5 (no máximo `maximumFractionDigits` casas). */
+export function formatDecimal(value: string | number | null | undefined, maximumFractionDigits = 1): string {
+  const amount = Number(value ?? 0)
+  return new Intl.NumberFormat('pt-BR', { maximumFractionDigits }).format(Number.isFinite(amount) ? amount : 0)
+}
+
+/** "95,9%" em vez de "95.91%". */
+export function formatPercent(value: string | number | null | undefined, maximumFractionDigits = 1): string {
+  return `${formatDecimal(value, maximumFractionDigits)}%`
+}
+
+/** "77,5 min". */
+export function formatMinutes(value: string | number | null | undefined): string {
+  return `${formatDecimal(value, 1)} min`
+}
+
+/** Custo por unidade de insumo: "R$ 3,6166/kg" vira "R$ 3,62/kg" (centavo de real quando passa de 1). */
+export function formatUnitCost(value: string | number | null | undefined, unit: string): string {
+  const amount = Number(value ?? 0)
+  const safe = Number.isFinite(amount) ? amount : 0
+  const fractionDigits = Math.abs(safe) >= 1 ? 2 : 4
+  const formatted = new Intl.NumberFormat('pt-BR', {
+    style: 'currency',
+    currency: 'BRL',
+    minimumFractionDigits: 2,
+    maximumFractionDigits: fractionDigits,
+  }).format(safe)
+  return `${formatted}/${unit}`
+}
+
 export function formatInteger(value: number): string {
   return integerFormatter.format(value)
 }

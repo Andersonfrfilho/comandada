@@ -48,6 +48,8 @@ interface CreateOrderInput {
   scheduledFor?: string | undefined
   payments?: CreateOrderPaymentInput[] | undefined
   customerDocument?: string | undefined
+  /** Nome dito no balcão/mesa quando o cliente não tem cadastro. */
+  customerName?: string | undefined
   delivery?: CreateOrderDeliveryInput | undefined
   // Quem lançou o pedido no painel; ausente para WhatsApp e iFood.
   userId?: string | undefined
@@ -120,6 +122,7 @@ export class CreateOrderUseCase {
       .values({
         establishmentId: input.establishmentId,
         customerId: input.customerId ?? null,
+        customerName: input.customerName?.trim() || null,
         tableId: input.tableId ?? null,
         comandaId,
         channel: input.channel,

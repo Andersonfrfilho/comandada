@@ -1,3 +1,4 @@
+import { formatMinutes, formatPercent } from '@/lib/listing'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { REVENUE_RULE_HINT } from '@/constants/paymentLabels'
@@ -573,7 +574,7 @@ export function ReportsPage() {
             <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-xs text-gray-400 mb-1">Tempo médio na mesa</p>
-                <p className="text-xl font-bold text-gray-900">{tableMetrics.averageTimeAtTableMinutes} min</p>
+                <p className="text-xl font-bold text-gray-900">{formatMinutes(tableMetrics.averageTimeAtTableMinutes)}</p>
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-xs text-gray-400 mb-1">Ticket médio por comanda</p>
@@ -581,7 +582,7 @@ export function ReportsPage() {
               </div>
               <div className="bg-white rounded-2xl p-4 shadow-sm">
                 <p className="text-xs text-gray-400 mb-1">Taxa de ocupação</p>
-                <p className="text-xl font-bold text-gray-900">{tableMetrics.occupancyRatePercent}%</p>
+                <p className="text-xl font-bold text-gray-900">{formatPercent(tableMetrics.occupancyRatePercent)}</p>
                 <p className="text-xs text-gray-400 mt-1">
                   sobre {Math.round(tableMetrics.operatingMinutesPerDay / 60)}h de salão por dia
                 </p>
@@ -614,7 +615,7 @@ export function ReportsPage() {
                           <td className="py-2 font-medium text-gray-800">Mesa {t.tableNumber}</td>
                           <td className="py-2 text-right text-gray-600">{t.comandaCount}</td>
                           <td className="py-2 text-right text-gray-600">
-                            {t.comandaCount > 0 ? `${t.avgTimeMinutes} min` : NO_DATA}
+                            {t.comandaCount > 0 ? formatMinutes(t.avgTimeMinutes) : NO_DATA}
                           </td>
                           <td className="py-2 text-right text-gray-900 font-medium">{formatBRL(t.totalRevenue)}</td>
                           <td className="py-2 text-right text-gray-600">
@@ -816,7 +817,7 @@ export function ReportsPage() {
                         <tr key={prod.productId} className="border-b border-gray-50">
                           <td className="py-2 font-medium text-gray-800 truncate max-w-[200px]">{prod.productName}</td>
                           <td className="py-2 text-right text-green-600">
-                            {hasCost(prod.costPrice) ? `${prod.marginPercent}%` : (
+                            {hasCost(prod.costPrice) ? formatPercent(prod.marginPercent) : (
                               <span className="text-amber-600">{NO_COST_REGISTERED}</span>
                             )}
                           </td>
@@ -884,7 +885,7 @@ export function ReportsPage() {
             {prepTimeReport.products.length > 0 && (
               <div className="bg-white rounded-2xl p-5 shadow-sm">
                 <h3 className="text-sm font-semibold text-gray-700 mb-4">
-                  Tempo Cadastrado vs Real (in_production → ready)
+                  Tempo de preparo: cadastrado × real (de Em preparo até Pronto)
                 </h3>
                 <div className="overflow-x-auto">
                   <table className="w-full text-sm">
@@ -908,8 +909,8 @@ export function ReportsPage() {
                             <td className={`py-2 font-medium ${isWorse ? 'text-red-800' : 'text-gray-800'}`}>
                               {prod.productName}
                             </td>
-                            <td className="py-2 text-right text-gray-600">{prod.cadastradoMinutes} min</td>
-                            <td className="py-2 text-right text-gray-900 font-medium">{prod.realAverageMinutes} min</td>
+                            <td className="py-2 text-right text-gray-600">{formatMinutes(prod.cadastradoMinutes)}</td>
+                            <td className="py-2 text-right text-gray-900 font-medium">{formatMinutes(prod.realAverageMinutes)}</td>
                             <td className={`py-2 text-right font-medium ${isWorse ? 'text-red-600' : 'text-green-600'}`}>
                               {isWorse ? '+' : ''}{prod.differenceMinutes} min ({isWorse ? '+' : ''}{prod.differencePercent}%)
                             </td>

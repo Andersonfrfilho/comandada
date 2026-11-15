@@ -287,6 +287,18 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       expect(items[0]?.productName).toBe('Hot roll')
     })
 
+    it('guarda o nome digitado para cliente sem cadastro', async () => {
+      const order = await createUseCase().execute({
+        establishmentId,
+        channel: 'manual',
+        type: 'pickup',
+        customerName: '  Dona Maria ',
+        items: [{ productId, productName: 'Hot roll', unitPrice: 30, quantity: 1 }],
+        priceFromCatalog: true,
+      })
+      expect(order.customerName).toBe('Dona Maria')
+    })
+
     it('recusa produto fora do cardápio, item sem produto e produto desativado', async () => {
       await expect(createUseCase().execute({
         establishmentId,

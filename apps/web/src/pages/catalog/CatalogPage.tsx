@@ -443,9 +443,9 @@ function CatalogPageContent() {
       : 'Excluir produto'
 
   return (
-    <div className="flex h-full min-h-screen">
-      {/* Left panel — catalogs */}
-      <div className="w-56 flex-shrink-0 border-r border-gray-200 bg-gray-50 flex flex-col">
+    <div className="flex flex-col md:flex-row h-full min-h-screen">
+      {/* Left panel — catalogs (no celular fica em cima, com rolagem própria, e a lista ganha a largura toda) */}
+      <div className="w-full md:w-56 flex-shrink-0 border-b md:border-b-0 md:border-r border-gray-200 bg-gray-50 flex flex-col max-h-80 md:max-h-none overflow-y-auto md:overflow-visible">
         <div className="px-4 py-4 border-b border-gray-200">
           <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-3">Catálogos</p>
           <button
@@ -528,8 +528,8 @@ function CatalogPageContent() {
 
       {/* Right panel — products */}
       <div className="flex-1 flex flex-col min-w-0">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 flex-shrink-0">
-          <div>
+        <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-gray-200 flex-shrink-0">
+          <div className="min-w-0">
             <h1 className="text-lg font-bold text-gray-900">
               {selectedCatId === null
                 ? 'Todos os produtos'
@@ -553,7 +553,7 @@ function CatalogPageContent() {
           </button>
         </div>
 
-        <div className="flex flex-wrap items-end gap-3 px-6 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
+        <div className="flex flex-wrap items-end gap-3 px-4 md:px-6 py-3 border-b border-gray-200 bg-gray-50 flex-shrink-0">
           <SearchField value={productSearch} onChange={setProductSearch} placeholder="Nome, descrição ou código de barras" />
           <FilterField label="Status" className="w-full sm:w-32">
             <FilterSelect value={productStatus} onChange={setProductStatus} options={PRODUCT_STATUS_OPTIONS} />
@@ -595,7 +595,7 @@ function CatalogPageContent() {
           )}
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6">
+        <div className="flex-1 overflow-y-auto p-4 md:p-6">
           {visibleProducts.length === 0 ? (
             <p className="text-gray-400 text-center py-16">
               {hasProductFilters ? 'Nenhum produto com esses filtros' : 'Nenhum produto neste catálogo'}
@@ -608,11 +608,11 @@ function CatalogPageContent() {
                 return (
                   <div
                     key={prod.id}
-                    className={`bg-white rounded-xl border border-gray-200 p-4 flex items-center gap-4 ${!prod.active ? 'opacity-60' : ''}`}
+                    className={`bg-white rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${!prod.active ? 'opacity-60' : ''}`}
                   >
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900 truncate">{prod.name}</span>
+                        <span className="font-semibold text-gray-900 break-words">{prod.name}</span>
                         {!prod.active && (
                           <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">Inativo</span>
                         )}
@@ -632,7 +632,7 @@ function CatalogPageContent() {
                         </p>
                       )}
                     </div>
-                    <div className="text-right flex-shrink-0">
+                    <div className="sm:text-right flex-shrink-0">
                       <p className="font-bold text-gray-900">{formatBRL(prod.price)}</p>
                       <RecipeCostBadge
                         productId={prod.id}
@@ -646,7 +646,7 @@ function CatalogPageContent() {
                         </p>
                       )}
                     </div>
-                    <div className="flex items-center gap-1.5 flex-shrink-0">
+                    <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
                       <button
                         onClick={() => openEditProd(prod)}
                         className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"

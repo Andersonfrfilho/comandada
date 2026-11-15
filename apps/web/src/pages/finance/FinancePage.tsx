@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/stores/confirmStore'
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { REVENUE_RULE_HINT } from '@/constants/paymentLabels'
@@ -9,7 +10,7 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
-import { matchesSearch, paginateRows, sortRows, toggleSort, type SortDirection, type SortState } from '@/lib/listing'
+import { formatPercent, matchesSearch, paginateRows, sortRows, toggleSort, type SortDirection, type SortState } from '@/lib/listing'
 import { Banknote, Plus, ChevronLeft, ChevronRight, CheckCircle, XCircle, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react'
 
 interface MonthlyAccount {
@@ -523,8 +524,8 @@ export function FinancePage() {
           </button>
           <button
             type="button"
-            onClick={() => {
-              if (window.confirm('Excluir este gasto?')) {
+            onClick={async () => {
+              if (await confirmDialog({ title: 'Excluir este gasto?', message: 'Ele sai do Financeiro e dos relatórios.', confirmLabel: 'Excluir', tone: 'danger' })) {
                 deleteExpenseMutation.mutate(expense.id)
               }
             }}
@@ -686,8 +687,8 @@ export function FinancePage() {
                     </button>
                     <button
                       type="button"
-                      onClick={() => {
-                        if (window.confirm('Excluir esta conta?')) {
+                      onClick={async () => {
+                        if (await confirmDialog({ title: 'Excluir esta conta?', confirmLabel: 'Excluir', tone: 'danger' })) {
                           deleteMutation.mutate(account.id)
                         }
                       }}
@@ -835,7 +836,7 @@ export function FinancePage() {
                   <p className="text-xs text-gray-600 mb-1">Margem</p>
                   <p className={`text-lg font-bold ${
                     overviewData.currentMonth.margin >= 20 ? 'text-green-700' : overviewData.currentMonth.margin >= 10 ? 'text-yellow-700' : 'text-red-700'
-                  }`}>{overviewData.currentMonth.margin}%</p>
+                  }`}>{formatPercent(overviewData.currentMonth.margin)}</p>
                 </div>
               </div>
 

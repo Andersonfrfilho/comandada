@@ -75,7 +75,7 @@ export class GetAgendaDayUseCase {
       type: order.type,
       status: order.status,
       totalAmount: order.totalAmount,
-      customerName: order.customer?.name ?? null,
+      customerName: order.customer?.name ?? order.customerName ?? null,
       itemsSummary: order.items.map((item) => `${item.quantity}× ${item.productName}`).join(', '),
     }))
   }

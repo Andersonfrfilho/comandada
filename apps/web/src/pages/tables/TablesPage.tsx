@@ -223,7 +223,7 @@ export function TablesPage() {
               onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors active:scale-95 ${
                 selectionMode
-                  ? 'bg-indigo-600 text-white border-indigo-600 hover:bg-indigo-700'
+                  ? 'bg-brand-600 text-white border-brand-600 hover:bg-brand-700'
                   : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50'
               }`}
             >
@@ -242,8 +242,8 @@ export function TablesPage() {
       </div>
 
       {selectionMode && viewMode === 'map' && (
-        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 px-4 py-3 bg-indigo-50 border border-indigo-200 rounded-lg">
-          <p className="text-sm text-indigo-900">
+        <div className="flex flex-wrap items-center justify-between gap-3 mb-4 px-4 py-3 bg-brand-50 border border-brand-200 rounded-lg">
+          <p className="text-sm text-brand-700">
             {selectedIds.size === 0
               ? 'Selecione ao menos 2 mesas para juntar.'
               : `${selectedIds.size} mesa${selectedIds.size !== 1 ? 's' : ''} selecionada${selectedIds.size !== 1 ? 's' : ''}.`}
@@ -251,7 +251,7 @@ export function TablesPage() {
           <button
             onClick={() => void handleGroup()}
             disabled={selectedIds.size < 2 || actionLoading}
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm font-medium rounded-lg hover:bg-indigo-700 transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
+            className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             <Link2 className="h-4 w-4" />
             {actionLoading ? 'Juntando...' : 'Juntar selecionadas'}

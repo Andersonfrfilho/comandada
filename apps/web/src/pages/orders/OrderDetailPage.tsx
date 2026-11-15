@@ -1,3 +1,5 @@
+import { FISCAL_STATUS_LABELS } from '@/constants/statusLabels'
+import { formatDeliveryAddress, deliveryComplement, type AddressSnapshot } from '@/lib/deliveryAddress'
 import { useParams, Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -44,7 +46,7 @@ interface OrderPayment {
 
 interface OrderDelivery {
   id: string
-  addressSnapshot: { address: string; complement: string | null }
+  addressSnapshot: AddressSnapshot
   feeAmount: string
   distanceKm: string | null
 }
@@ -81,6 +83,7 @@ interface OrderDetail {
   estimatedAt: string | null
   code: string | null
   customer: { name: string; whatsappNumber: string } | null
+  customerName?: string | null
   items: OrderItem[]
   // `GET /orders/:id` ainda não devolve pagamentos, nota e histórico — as relações não existem no
   // schema. Opcionais aqui para a tela renderizar em vez de estourar no `.map`.
@@ -91,13 +94,6 @@ interface OrderDetail {
   partialConfirmation?: OrderPartialConfirmationState | null
 }
 
-const FISCAL_STATUS_LABELS: Record<FiscalDocStatus, string> = {
-  pending: 'Pendente',
-  emitting: 'Emitindo...',
-  authorized: 'Autorizada',
-  rejected: 'Rejeitada',
-  cancelled: 'Cancelada',
-}
 
 export function OrderDetailPage() {
   const { id } = useParams<{ id: string }>()
@@ -192,6 +188,9 @@ export function OrderDetailPage() {
             <p className="text-xs text-gray-400">
               Recebido em {new Date(order.receivedAt).toLocaleString('pt-BR')}
             </p>
+            {!order.customer && order.customerName && (
+              <p className="mt-2 text-sm font-medium text-gray-900">{order.customerName}</p>
+            )}
             {order.customer && (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
                 <div className="min-w-0">
@@ -242,8 +241,8 @@ export function OrderDetailPage() {
           {order.type === 'delivery' && order.delivery?.[0] && (
             <OrderDeliveryCard
               orderId={order.id}
-              address={order.delivery[0].addressSnapshot.address}
-              complement={order.delivery[0].addressSnapshot.complement}
+              address={formatDeliveryAddress(order.delivery[0].addressSnapshot)}
+              complement={deliveryComplement(order.delivery[0].addressSnapshot)}
               feeAmount={order.delivery[0].feeAmount}
               savedDistanceKm={order.delivery[0].distanceKm}
             />

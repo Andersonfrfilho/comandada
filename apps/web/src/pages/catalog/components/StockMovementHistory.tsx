@@ -1,3 +1,4 @@
+import { formatDecimal } from '@/lib/listing'
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -40,7 +41,7 @@ function toNumber(value: string): number {
 function formatQuantity(movementType: string, quantity: string): string {
   const value = toNumber(quantity)
   const sign = value > 0 ? '+' : ''
-  return movementType === 'adjustment' || movementType === 'loss' ? `${sign}${value.toFixed(4)}` : value.toFixed(4)
+  return movementType === 'adjustment' || movementType === 'loss' ? `${sign}${formatDecimal(value, 3)}` : formatDecimal(value, 3)
 }
 
 export function StockMovementHistory({ ingredientId }: StockMovementHistoryProps) {

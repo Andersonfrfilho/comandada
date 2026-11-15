@@ -13,6 +13,7 @@ const LAST_ORDER_KEY = 'lastOrder'
 // Estados de `src/shared/constants/StateConstants.ts` (BotState), que o bot grava em `bot_sessions`.
 const STATE_LABELS: Record<string, string> = {
   start: 'Início',
+  idle: 'Parado',
   awaiting_name: 'Aguardando nome',
   ordering: 'Vendo cardápio',
   ordering_cat: 'Vendo cardápio',
@@ -101,7 +102,8 @@ const currencyFormatter = new Intl.NumberFormat('pt-BR', { style: 'currency', cu
 
 export function stateLabel(currentState: string | undefined): string | undefined {
   if (!currentState) return undefined
-  return STATE_LABELS[currentState] ?? currentState
+  // Passo novo do bot sem nome aqui: melhor não mostrar nada do que mostrar o código interno.
+  return STATE_LABELS[currentState]
 }
 
 function asDisplayValue(value: unknown): string | undefined {

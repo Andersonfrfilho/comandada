@@ -1,3 +1,4 @@
+import { formatPercent } from '@/lib/listing'
 import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -80,7 +81,7 @@ export function OrderIssuesSection() {
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
             <div className="bg-white rounded-2xl p-5 shadow-sm">
               <p className="text-xs text-gray-500 mb-1">Pedidos com problema</p>
-              <p className="text-2xl font-bold text-gray-900">{report.issueRatePercent}%</p>
+              <p className="text-2xl font-bold text-gray-900">{formatPercent(report.issueRatePercent)}</p>
               <p className="text-xs text-gray-400 mt-1">
                 {report.ordersWithIssue} de {report.totalOrders} pedidos
               </p>

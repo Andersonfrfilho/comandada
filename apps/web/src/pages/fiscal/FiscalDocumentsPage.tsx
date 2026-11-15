@@ -1,3 +1,6 @@
+import { toast } from '@/stores/toastStore'
+import { confirmDialog } from '@/stores/confirmStore'
+import { FISCAL_STATUS_COLORS, FISCAL_STATUS_LABELS } from '@/constants/statusLabels'
 import { orderNumberLabel } from '@/lib/orderLabel'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -32,21 +35,7 @@ interface FiscalDoc {
   createdAt: string
 }
 
-const STATUS_LABELS: Record<FiscalDocStatus, string> = {
-  pending: 'Pendente',
-  emitting: 'Emitindo',
-  authorized: 'Autorizada',
-  rejected: 'Rejeitada',
-  cancelled: 'Cancelada',
-}
 
-const STATUS_BADGE: Record<FiscalDocStatus, string> = {
-  pending: 'bg-gray-100 text-gray-700',
-  emitting: 'bg-blue-100 text-blue-700 animate-pulse',
-  authorized: 'bg-green-100 text-green-700',
-  rejected: 'bg-red-100 text-red-700',
-  cancelled: 'bg-gray-200 text-gray-500',
-}
 
 const FILTERABLE_STATUSES: FiscalDocStatus[] = [
   'pending',
@@ -68,6 +57,8 @@ const FISCAL_SORT_FIELDS = ['createdAt', 'totalLiquido', 'numeroDocumento'] as c
 type FiscalSortField = (typeof FISCAL_SORT_FIELDS)[number]
 
 type FiscalModel = 'nfce' | 'nfe' | 'sat'
+
+const FISCAL_MODEL_LABELS: Record<string, string> = { nfce: 'NFC-e', nfe: 'NF-e', sat: 'SAT' }
 const MODEL_OPTIONS: ReadonlyArray<{ value: FiscalModel; label: string }> = [
   { value: 'nfce', label: 'NFC-e' },
   { value: 'nfe', label: 'NF-e' },
@@ -123,7 +114,7 @@ export function FiscalDocumentsPage() {
     mutationFn: (documentId: string) =>
       api.post(`/fiscal-documents/${documentId}/retry`, {}, accessToken ?? undefined),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fiscal-documents'] }),
-    onError: () => window.alert('Falha ao reprocessar a nota. Tente novamente.'),
+    onError: () => toast.error('Não deu para reprocessar a nota. Tente de novo.'),
   })
 
   const cancelMutation = useMutation({
@@ -134,13 +125,13 @@ export function FiscalDocumentsPage() {
         accessToken ?? undefined
       ),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: ['fiscal-documents'] }),
-    onError: () => window.alert('Falha ao cancelar a nota. Tente novamente.'),
+    onError: (error: Error) => toast.error(error.message || 'Não deu para cancelar a nota. Tente de novo.'),
   })
 
   const printMutation = useMutation({
     mutationFn: (orderId: string) =>
       api.post(`/orders/${orderId}/fiscal-document/print`, {}, accessToken ?? undefined),
-    onError: () => window.alert('Não foi possível imprimir. Verifique a impressora.'),
+    onError: () => toast.error('Não foi possível imprimir. Verifique a impressora.'),
   })
 
   async function handleDownloadXml(documentId: string) {
@@ -148,7 +139,7 @@ export function FiscalDocumentsPage() {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
     if (!response.ok) {
-      window.alert('Não foi possível baixar o XML.')
+      toast.error('Não foi possível baixar o XML.')
       return
     }
     const data = (await response.json()) as { xml: string }
@@ -166,7 +157,7 @@ export function FiscalDocumentsPage() {
       headers: accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined,
     })
     if (!response.ok) {
-      window.alert('Não foi possível gerar o PDF.')
+      toast.error('Não foi possível gerar o PDF.')
       return
     }
     const blob = await response.blob()
@@ -185,10 +176,18 @@ export function FiscalDocumentsPage() {
     list.setFilter('status', next.join(',') || null)
   }
 
-  function handleCancel(documentId: string) {
-    const justificativa = window.prompt('Justificativa do cancelamento (mínimo 15 caracteres):')
-    if (!justificativa || justificativa.trim().length < 15) return
-    cancelMutation.mutate({ documentId, justificativa: justificativa.trim() })
+  async function handleCancel(documentId: string) {
+    // Antes um prompt do navegador: texto curto sumia sem aviso.
+    const justificativa = await confirmDialog({
+      title: 'Cancelar nota fiscal?',
+      message: 'O cancelamento vai para a Receita e não pode ser desfeito.',
+      confirmLabel: 'Cancelar nota',
+      cancelLabel: 'Voltar',
+      tone: 'danger',
+      input: { label: 'Justificativa', minLength: 15, placeholder: 'Ex.: pedido cancelado pelo cliente antes do preparo' },
+    })
+    if (!justificativa) return
+    cancelMutation.mutate({ documentId, justificativa })
   }
 
   function renderActions(doc: FiscalDoc) {
@@ -297,17 +296,17 @@ export function FiscalDocumentsPage() {
       key: 'model',
       header: 'Modelo',
       className: 'hidden md:table-cell',
-      render: (doc) => <span className="uppercase text-gray-600">{doc.model}</span>,
+      render: (doc) => <span className="text-gray-600">{FISCAL_MODEL_LABELS[doc.model] ?? doc.model}</span>,
     },
     {
       key: 'status',
       header: 'Status',
       render: (doc) => (
         <span
-          className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${STATUS_BADGE[doc.status]}`}
+          className={`rounded-full px-2 py-1 text-xs font-semibold whitespace-nowrap ${FISCAL_STATUS_COLORS[doc.status]}`}
           title={doc.status === 'rejected' ? doc.errorMessage ?? undefined : undefined}
         >
-          {STATUS_LABELS[doc.status]}
+          {FISCAL_STATUS_LABELS[doc.status]}
         </span>
       ),
     },
@@ -357,7 +356,7 @@ export function FiscalDocumentsPage() {
               statusFilter.includes(status) ? 'bg-gray-900 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
             }`}
           >
-            {STATUS_LABELS[status]}
+            {FISCAL_STATUS_LABELS[status]}
           </button>
         ))}
       </div>

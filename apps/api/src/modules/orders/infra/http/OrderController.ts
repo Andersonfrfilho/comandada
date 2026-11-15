@@ -54,6 +54,7 @@ const createOrderSchema = z.object({
   scheduledFor: z.string().datetime().optional(),
   payments: z.array(orderPaymentSchema).optional(),
   customerDocument: z.string().max(20).optional(),
+  customerName: z.string().max(255).optional(),
   delivery: orderDeliverySchema.optional(),
 })
 

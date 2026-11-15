@@ -1,3 +1,4 @@
+import { confirmDialog } from '@/stores/confirmStore'
 import { useState, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
@@ -247,13 +248,13 @@ export function DeliveryFeeManager() {
     })
   }
 
-  function handleDeleteRule(id: number) {
-    if (!window.confirm('Tem certeza que deseja excluir esta regra?')) return
+  async function handleDeleteRule(id: number) {
+    if (!(await confirmDialog({ title: 'Excluir esta regra de taxa?', confirmLabel: 'Excluir', tone: 'danger' }))) return
     deleteRuleMutation.mutate(id)
   }
 
-  function handleDeleteZone(id: number) {
-    if (!window.confirm('Tem certeza que deseja excluir esta zona?')) return
+  async function handleDeleteZone(id: number) {
+    if (!(await confirmDialog({ title: 'Excluir esta zona de entrega?', confirmLabel: 'Excluir', tone: 'danger' }))) return
     deleteZoneMutation.mutate(id)
   }
 

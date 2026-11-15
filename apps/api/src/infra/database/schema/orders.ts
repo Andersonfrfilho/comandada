@@ -11,6 +11,8 @@ export const orders = pgTable('orders', {
     .notNull()
     .references(() => establishments.id, { onDelete: 'cascade' }),
   customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'set null' }),
+  // Nome digitado no painel para cliente sem cadastro; com cadastro vale o nome do cliente.
+  customerName: varchar('customer_name', { length: 255 }),
   tableId: uuid('table_id').references(() => restaurantTables.id, { onDelete: 'set null' }),
   // Comanda aberta da mesa quando o pedido foi lançado: a conta da mesa soma por aqui.
   comandaId: uuid('comanda_id').references(() => comandas.id, { onDelete: 'set null' }),
