@@ -31,6 +31,20 @@ class DeliveryHandler extends BaseHandler {
       return true;
     }
 
+    if (currentState === BotState.AWAITING_COMPLEMENT && (texto === MENU_BACK_ID || texto === 'voltar')) {
+      this._backToOrderType();
+      return true;
+    }
+
+    if (currentState === BotState.AWAITING_COMPLEMENT && (texto === ADDRESS_FIX_ID || texto === 'corrigir' || texto === 'corrigir endereço' || texto === 'corrigir endereco')) {
+      newCart.address = '';
+      newCart.complement = '';
+      newCart.delivery_fee = 0;
+      newState = BotState.AWAITING_ADDRESS;
+      respostas.push(MessagesConstants.SOLICITAR_ENDERECO);
+      return true;
+    }
+
     if (currentState === BotState.AWAITING_ADDRESS) {
       await this._handleAddress();
       return true;
@@ -105,7 +119,7 @@ class DeliveryHandler extends BaseHandler {
     newCart.delivery_fee = calcFee;
     newState = BotState.AWAITING_COMPLEMENT;
     respostas.push(locationMsg(lat, lng, MessagesConstants.ENDERECO_ENTREGA_TITULO, addressLabel));
-    respostas.push(MessagesConstants.ENDERECO_ENCONTRADO(addressLabel, this._buildEtaLine(calcFee, routeMin, routeKm)));
+    respostas.push(complementButtons(MessagesConstants.ENDERECO_ENCONTRADO(addressLabel, this._buildEtaLine(calcFee, routeMin, routeKm))));
   }
 
   private async _handleAddress(): Promise<void> {
@@ -144,7 +158,7 @@ class DeliveryHandler extends BaseHandler {
       newCart.delivery_fee = calcFee;
       newState = BotState.AWAITING_COMPLEMENT;
       respostas.push(locationMsg(lat, lng, MessagesConstants.ENDERECO_ENTREGA_TITULO, addressLabel));
-      respostas.push(MessagesConstants.LOCALIZACAO_RECEBIDA(addressLabel, this._buildEtaLine(calcFee, routeMin, routeKm)));
+      respostas.push(complementButtons(MessagesConstants.LOCALIZACAO_RECEBIDA(addressLabel, this._buildEtaLine(calcFee, routeMin, routeKm))));
       return;
     }
 
@@ -223,7 +237,10 @@ class DeliveryHandler extends BaseHandler {
     const fullAddress = [streetInfo['logradouro'], numLabel, streetInfo['bairro'], streetInfo['localidade'], streetInfo['uf']].filter(Boolean).join(', ');
     newCart.address_street_temp = null;
 
-    const geoResult = await geocodingProvider.search(fullAddress + ', Brasil');
+    // O bairro do CEP às vezes não existe no mapa (ex.: "Franca Pólo Club"): tenta de novo só com rua, número e cidade.
+    const withoutDistrict = [streetInfo['logradouro'], numLabel, streetInfo['localidade'], streetInfo['uf']].filter(Boolean).join(', ');
+    const geoResult = await geocodingProvider.search(fullAddress + ', Brasil')
+      || (streetInfo['bairro'] ? await geocodingProvider.search(withoutDistrict + ', Brasil') : null);
 
     if (!geoResult) {
       const { total: cartSubtotal } = cartSummary(newCart.items);
@@ -233,7 +250,9 @@ class DeliveryHandler extends BaseHandler {
       newCart.delivery_fee = fee;
       const feeMsg = fee === 0 ? MessagesConstants.FRETE_GRATIS : MessagesConstants.TAXA_ENTREGA(fmtBRL(fee));
       newState = BotState.AWAITING_COMPLEMENT;
+      // Sem coordenadas: o link do mapa vai em texto (a Meta mostra a prévia) e a pergunta vem em botões.
       respostas.push(MessagesConstants.ENDERECO_CONFIRMADO_CEP(fullAddress, mapsLink, feeMsg));
+      respostas.push(complementButtons());
       return;
     }
 
