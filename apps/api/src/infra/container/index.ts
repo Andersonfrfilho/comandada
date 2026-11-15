@@ -397,7 +397,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   )
 
   // Kitchen
-  const getKitchenQueueUseCase = new GetKitchenQueueUseCase(db)
+  const getKitchenQueueUseCase = new GetKitchenQueueUseCase(db, new EstimateOrderTimeUseCase(db))
   const markOrderItemReadyUseCase = new MarkOrderItemReadyUseCase(db, updateOrderStatusUseCase)
   const kitchenController = new KitchenController(
     getKitchenQueueUseCase,
