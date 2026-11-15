@@ -43,7 +43,7 @@ export type DeliveryStatus = 'pending' | 'dispatched' | 'delivered' | 'failed'
 
 export type CashRegisterStatus = 'open' | 'closed'
 
-export type CashMovementType = 'payment' | 'withdrawal' | 'supply'
+export type CashMovementType = 'payment' | 'withdrawal' | 'supply' | 'refund'
 
 export type PaymentMethod = 'pix' | 'card_credit' | 'card_debit' | 'cash' | 'voucher'
 

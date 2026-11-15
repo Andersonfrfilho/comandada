@@ -76,6 +76,7 @@ const ONLINE_PAYMENT_BADGES: Record<string, { label: string; className: string }
   awaiting: { label: 'Aguardando pagamento', className: 'bg-amber-100 text-amber-800' },
   paid: { label: 'Pago online', className: 'bg-green-100 text-green-800' },
   failed: { label: 'Pagamento expirou', className: 'bg-gray-200 text-gray-700' },
+  partially_refunded: { label: 'Estorno parcial', className: 'bg-orange-100 text-orange-800' },
   refunded: { label: 'Estornado', className: 'bg-red-100 text-red-700' },
 }
 

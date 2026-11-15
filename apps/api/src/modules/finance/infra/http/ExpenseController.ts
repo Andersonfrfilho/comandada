@@ -1,4 +1,5 @@
-import { eq, and, gte, lte, sql, desc } from 'drizzle-orm'
+import { eq, and, gte, lte, sql, desc, inArray } from 'drizzle-orm'
+import { netCashAmount } from '@/modules/cashier/shared/cashMovementAmounts'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
@@ -265,12 +266,12 @@ export class ExpenseController {
 
     // Current month cash register payments
     const cashPayments = await this.db
-      .select({ total: sql<string>`COALESCE(SUM(${schema.cashMovements.amount}), '0')` })
+      .select({ total: sql<string>`COALESCE(SUM(${netCashAmount}), '0')` })
       .from(schema.cashMovements)
       .innerJoin(schema.cashRegisters, eq(schema.cashMovements.cashRegisterId, schema.cashRegisters.id))
       .where(and(
         eq(schema.cashRegisters.establishmentId, establishmentId),
-        eq(schema.cashMovements.type, 'payment'),
+        inArray(schema.cashMovements.type, ['payment', 'refund']),
         gte(schema.cashMovements.createdAt, currentMonthStart),
         lte(schema.cashMovements.createdAt, currentMonthEnd),
       ))
@@ -352,12 +353,12 @@ export class ExpenseController {
         ))
 
       const monthCash = await this.db
-        .select({ total: sql<string>`COALESCE(SUM(${schema.cashMovements.amount}), '0')` })
+        .select({ total: sql<string>`COALESCE(SUM(${netCashAmount}), '0')` })
         .from(schema.cashMovements)
         .innerJoin(schema.cashRegisters, eq(schema.cashMovements.cashRegisterId, schema.cashRegisters.id))
         .where(and(
           eq(schema.cashRegisters.establishmentId, establishmentId),
-          eq(schema.cashMovements.type, 'payment'),
+          inArray(schema.cashMovements.type, ['payment', 'refund']),
           gte(schema.cashMovements.createdAt, monthDate),
           lte(schema.cashMovements.createdAt, nextMonthDate),
         ))

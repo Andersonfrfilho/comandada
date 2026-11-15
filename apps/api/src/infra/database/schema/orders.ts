@@ -30,8 +30,11 @@ export const orders = pgTable('orders', {
   // Previsão dada ao cliente quando o pedido foi aceito (pronto para retirar ou entregue).
   estimatedAt: timestamp('estimated_at', { withTimezone: true }),
   // Pagamento online pelo WhatsApp: `awaiting` segura o pedido fora da cozinha até o provedor confirmar.
-  // not_required | awaiting | paid | failed | refunded
+  // not_required | awaiting | paid | failed | partially_refunded | refunded
   paymentStatus: varchar('payment_status', { length: 20 }).notNull().default('not_required'),
+  // Quanto já voltou para o cliente (estornos online e devoluções na mão). Reservado antes de chamar o
+  // provedor, para o webhook do estorno não contar a mesma devolução duas vezes.
+  refundedAmount: numeric('refunded_amount', { precision: 10, scale: 2 }).notNull().default('0'),
   receivedAt: timestamp('received_at', { withTimezone: true }).defaultNow().notNull(),
   productionStartedAt: timestamp('production_started_at', { withTimezone: true }),
   readyAt: timestamp('ready_at', { withTimezone: true }),

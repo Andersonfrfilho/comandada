@@ -9,12 +9,18 @@ import type { AddCashMovementUseCase } from '@/modules/cashier/application/use-c
 import type { CancelScheduleBookingUseCase } from '@/modules/agenda/application/use-cases/CancelScheduleBookingUseCase'
 import { SCHEDULING_ACTOR_BOT } from '@/modules/agenda/shared/agenda.constant'
 import type { BotMessageProvider } from '@/shared/providers/BotMessageProvider'
+import type { OrderRefundLedger } from './OrderRefundLedger'
 import {
   CASH_METHOD_BY_CHARGE_KIND,
   ORDER_PAYMENT_STATUS,
   PAYMENT_CUSTOMER_MESSAGES,
   PAYMENT_TEMPLATE_TEXTS,
   PAYMENT_EXPIRED_CANCELLATION_REASON,
+  PAYMENT_REFUND_STATUS,
+  REFUND_CENTS_TOLERANCE,
+  REFUND_METHOD,
+  REFUND_REASONS,
+  REFUNDABLE_ONLINE_STATUSES,
 } from '../../shared/payments.constant'
 
 type Database = NodePgDatabase<typeof schema>
@@ -34,6 +40,9 @@ export interface OrderPaymentTransitionsDependencies {
   readonly botMessages: BotMessageProvider
   readonly addCashMovement: Pick<AddCashMovementUseCase, 'execute'>
   readonly cancelBooking?: Pick<CancelScheduleBookingUseCase, 'execute'> | undefined
+  readonly ledger: Pick<OrderRefundLedger, 'summary' | 'reserve' | 'complete'>
+  // Pago depois de cancelado: devolve sozinho (o cliente não vai receber o pedido).
+  readonly refundAfterCancellation?: ((order: OrderWithCustomer) => Promise<void>) | undefined
 }
 
 function orderCode(order: schema.Order): string {
@@ -85,8 +94,15 @@ export class OrderPaymentTransitions {
       paymentStatus: ORDER_PAYMENT_STATUS.PAID,
     })
     if (order.status === 'cancelled') {
-      // Pagou depois de cancelado (corrida rara com a expiração): a equipe decide, o bot não promete cozinha.
-      console.error('[Payments] paid after cancellation, needs manual refund:', order.id)
+      // Pagou depois de cancelado (corrida com a expiração, ou cancelado no painel com o link aberto):
+      // o pedido não sai, então o dinheiro volta. Se o estorno falhar, a equipe vê no detalhe do pedido.
+      if (this.deps.refundAfterCancellation) {
+        await this.deps.refundAfterCancellation({ ...order, paymentStatus: ORDER_PAYMENT_STATUS.PAID }).catch((error: unknown) =>
+          console.error('[Payments] refund after cancellation failed:', order.id, error instanceof Error ? error.message : error)
+        )
+      } else {
+        console.error('[Payments] paid after cancellation, needs manual refund:', order.id)
+      }
       return true
     }
     await this.deps.wsHub.publishBroadcast(order.establishmentId, WS_EVENTS.KITCHEN_ORDER_QUEUED, {
@@ -130,8 +146,32 @@ export class OrderPaymentTransitions {
     return true
   }
 
+  // Estorno total ou contestação avisados pelo provedor. O que ainda não tinha voltado por aqui (estorno
+  // feito direto no painel do provedor) entra no livro e sai do caixa; o que já voltou não conta de novo.
   async markRefunded(order: OrderWithCustomer, status: ChargeStatus): Promise<boolean> {
-    if (order.paymentStatus !== ORDER_PAYMENT_STATUS.PAID) return false
+    if (!(REFUNDABLE_ONLINE_STATUSES as readonly string[]).includes(order.paymentStatus)) return false
+    const summary = await this.deps.ledger.summary(order)
+    if (summary.refundable > REFUND_CENTS_TOLERANCE) {
+      const refund = await this.deps.ledger.reserve(
+        {
+          order,
+          amount: summary.refundable,
+          method: REFUND_METHOD.ONLINE,
+          provider: summary.onlineCharge?.provider ?? null,
+          chargeId: summary.onlineCharge?.id ?? null,
+          paymentMethod: summary.onlineCharge
+            ? CASH_METHOD_BY_CHARGE_KIND[summary.onlineCharge.kind as ChargeKind]
+            : null,
+          reason: status === CHARGE_STATUS.CHARGEBACK ? REFUND_REASONS.chargeback : REFUND_REASONS.provider,
+        },
+        summary.paid
+      )
+      if (refund) {
+        await this.deps.ledger.complete(order, refund, { status: PAYMENT_REFUND_STATUS.APPROVED, chargeStatus: status }, summary.paid)
+        return true
+      }
+    }
+    // Já estava tudo devolvido por aqui: só acerta o estado.
     await this.updateCharges(order.id, status)
     await this.deps.db
       .update(schema.orders)
@@ -141,7 +181,9 @@ export class OrderPaymentTransitions {
       orderId: order.id,
       paymentStatus: ORDER_PAYMENT_STATUS.REFUNDED,
     })
-    await this.notify(order, PAYMENT_CUSTOMER_MESSAGES.refunded(orderCode(order)), PAYMENT_TEMPLATE_TEXTS.refunded)
+    if (order.paymentStatus !== ORDER_PAYMENT_STATUS.PARTIALLY_REFUNDED) {
+      await this.notify(order, PAYMENT_CUSTOMER_MESSAGES.refunded(orderCode(order)), PAYMENT_TEMPLATE_TEXTS.refunded)
+    }
     return true
   }
 

@@ -7,6 +7,8 @@ import { WS_EVENTS } from '@/infra/websocket/WebSocketEvents'
 import { NotFoundError, ValidationError } from '@/shared/errors/AppError'
 import { canTransitionTo } from '../../domain/entities/Order'
 import type { UpdateOrderStatusUseCase } from './UpdateOrderStatusUseCase'
+import type { RefundOrderPaymentUseCase } from '@/modules/payments/application/use-cases/RefundOrderPaymentUseCase'
+import { REFUND_REASONS } from '@/modules/payments/shared/payments.constant'
 import {
   ORDER_ERROR_MESSAGES,
   PARTIAL_CONFIRMATION_DECLINED_REASON,
@@ -36,8 +38,10 @@ export interface AnswerPartialConfirmationResult {
   readonly orderCode: string
   readonly status: 'accepted' | 'declined'
   readonly total: number
-  /** Pago online antes da falta: a diferença precisa ser devolvida pela equipe. */
+  /** Pago online antes da falta: a diferença que volta para o cliente. */
   readonly refundDue: number
+  /** A diferença já foi estornada no provedor; `false`: a equipe devolve. */
+  readonly refundedOnline: boolean
   /** Itens trocados (para a mensagem de confirmação ao cliente). */
   readonly replaced: readonly PartialReplacement[]
 }
@@ -50,8 +54,21 @@ export class AnswerPartialConfirmationUseCase {
   constructor(
     private readonly db: Database,
     private readonly wsHub: WebSocketHub,
-    private readonly updateOrderStatus: Pick<UpdateOrderStatusUseCase, 'execute'>
+    private readonly updateOrderStatus: Pick<UpdateOrderStatusUseCase, 'execute'>,
+    private readonly refunds?: Pick<RefundOrderPaymentUseCase, 'execute'> | undefined
   ) {}
+
+  // Estorno automático do que o cliente pagou online e não vai receber. Falhou: fica para a equipe.
+  private async refundOnline(order: schema.Order, amount: number | undefined, reason: string, notifyCustomer: boolean): Promise<boolean> {
+    if (!this.refunds || order.paymentStatus !== 'paid') return false
+    try {
+      await this.refunds.execute({ establishmentId: order.establishmentId, orderId: order.id, amount, reason, notifyCustomer })
+      return true
+    } catch (error) {
+      console.error('[Orders] partial confirmation refund failed:', error instanceof Error ? error.message : error)
+      return false
+    }
+  }
 
   async execute(input: AnswerPartialConfirmationInput): Promise<AnswerPartialConfirmationResult> {
     const customer = await this.db.query.customers.findFirst({
@@ -92,7 +109,9 @@ export class AnswerPartialConfirmationUseCase {
           cancellationReason: PARTIAL_CONFIRMATION_DECLINED_REASON,
         })
       }
-      return { orderCode, status: 'declined', total: Number(order.totalAmount), refundDue: 0, replaced: [] }
+      // Cancelado: o que foi pago online volta inteiro.
+      await this.refundOnline(order, undefined, REFUND_REASONS.partialConfirmationDeclined, true)
+      return { orderCode, status: 'declined', total: Number(order.totalAmount), refundDue: 0, refundedOnline: false, replaced: [] }
     }
     if (!input.accept) return decline()
 
@@ -149,7 +168,9 @@ export class AnswerPartialConfirmationUseCase {
       to: product.productName,
       quantity: item.quantity,
     }))
-    return { orderCode, status: 'accepted', total: newTotal, refundDue, replaced }
+    // O bot já conta a devolução na resposta: sem segunda mensagem.
+    const refundedOnline = refundDue > 0 ? await this.refundOnline(order, refundDue, REFUND_REASONS.partialConfirmation, false) : false
+    return { orderCode, status: 'accepted', total: newTotal, refundDue, refundedOnline, replaced }
   }
 
   /**

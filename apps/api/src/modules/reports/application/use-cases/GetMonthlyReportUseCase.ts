@@ -1,4 +1,5 @@
-import { eq, and, count, sum, gte, lt, sql } from 'drizzle-orm'
+import { eq, and, count, sum, gte, lt, sql, inArray } from 'drizzle-orm'
+import { netCashAmount } from '@/modules/cashier/shared/cashMovementAmounts'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
@@ -129,13 +130,13 @@ export class GetMonthlyReportUseCase {
       this.db
         .select({
           method: schema.cashMovements.paymentMethod,
-          total: sum(schema.cashMovements.amount),
+          total: sql<string>`sum(${netCashAmount})`,
         })
         .from(schema.cashMovements)
         .innerJoin(schema.cashRegisters, eq(schema.cashMovements.cashRegisterId, schema.cashRegisters.id))
         .where(and(
           eq(schema.cashRegisters.establishmentId, establishmentId),
-          eq(schema.cashMovements.type, 'payment'),
+          inArray(schema.cashMovements.type, ['payment', 'refund']),
           gte(schema.cashMovements.createdAt, from),
           lt(schema.cashMovements.createdAt, to),
         ))

@@ -5,6 +5,8 @@ import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 import type { GetPaymentAccountUseCase } from '../../application/use-cases/GetPaymentAccountUseCase'
 import type { UpsertPaymentAccountUseCase } from '../../application/use-cases/UpsertPaymentAccountUseCase'
 import type { HandlePaymentWebhookUseCase } from '../../application/use-cases/HandlePaymentWebhookUseCase'
+import type { GetOrderPaymentSummaryUseCase } from '../../application/use-cases/GetOrderPaymentSummaryUseCase'
+import type { RefundOrderPaymentUseCase } from '../../application/use-cases/RefundOrderPaymentUseCase'
 import { PAYMENT_EXPIRATION_MINUTES, PAYMENT_PROVIDER, PAYMENT_PROVIDER_VALUES } from '../../shared/payments.constant'
 
 const upsertSchema = z.object({
@@ -23,6 +25,13 @@ const upsertSchema = z.object({
   active: z.boolean().default(true),
 })
 
+const refundSchema = z.object({
+  // Em reais; sem valor devolve tudo o que ainda não voltou.
+  amount: z.number().positive().max(1_000_000).optional(),
+  reason: z.string().trim().max(500).optional(),
+  notifyCustomer: z.boolean().default(true),
+})
+
 const webhookParamsSchema = z.object({
   provider: z.enum(PAYMENT_PROVIDER_VALUES),
   establishmentId: z.string().uuid(),
@@ -32,8 +41,43 @@ export class PaymentController {
   constructor(
     private readonly getAccountUseCase: GetPaymentAccountUseCase,
     private readonly upsertAccountUseCase: UpsertPaymentAccountUseCase,
-    private readonly handleWebhookUseCase: HandlePaymentWebhookUseCase
+    private readonly handleWebhookUseCase: HandlePaymentWebhookUseCase,
+    private readonly getOrderPaymentsUseCase: GetOrderPaymentSummaryUseCase,
+    private readonly refundOrderUseCase: RefundOrderPaymentUseCase
   ) {}
+
+  orderPayments: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    response.json(
+      await this.getOrderPaymentsUseCase.execute({
+        establishmentId: request.user.establishmentId,
+        orderId: request.params['id']!,
+      })
+    )
+  }
+
+  refundOrder: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const parsed = refundSchema.safeParse(request.body ?? {})
+    if (!parsed.success) throw new ValidationError('Validation failed', parsed.error.flatten().fieldErrors)
+    const result = await this.refundOrderUseCase.execute({
+      establishmentId: request.user.establishmentId,
+      orderId: request.params['id']!,
+      amount: parsed.data.amount,
+      reason: parsed.data.reason,
+      userId: request.user.id,
+      notifyCustomer: parsed.data.notifyCustomer,
+    })
+    response.json(
+      {
+        refund: result.refund,
+        paymentStatus: result.paymentStatus,
+        refundedAmount: result.refundedAmount.toFixed(2),
+        cashRecorded: result.cashRecorded,
+      },
+      201
+    )
+  }
 
   getAccount: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()

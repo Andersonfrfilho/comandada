@@ -6,7 +6,7 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 
 interface CashMovement {
   id: string
-  type: 'payment' | 'withdrawal' | 'supply'
+  type: 'payment' | 'withdrawal' | 'supply' | 'refund'
   paymentMethod: string | null
   amount: string
   notes: string | null
@@ -34,7 +34,7 @@ interface FiscalDoc {
   createdAt: string
 }
 
-const MOVEMENT_LABELS = { payment: 'Pagamento', withdrawal: 'Retirada', supply: 'Suprimento' }
+const MOVEMENT_LABELS = { payment: 'Pagamento', withdrawal: 'Retirada', supply: 'Suprimento', refund: 'Devolução' }
 const PAYMENT_LABELS: Record<string, string> = {
   pix: 'Pix', card_credit: 'Crédito', card_debit: 'Débito', cash: 'Dinheiro', voucher: 'Voucher',
 }
@@ -253,8 +253,8 @@ export function CashierPage() {
                       {m.notes && <p className="text-xs text-gray-400 mt-0.5">{m.notes}</p>}
                     </div>
                     <div className="text-right flex-shrink-0 ml-3">
-                      <span className={`font-semibold ${m.type === 'withdrawal' ? 'text-red-600' : 'text-green-600'}`}>
-                        {m.type === 'withdrawal' ? '−' : '+'}{formatBRL(m.amount, !showValues)}
+                      <span className={`font-semibold ${m.type === 'withdrawal' || m.type === 'refund' ? 'text-red-600' : 'text-green-600'}`}>
+                        {m.type === 'withdrawal' || m.type === 'refund' ? '−' : '+'}{formatBRL(m.amount, !showValues)}
                       </span>
                       <p className="text-xs text-gray-400">{formatTime(m.createdAt)}</p>
                     </div>

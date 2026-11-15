@@ -1062,7 +1062,7 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
 
         CashMovementType: {
           type: 'string',
-          enum: ['payment', 'withdrawal', 'supply'],
+          enum: ['payment', 'withdrawal', 'supply', 'refund'],
         },
 
         PaymentMethod: {

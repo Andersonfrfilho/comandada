@@ -133,6 +133,11 @@ import { UpsertPaymentAccountUseCase } from '@/modules/payments/application/use-
 import { CreateOrderChargeUseCase } from '@/modules/payments/application/use-cases/CreateOrderChargeUseCase'
 import { HandlePaymentWebhookUseCase } from '@/modules/payments/application/use-cases/HandlePaymentWebhookUseCase'
 import { ExpireStaleChargesUseCase } from '@/modules/payments/application/use-cases/ExpireStaleChargesUseCase'
+import { RefundOrderPaymentUseCase } from '@/modules/payments/application/use-cases/RefundOrderPaymentUseCase'
+import { GetOrderPaymentSummaryUseCase } from '@/modules/payments/application/use-cases/GetOrderPaymentSummaryUseCase'
+import { OrderRefundLedger } from '@/modules/payments/application/services/OrderRefundLedger'
+import { OrderCancellationPayments } from '@/modules/payments/application/services/OrderCancellationPayments'
+import { REFUND_REASONS } from '@/modules/payments/shared/payments.constant'
 import { PaymentController } from '@/modules/payments/infra/http/PaymentController'
 import {
   CONVERSATION_AGENT_SENDER,
@@ -367,13 +372,16 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   // A loja não tem o WhatsApp: o aviso sai da nuvem quando o status chega pela sincronização.
   const notifySyncedOrderStatus = new NotifySyncedOrderStatusUseCase(db, notifyOrderStatusUseCase)
   const notifiesCustomerHere = process.env['SYNC_ROLE'] !== 'loja'
+  // Pagamentos montados mais abaixo; o cancelamento chama na hora de rodar, não na construção.
+  let orderCancellationPayments: OrderCancellationPayments | undefined
   const updateOrderStatusUseCase = new UpdateOrderStatusUseCase(
     db,
     wsHub,
     triggerFiscalEmissionUseCase,
     deductStockForOrderUseCase,
     notifiesCustomerHere ? notifyOrderStatusUseCase : undefined,
-    recordOrderPaymentsUseCase
+    recordOrderPaymentsUseCase,
+    async (order) => orderCancellationPayments?.releasePending(order)
   )
 
   // Orders
@@ -481,19 +489,32 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   // Pagamento online pelo WhatsApp: cada restaurante liga a própria conta (Mercado Pago) em Configurações.
   const publicApiUrl = process.env.API_PUBLIC_URL ?? 'http://localhost:3333'
   const paymentAccountService = new PaymentAccountService(db, new MercadoPagoGatewayFactoryImplementation())
+  const orderRefundLedger = new OrderRefundLedger({ db, wsHub, botMessages, addCashMovement: addCashMovementUseCase })
+  const refundOrderPaymentUseCase = new RefundOrderPaymentUseCase(db, paymentAccountService, orderRefundLedger)
+  orderCancellationPayments = new OrderCancellationPayments(db, paymentAccountService)
   const orderPaymentTransitions = new OrderPaymentTransitions({
     db,
     wsHub,
     botMessages,
     addCashMovement: addCashMovementUseCase,
     cancelBooking: scheduleBooking.cancel,
+    ledger: orderRefundLedger,
+    refundAfterCancellation: async (order) => {
+      await refundOrderPaymentUseCase.execute({
+        establishmentId: order.establishmentId,
+        orderId: order.id,
+        reason: REFUND_REASONS.paidAfterCancellation,
+      })
+    },
   })
   const createOrderChargeUseCase = new CreateOrderChargeUseCase(db, paymentAccountService, publicApiUrl)
   const getPaymentAccountUseCase = new GetPaymentAccountUseCase(paymentAccountService, publicApiUrl)
   const paymentController = new PaymentController(
     getPaymentAccountUseCase,
     new UpsertPaymentAccountUseCase(db, paymentAccountService, createAuditLogUseCase),
-    new HandlePaymentWebhookUseCase(db, paymentAccountService, orderPaymentTransitions)
+    new HandlePaymentWebhookUseCase(db, paymentAccountService, orderPaymentTransitions),
+    new GetOrderPaymentSummaryUseCase(db, orderRefundLedger, paymentAccountService),
+    refundOrderPaymentUseCase
   )
   const expireStaleCharges = new ExpireStaleChargesUseCase(db, paymentAccountService, orderPaymentTransitions)
 
@@ -538,7 +559,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     botCustomerService,
     new CreateBotReservationUseCase(botCustomerService, new ReserveTableUseCase(db, scheduling, agendaSetupService)),
     new CreateOrderIssueUseCase(db, botCustomerService, wsHub),
-    new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase),
+    new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase, refundOrderPaymentUseCase),
     transcribeBotAudioUseCase
   )
   // Lembretes dos crons do n8n (04: "faz X dias que você pediu", 05: reserva de mesa).

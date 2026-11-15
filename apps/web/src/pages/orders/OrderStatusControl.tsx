@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { useMutation, useQueryClient } from '@tanstack/react-query'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { ArrowRight } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
@@ -7,6 +7,9 @@ import { Modal } from '@/components/ui/Modal'
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, type OrderStatus } from '@/constants/orderLabels'
 import { resolveSteps } from './OrderProgressBar'
 import { classifyStatusMove, nextStatus, type StatusMoveKind } from './orderStatusMoves'
+import { REFUND_COPY, type OrderPaymentSummary } from '@/constants/onlinePayments'
+import { orderPaymentsQueryKey, refundErrorMessage } from './OrderPaymentCard'
+import { formatBrl } from './orderDetailFormat'
 
 const MOVE_WARNINGS: Record<Exclude<StatusMoveKind, 'forward'>, string> = {
   skip: 'Vai pular etapas. O histórico registra que foi uma mudança manual.',
@@ -27,6 +30,16 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
   const queryClient = useQueryClient()
   const [target, setTarget] = useState<OrderStatus | null>(null)
   const [note, setNote] = useState('')
+  const [refundOnCancel, setRefundOnCancel] = useState(true)
+  const [refundFailure, setRefundFailure] = useState<string | null>(null)
+
+  // Mesmo dado do quadro de pagamento (cache compartilhado): o cancelamento oferece devolver o que foi pago.
+  const { data: paymentSummary } = useQuery({
+    queryKey: orderPaymentsQueryKey(orderId),
+    queryFn: () => api.get<OrderPaymentSummary>(`/orders/${orderId}/payments`, accessToken ?? undefined),
+  })
+  const refundable = Number(paymentSummary?.refundable ?? 0)
+  const canRefundOnCancel = refundable > 0 && paymentSummary?.refundMode !== 'none'
 
   const steps = resolveSteps(orderType)
   const options: OrderStatus[] = [...steps, 'cancelled']
@@ -34,10 +47,10 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
   const moveKind = target ? classifyStatusMove(steps, status, target) : null
 
   const move = useMutation({
-    mutationFn: (variables: { to: OrderStatus; note?: string }) => {
+    mutationFn: async (variables: { to: OrderStatus; note?: string; refund?: boolean }) => {
       const kind = classifyStatusMove(steps, status, variables.to)
       const reason = variables.note?.trim() || undefined
-      return api.patch(
+      await api.patch(
         `/orders/${orderId}/status`,
         {
           status: variables.to,
@@ -47,6 +60,14 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
         },
         accessToken ?? undefined
       )
+      // Cancelou: o pedido já está cancelado. Se a devolução falhar, avisa e o botão fica no quadro de pagamento.
+      if (variables.to === 'cancelled' && variables.refund) {
+        try {
+          await api.post(`/orders/${orderId}/refunds`, { reason: reason ?? 'Pedido cancelado' }, accessToken ?? undefined)
+        } catch (error) {
+          setRefundFailure(REFUND_COPY.cancelRefundFailed(refundErrorMessage(error)))
+        }
+      }
     },
     onSuccess: () => {
       setTarget(null)
@@ -59,6 +80,8 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
   function choose(to: OrderStatus) {
     if (to === status) return
     move.reset()
+    setRefundFailure(null)
+    setRefundOnCancel(true)
     if (classifyStatusMove(steps, status, to) === 'forward' && to !== 'cancelled') {
       move.mutate({ to })
       return
@@ -100,6 +123,7 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
           </select>
         </label>
       </div>
+      {refundFailure && !target && <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">{refundFailure}</p>}
       {move.isError && !target && (
         <p className="mt-2 text-sm text-red-700">{move.error instanceof Error ? move.error.message : 'Não foi possível mudar o status.'}</p>
       )}
@@ -131,6 +155,12 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
                 className="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm"
               />
             </label>
+            {moveKind === 'cancel' && canRefundOnCancel && (
+              <label className="flex items-center gap-2 text-sm text-gray-700">
+                <input type="checkbox" checked={refundOnCancel} onChange={(event) => setRefundOnCancel(event.target.checked)} />
+                {REFUND_COPY.cancelCheckbox(formatBrl(refundable))}
+              </label>
+            )}
             {move.isError && (
               <p className="rounded bg-red-50 px-3 py-2 text-sm text-red-700">
                 {move.error instanceof Error ? move.error.message : 'Não foi possível mudar o status.'}
@@ -147,7 +177,7 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
               <button
                 type="button"
                 disabled={move.isPending || (moveKind === 'cancel' && note.trim().length === 0)}
-                onClick={() => move.mutate({ to: target, note })}
+                onClick={() => move.mutate({ to: target, note, refund: moveKind === 'cancel' && canRefundOnCancel && refundOnCancel })}
                 className={`flex-1 rounded-lg px-4 py-2 text-sm font-medium text-white disabled:bg-gray-300 ${
                   moveKind === 'cancel' ? 'bg-red-600 hover:bg-red-700' : 'bg-brand-600 hover:bg-brand-700'
                 }`}

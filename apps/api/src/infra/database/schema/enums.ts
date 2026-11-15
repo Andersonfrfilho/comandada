@@ -27,6 +27,8 @@ export const cashMovementTypeEnum = pgEnum('cash_movement_type', [
   'payment',
   'withdrawal',
   'supply',
+  // Devolução ao cliente (estorno): sai do caixa como a sangria, mas conta contra o faturamento.
+  'refund',
 ])
 
 export const paymentMethodEnum = pgEnum('payment_method', [
