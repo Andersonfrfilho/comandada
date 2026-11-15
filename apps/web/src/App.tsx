@@ -37,16 +37,22 @@ import { useBrandingStore } from '@/stores/brandingStore'
 // `h-screen` e não `min-h-screen`: com altura só mínima, nenhum filho tem teto contra o qual rolar,
 // o `overflow-y-auto` do main nunca entra em ação e quem estica é a página inteira. `min-w-0` pelo
 // mesmo motivo no eixo horizontal — sem ele, uma tabela larga alarga o layout todo em vez de rolar
-// dentro do próprio contêiner.
+// dentro do próprio contêiner. O wrapper `min-h-full flex flex-col` com o conteúdo em `flex-1`
+// empurra o rodapé para o fim da tela quando a página tem pouco conteúdo; com conteúdo longo, ele
+// fica depois do conteúdo, como antes.
 function AppLayout() {
   return (
     <div className="flex h-screen overflow-hidden">
       <MobileNav />
       <Sidebar />
       <main className="flex-1 min-w-0 overflow-y-auto pt-14 md:pt-0">
-        <AccessDeniedBanner />
-        <Outlet />
-        <AppFooter />
+        <div className="flex min-h-full flex-col">
+          <div className="flex-1">
+            <AccessDeniedBanner />
+            <Outlet />
+          </div>
+          <AppFooter />
+        </div>
       </main>
     </div>
   )
