@@ -19,13 +19,15 @@ import {
   UtensilsCrossed,
   Wallet,
 } from 'lucide-react'
-import { hasPermission, type Permission, type RequiredPermission } from '@/lib/permissions'
+import { hasPermission, type Permission, type PermissionRule } from '@/lib/permissions'
 
 interface NavItem {
   to: string
   label: string
   /** Mesma permissão que a API pede para a tela funcionar; sem ela o item some e a rota redireciona. */
-  permission: RequiredPermission
+  permission: PermissionRule
+  /** Tela de apoio de outro trabalho (Mesas para o caixa): aparece no menu, mas não vira tela inicial. */
+  notHome?: boolean
   icon: ComponentType<{ className?: string }>
 }
 
@@ -47,7 +49,14 @@ export const NAV_SECTIONS: NavSection[] = [
       { to: '/agenda', label: 'Agenda', permission: { resource: 'orders', action: 'write' }, icon: CalendarDays },
       { to: '/kitchen', label: 'Cozinha', permission: { resource: 'kitchen', action: 'read' }, icon: ChefHat },
       { to: '/delivery', label: 'Entregas', permission: { resource: 'delivery', action: 'read' }, icon: Truck },
-      { to: '/tables', label: 'Mesas', permission: { resource: 'orders', action: 'write' }, icon: UtensilsCrossed },
+      // Caixa entra em Mesas para receber a conta; quem lança pedido abre comanda e lança.
+      {
+        to: '/tables',
+        label: 'Mesas',
+        permission: [{ resource: 'orders', action: 'write' }, { resource: 'cashier', action: 'write' }],
+        notHome: true,
+        icon: UtensilsCrossed,
+      },
       { to: '/cashier', label: 'Caixa', permission: { resource: 'cashier', action: 'read' }, icon: Wallet },
     ],
   },
@@ -90,7 +99,7 @@ export function visibleSectionsFor(permissions: Permission[] | undefined): NavSe
 }
 
 /** Permissão exigida por uma rota do menu (subrotas como /orders/123 herdam a do item). */
-export function permissionForPath(path: string): RequiredPermission | undefined {
+export function permissionForPath(path: string): PermissionRule | undefined {
   const items = NAV_SECTIONS.flatMap((section) => section.items)
   const exact = items.find((item) => item.to === path)
   if (exact) return exact.permission
@@ -103,5 +112,6 @@ export function permissionForPath(path: string): RequiredPermission | undefined 
  * Dashboard, que dava 403 e mostrava zeros como se fossem números reais.
  */
 export function homePathFor(permissions: Permission[] | undefined): string | null {
-  return visibleSectionsFor(permissions)[0]?.items[0]?.to ?? null
+  const items = visibleSectionsFor(permissions).flatMap((section) => section.items)
+  return (items.find((item) => !item.notHome) ?? items[0])?.to ?? null
 }

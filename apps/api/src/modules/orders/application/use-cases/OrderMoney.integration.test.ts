@@ -17,6 +17,12 @@ import { GetMonthlyReportUseCase } from '@/modules/reports/application/use-cases
 import { localYearMonth } from '@/modules/reports/shared/revenue'
 import { CreateOrderUseCase } from './CreateOrderUseCase'
 import { UpdateOrderStatusUseCase } from './UpdateOrderStatusUseCase'
+import { RecordOrderPaymentsUseCase } from '@/modules/cashier/application/use-cases/RecordOrderPaymentsUseCase'
+import { DrizzleTableRepository } from '@/modules/tables/infra/repositories/DrizzleTableRepository'
+import { DrizzleComandaRepository } from '@/modules/tables/infra/repositories/DrizzleComandaRepository'
+import { GetComandaBillUseCase } from '@/modules/tables/application/use-cases/GetComandaBillUseCase'
+import { SettleComandaUseCase } from '@/modules/tables/application/use-cases/SettleComandaUseCase'
+import { CloseComandaUseCase } from '@/modules/tables/application/use-cases/CloseComandaUseCase'
 
 // Regras de dinheiro e estoque que dependem do Postgres (somas, travas, fuso).
 // Ex.: TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/comandada_test bun test integration
@@ -364,6 +370,93 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       const completed = await newDeliveryOrder()
       await move(completed.id, 'completed', true)
       expect((await deliveryOf(completed.id))?.status).toBe('delivered')
+    })
+  })
+  describe('conta da mesa', () => {
+    async function tableWithComanda() {
+      const [table] = await db.insert(schema.restaurantTables).values({ establishmentId, number: 7, capacity: 4, status: 'occupied' }).returning()
+      const [comanda] = await db.insert(schema.comandas).values({ establishmentId, tableId: table!.id, code: 'ABC234' }).returning()
+      return { table: table!, comanda: comanda! }
+    }
+
+    function tableOrder(tableId: string) {
+      return new CreateOrderUseCase(db, silentHub).execute({
+        establishmentId,
+        channel: 'manual',
+        type: 'table',
+        tableId,
+        items: [{ productId, productName: 'Hot roll', unitPrice: 30, quantity: 2 }],
+        priceFromCatalog: true,
+      })
+    }
+
+    function settleUseCase() {
+      const movements = new AddCashMovementUseCase(db)
+      const deduct = new DeductStockForOrderUseCase(db)
+      const status = new UpdateOrderStatusUseCase(
+        db, silentHub, undefined, deduct, undefined, new RecordOrderPaymentsUseCase(db, movements), undefined, new RestoreStockForOrderUseCase(db)
+      )
+      const tables = new DrizzleTableRepository(db)
+      const comandas = new DrizzleComandaRepository(db)
+      const bill = new GetComandaBillUseCase(db)
+      return {
+        bill,
+        settle: new SettleComandaUseCase(db, bill, movements, status, tables, comandas),
+        close: new CloseComandaUseCase(tables, comandas, bill),
+      }
+    }
+
+    it('pedido de mesa entra na comanda aberta; sem comanda o painel recusa', async () => {
+      const [table] = await db.insert(schema.restaurantTables).values({ establishmentId, number: 3, capacity: 2 }).returning()
+      await expect(tableOrder(table!.id)).rejects.toMatchObject({ code: 'table_comanda_required' })
+
+      const { table: occupied, comanda } = await tableWithComanda()
+      const order = await tableOrder(occupied.id)
+      expect(order.comandaId).toBe(comanda.id)
+    })
+
+    it('receber a conta lança cada parte no caixa, conclui os pedidos e libera a mesa', async () => {
+      const { table, comanda } = await tableWithComanda()
+      const first = await tableOrder(table.id)
+      const second = await tableOrder(table.id)
+      const { bill, settle, close } = settleUseCase()
+
+      const before = await bill.execute(comanda.id, establishmentId)
+      expect(before.outstandingAmount).toBe(120)
+      await expect(close.execute(comanda.id, establishmentId)).rejects.toBeInstanceOf(AppError)
+      await expect(
+        settle.execute({ comandaId: comanda.id, establishmentId, payments: [{ paymentTypeName: 'pix', amount: 120 }] })
+      ).rejects.toMatchObject({ message: 'Abra o caixa antes de receber a conta' })
+
+      await db.insert(schema.cashRegisters).values({ establishmentId, userId, openingAmount: '0' })
+      await expect(
+        settle.execute({ comandaId: comanda.id, establishmentId, payments: [{ paymentTypeName: 'pix', amount: 100 }] })
+      ).rejects.toBeInstanceOf(AppError)
+
+      const after = await settle.execute({
+        comandaId: comanda.id,
+        establishmentId,
+        userId,
+        payments: [
+          { paymentTypeName: 'dinheiro', amount: 50, changeFor: 100, splitLabel: 'Pessoa 1' },
+          { paymentTypeName: 'cartao_credito', amount: 70, splitLabel: 'Pessoa 2' },
+        ],
+      })
+      expect(after.comanda.status).toBe('paid')
+      expect(after.outstandingAmount).toBe(0)
+      expect(after.orders.map((order) => order.status)).toEqual(['completed', 'completed'])
+
+      const movements = await db.query.cashMovements.findMany({ where: eq(schema.cashMovements.type, 'payment') })
+      expect(movements.reduce((sum, movement) => sum + Number(movement.amount), 0)).toBe(120)
+      expect(movements.filter((movement) => movement.orderId === first.id).map((movement) => movement.paymentMethod).sort())
+        .toEqual(['card_credit', 'cash'])
+      expect(movements.filter((movement) => movement.orderId === second.id).map((movement) => Number(movement.amount)))
+        .toEqual([60])
+
+      const freed = await db.query.restaurantTables.findFirst({ where: eq(schema.restaurantTables.id, table.id) })
+      expect(freed?.status).toBe('available')
+      // Paga não volta a "não paga".
+      await expect(close.execute(comanda.id, establishmentId)).rejects.toBeInstanceOf(AppError)
     })
   })
 })

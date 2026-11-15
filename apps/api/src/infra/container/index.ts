@@ -52,6 +52,9 @@ import { UpdateTableUseCase } from '@/modules/tables/application/use-cases/Updat
 import { DeleteTableUseCase } from '@/modules/tables/application/use-cases/DeleteTableUseCase'
 import { OpenComandaUseCase } from '@/modules/tables/application/use-cases/OpenComandaUseCase'
 import { CloseComandaUseCase } from '@/modules/tables/application/use-cases/CloseComandaUseCase'
+import { GetComandaBillUseCase } from '@/modules/tables/application/use-cases/GetComandaBillUseCase'
+import { SettleComandaUseCase } from '@/modules/tables/application/use-cases/SettleComandaUseCase'
+import { TransferComandaUseCase } from '@/modules/tables/application/use-cases/TransferComandaUseCase'
 import { GetComandaByCodeUseCase } from '@/modules/tables/application/use-cases/GetComandaByCodeUseCase'
 import { ConfirmComandaUseCase } from '@/modules/tables/application/use-cases/ConfirmComandaUseCase'
 import { TableController } from '@/modules/tables/infra/http/TableController'
@@ -636,7 +639,17 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const groupTablesUseCase = new GroupTablesUseCase(db, tableRepository, createAuditLogUseCase)
   const ungroupTablesUseCase = new UngroupTablesUseCase(db, createAuditLogUseCase)
   const openComandaUseCase = new OpenComandaUseCase(tableRepository, comandaRepository)
-  const closeComandaUseCase = new CloseComandaUseCase(tableRepository, comandaRepository)
+  const getComandaBillUseCase = new GetComandaBillUseCase(db)
+  const closeComandaUseCase = new CloseComandaUseCase(tableRepository, comandaRepository, getComandaBillUseCase)
+  const settleComandaUseCase = new SettleComandaUseCase(
+    db,
+    getComandaBillUseCase,
+    addCashMovementUseCase,
+    updateOrderStatusUseCase,
+    tableRepository,
+    comandaRepository
+  )
+  const transferComandaUseCase = new TransferComandaUseCase(db, tableRepository, comandaRepository)
   const getComandaByCodeUseCase = new GetComandaByCodeUseCase(comandaRepository)
   const listComandasByTableUseCase = new ListComandasByTableUseCase(tableRepository, comandaRepository)
   const confirmComandaUseCase = new ConfirmComandaUseCase(comandaRepository)
@@ -653,7 +666,10 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     getComandaByCodeUseCase,
     listComandasByTableUseCase,
     confirmComandaUseCase,
-    comandaRepository
+    comandaRepository,
+    getComandaBillUseCase,
+    settleComandaUseCase,
+    transferComandaUseCase
   )
 
   // Conversations

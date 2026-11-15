@@ -2,6 +2,7 @@ import { pgTable, uuid, varchar, text, numeric, timestamp, boolean, integer } fr
 import { establishments } from './establishments'
 import { customers } from './customers'
 import { restaurantTables } from './tables'
+import { comandas } from './comandas'
 import { orderStatusEnum, orderTypeEnum, orderChannelEnum } from './enums'
 
 export const orders = pgTable('orders', {
@@ -11,6 +12,8 @@ export const orders = pgTable('orders', {
     .references(() => establishments.id, { onDelete: 'cascade' }),
   customerId: uuid('customer_id').references(() => customers.id, { onDelete: 'set null' }),
   tableId: uuid('table_id').references(() => restaurantTables.id, { onDelete: 'set null' }),
+  // Comanda aberta da mesa quando o pedido foi lançado: a conta da mesa soma por aqui.
+  comandaId: uuid('comanda_id').references(() => comandas.id, { onDelete: 'set null' }),
   channel: orderChannelEnum('channel').default('manual').notNull(),
   status: orderStatusEnum('status').default('received').notNull(),
   type: orderTypeEnum('type').notNull(),

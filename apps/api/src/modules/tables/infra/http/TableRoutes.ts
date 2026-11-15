@@ -19,6 +19,10 @@ export function registerTableRoutes(router: Router, controller: TableController)
   router.get('/tables/:id/comandas', authenticate, authorize('orders', 'read'), controller.listComandasByTable)
   router.post('/tables/:id/comanda', authenticate, authorize('orders', 'write'), controller.openComanda)
   router.patch('/comandas/:comandaId/close', authenticate, authorize('orders', 'write'), controller.closeComanda)
+  router.patch('/comandas/:comandaId/transfer', authenticate, authorize('orders', 'write'), controller.transferComanda)
+  // Conta da mesa: quem lança pedido e quem cuida do caixa veem; receber é do caixa.
+  router.get('/comandas/:comandaId/bill', authenticate, authorize('orders', 'read'), controller.getComandaBill)
+  router.post('/comandas/:comandaId/settle', authenticate, authorize('cashier', 'write'), controller.settleComanda)
 
   // Public comanda endpoints (no auth — customer facing)
   router.get('/public/comanda/:code', controller.getComandaByCode)

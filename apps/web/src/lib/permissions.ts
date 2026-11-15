@@ -29,12 +29,18 @@ export interface RequiredPermission {
   action: PermissionAction
 }
 
+/** Uma permissão, ou uma lista em que qualquer uma basta (ex.: Mesas para quem lança pedido ou cuida do caixa). */
+export type PermissionRule = RequiredPermission | readonly RequiredPermission[]
+
 export function hasPermission(
   permissions: Permission[] | undefined,
-  required: RequiredPermission
+  required: PermissionRule
 ): boolean {
-  return (permissions ?? []).some(
-    (permission) => permission.resource === required.resource && permission.action === required.action
+  const options: readonly RequiredPermission[] = Array.isArray(required) ? required : [required as RequiredPermission]
+  return options.some((option) =>
+    (permissions ?? []).some(
+      (permission) => permission.resource === option.resource && permission.action === option.action
+    )
   )
 }
 

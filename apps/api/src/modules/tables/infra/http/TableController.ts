@@ -13,6 +13,9 @@ import type { GetComandaByCodeUseCase } from '../../application/use-cases/GetCom
 import type { ListComandasByTableUseCase } from '../../application/use-cases/ListComandasByTableUseCase'
 import type { ConfirmComandaUseCase } from '../../application/use-cases/ConfirmComandaUseCase'
 import type { ComandaRepository } from '../../domain/repositories/ComandaRepository'
+import type { GetComandaBillUseCase } from '../../application/use-cases/GetComandaBillUseCase'
+import type { SettleComandaUseCase } from '../../application/use-cases/SettleComandaUseCase'
+import type { TransferComandaUseCase } from '../../application/use-cases/TransferComandaUseCase'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 
 const createTableSchema = z.object({
@@ -34,8 +37,21 @@ const groupTablesSchema = z.object({
   tableIds: z.array(z.string().uuid()).min(2),
 })
 
-const closeComandaSchema = z.object({
-  status: z.enum(['closed', 'paid']),
+const settleComandaSchema = z.object({
+  payments: z
+    .array(
+      z.object({
+        paymentTypeName: z.string().min(1).max(50),
+        amount: z.number().positive(),
+        changeFor: z.number().positive().optional(),
+        splitLabel: z.string().max(60).optional(),
+      })
+    )
+    .max(20),
+})
+
+const transferComandaSchema = z.object({
+  tableId: z.string().uuid(),
 })
 
 const confirmComandaSchema = z.object({
@@ -58,15 +74,20 @@ export class TableController {
     private readonly getComandaByCodeUseCase: GetComandaByCodeUseCase,
     private readonly listComandasByTableUseCase: ListComandasByTableUseCase,
     private readonly confirmComandaUseCase: ConfirmComandaUseCase,
-    private readonly comandaRepository: ComandaRepository
+    private readonly comandaRepository: ComandaRepository,
+    private readonly getComandaBillUseCase: GetComandaBillUseCase,
+    private readonly settleComandaUseCase: SettleComandaUseCase,
+    private readonly transferComandaUseCase: TransferComandaUseCase
   ) {}
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
     const tables = await this.listTablesUseCase.execute(request.user.establishmentId)
     const openComandas = await this.comandaRepository.listOpenByEstablishment(request.user.establishmentId)
-    const comandasByTable = new Map<string, typeof openComandas>()
-    for (const comanda of openComandas) {
+    const consumption = await this.comandaRepository.consumptionOfOpen(request.user.establishmentId)
+    const comandasByTable = new Map<string, Array<(typeof openComandas)[number] & { totalAmount: number; ordersCount: number }>>()
+    for (const openComanda of openComandas) {
+      const comanda = { ...openComanda, totalAmount: 0, ordersCount: 0, ...consumption.get(openComanda.id) }
       const bucket = comandasByTable.get(comanda.tableId) ?? []
       bucket.push(comanda)
       comandasByTable.set(comanda.tableId, bucket)
@@ -167,12 +188,36 @@ export class TableController {
 
   closeComanda: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
-    const parsed = closeComandaSchema.safeParse(request.body)
-    if (!parsed.success) throw new ValidationError('Dados inválidos', parsed.error.flatten().fieldErrors)
-    const comanda = await this.closeComandaUseCase.execute(
+    const comanda = await this.closeComandaUseCase.execute(request.params['comandaId']!, request.user.establishmentId)
+    response.json(comanda)
+  }
+
+  getComandaBill: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    response.json(await this.getComandaBillUseCase.execute(request.params['comandaId']!, request.user.establishmentId))
+  }
+
+  settleComanda: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const parsed = settleComandaSchema.safeParse(request.body)
+    if (!parsed.success) throw new ValidationError('Confira os pagamentos', parsed.error.flatten().fieldErrors)
+    const bill = await this.settleComandaUseCase.execute({
+      comandaId: request.params['comandaId']!,
+      establishmentId: request.user.establishmentId,
+      userId: request.user.id,
+      payments: parsed.data.payments,
+    })
+    response.json(bill)
+  }
+
+  transferComanda: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const parsed = transferComandaSchema.safeParse(request.body)
+    if (!parsed.success) throw new ValidationError('Escolha a mesa', parsed.error.flatten().fieldErrors)
+    const comanda = await this.transferComandaUseCase.execute(
       request.params['comandaId']!,
-      request.user.establishmentId,
-      parsed.data.status
+      parsed.data.tableId,
+      request.user.establishmentId
     )
     response.json(comanda)
   }
