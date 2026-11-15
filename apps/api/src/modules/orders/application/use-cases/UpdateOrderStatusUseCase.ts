@@ -1,4 +1,4 @@
-import { eq, and, isNull, sql } from 'drizzle-orm'
+import { eq, and, inArray, isNull, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { NewOrder } from '@/infra/database/schema'
@@ -33,6 +33,17 @@ export const MANUAL_STATUS_NOTE = 'Alterado manualmente no painel'
 // Status em que a comida já foi feita: se o pedido pulou a produção, a baixa entra aqui.
 const PRODUCED_STATUSES: readonly OrderStatus[] = ['ready', 'in_delivery', 'picked_up', 'completed']
 
+// Entrega acompanha o pedido quando a mudança vem do painel ou da cozinha: concluído não fica
+// "pendente" em Entregas, cancelado sai da fila e reaberto volta para ela.
+type DeliveryStatusValue = (typeof schema.deliveryStatusEnum.enumValues)[number]
+const DELIVERY_FOLLOWS_ORDER: Partial<Record<OrderStatus, { status: DeliveryStatusValue; from: DeliveryStatusValue[] }>> = {
+  in_delivery: { status: 'dispatched', from: ['pending'] },
+  completed: { status: 'delivered', from: ['pending', 'dispatched'] },
+  cancelled: { status: 'failed', from: ['pending', 'dispatched'] },
+  received: { status: 'pending', from: ['dispatched', 'delivered', 'failed'] },
+  in_production: { status: 'pending', from: ['dispatched', 'delivered', 'failed'] },
+  ready: { status: 'pending', from: ['dispatched', 'delivered', 'failed'] },
+}
 
 export class UpdateOrderStatusUseCase {
   constructor(
@@ -115,6 +126,7 @@ export class UpdateOrderStatusUseCase {
       .returning()
 
     await this.stampItemPreparation(input.orderId, input.newStatus, now)
+    await this.syncDelivery(input, now)
 
     if (input.newStatus === 'cancelled' && this.restoreStock) {
       await this.restoreStock
@@ -174,6 +186,27 @@ export class UpdateOrderStatusUseCase {
     }
 
     return updated!
+  }
+
+  private async syncDelivery(input: UpdateStatusInput, now: Date): Promise<void> {
+    const follow = DELIVERY_FOLLOWS_ORDER[input.newStatus]
+    if (!follow) return
+    await this.db
+      .update(schema.deliveries)
+      .set({
+        status: follow.status,
+        ...(follow.status === 'dispatched' && { dispatchedAt: now }),
+        ...(follow.status === 'delivered' && { deliveredAt: now }),
+        ...(follow.status === 'failed' && { failedAt: now, notes: MessagesConstants.delivery.orderCancelled }),
+        ...(follow.status === 'pending' && { dispatchedAt: null, deliveredAt: null, failedAt: null }),
+      })
+      .where(
+        and(
+          eq(schema.deliveries.orderId, input.orderId),
+          eq(schema.deliveries.establishmentId, input.establishmentId),
+          inArray(schema.deliveries.status, follow.from)
+        )
+      )
   }
 
   /**

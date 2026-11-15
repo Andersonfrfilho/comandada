@@ -305,6 +305,16 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - Equipe (`StaffAccessPolicy`): ninguém dá cargo com permissão que não tem, nem mexe em quem tem mais acesso.
   Conta do Mercado Pago exige `settings:manage` (administrador); o resto das Configurações, `settings:write`.
 
+## Operação do dia a dia
+
+- **Número do pedido:** `orders.number` sequencial por restaurante (`order_counters`, migration `0049`); tudo mostra
+  `#N` (`orderDisplayCode`/`orderBotCode`, painel `orderNumberLabel`), e mesa ou cliente vem junto na cozinha e nas listas.
+- **Alertas:** pedido novo e cliente pedindo atendente (`conversation:handoff-requested`) tocam som, toast, notificação do
+  navegador e contador no menu (`useOperationAlerts`). Erro de ação vira toast (`toastStore`); botões travam enquanto a ação roda.
+- **Entrega segue o pedido** (`UpdateOrderStatusUseCase.syncDelivery`); pedido cancelado/concluído não muda a entrega;
+  "não entregue" exige motivo; entregador é escolhido em Entregas (`PATCH /delivery/:id/assign`).
+- **Taxa no pedido do painel:** `POST /orders/delivery-fee/quote` mostra a taxa antes do pagamento; atendente pode ajustar (`feeAmount`).
+
 ## Agenda (encomendas e reservas)
 
 `@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.

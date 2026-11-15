@@ -329,4 +329,41 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       expect(order.totalAmount).toBe('35.00')
     })
   })
+
+  describe('número e entrega do pedido', () => {
+    it('cada pedido novo ganha o próximo número do restaurante', async () => {
+      const create = new CreateOrderUseCase(db, silentHub)
+      const input = {
+        establishmentId,
+        channel: 'manual' as const,
+        type: 'pickup' as const,
+        items: [{ productId, productName: 'Hot roll', unitPrice: 30, quantity: 1 }],
+        priceFromCatalog: true,
+      }
+      const [first, second] = await Promise.all([create.execute(input), create.execute(input)])
+      expect([first.number, second.number].sort()).toEqual([1, 2])
+    })
+
+    async function deliveryOf(orderId: string) {
+      return db.query.deliveries.findFirst({ where: eq(schema.deliveries.orderId, orderId) })
+    }
+
+    async function newDeliveryOrder() {
+      const order = await newOrder(1, { type: 'delivery' })
+      await db.insert(schema.deliveries).values({ orderId: order.id, establishmentId, addressSnapshot: { address: 'Rua A, 1' } })
+      return order
+    }
+
+    it('entrega acompanha o pedido: cancelado sai da fila, concluído vira entregue, reaberto volta', async () => {
+      const cancelled = await newDeliveryOrder()
+      await move(cancelled.id, 'cancelled')
+      expect((await deliveryOf(cancelled.id))?.status).toBe('failed')
+      await move(cancelled.id, 'received', true)
+      expect((await deliveryOf(cancelled.id))?.status).toBe('pending')
+
+      const completed = await newDeliveryOrder()
+      await move(completed.id, 'completed', true)
+      expect((await deliveryOf(completed.id))?.status).toBe('delivered')
+    })
+  })
 })

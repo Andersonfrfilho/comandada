@@ -1,3 +1,4 @@
+import { orderNumberLabel } from '@/lib/orderLabel'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
@@ -16,6 +17,7 @@ type FiscalDocStatus = 'pending' | 'emitting' | 'authorized' | 'rejected' | 'can
 interface FiscalDoc {
   id: string
   orderId: string
+  order?: { number: number | null; code: string | null } | null
   model: string
   status: FiscalDocStatus
   numeroDocumento: number | null
@@ -285,7 +287,11 @@ export function FiscalDocumentsPage() {
       key: 'order',
       header: 'Pedido',
       className: 'hidden sm:table-cell',
-      render: (doc) => <span className="font-mono text-gray-600">#{doc.orderId.slice(0, 8)}</span>,
+      render: (doc) => (
+        <span className="font-semibold text-gray-800">
+          {orderNumberLabel({ id: doc.orderId, number: doc.order?.number ?? null, code: doc.order?.code ?? null })}
+        </span>
+      ),
     },
     {
       key: 'model',

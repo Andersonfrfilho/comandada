@@ -3,6 +3,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { visibleSectionsFor } from '@/constants/navigation'
 import { BrandIdentity } from '@/components/brand/BrandIdentity'
 import { SyncStatusBadge } from '@/components/sync/SyncStatusBadge'
+import { AlertBadge, BrowserAlertsButton } from '@/components/layout/AlertBadge'
 
 export function Sidebar() {
   const user = useAuthStore((state) => state.user)
@@ -40,7 +41,8 @@ export function Sidebar() {
                 }
               >
                 <item.icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                <span>{item.label}</span>
+                <span className="flex-1">{item.label}</span>
+                <AlertBadge path={item.to} />
               </NavLink>
             ))}
           </div>
@@ -48,6 +50,7 @@ export function Sidebar() {
       </nav>
 
       <div className="p-3 border-t border-gray-700 space-y-1">
+        <BrowserAlertsButton />
         <NavLink
           to="/change-password"
           className="block w-full px-3 py-2 text-left text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"

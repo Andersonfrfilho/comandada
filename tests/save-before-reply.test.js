@@ -50,6 +50,14 @@ function assert(condition, message) { if (!condition) throw new Error(message); 
     assert(out.respostas[0].includes('cerca de 35 min'), out.respostas[0]);
   });
 
+  await test('gravou com número: o código do bot vira o #número do painel', async () => {
+    const routed = baseRouted();
+    routed.respostas = ['✅ *Pedido confirmado!*\n\n🔖 *Código do pedido: PED-1*', 'Quer receber promoções?'];
+    const out = await run({ routed, httpRequest: async () => ({ id: 'o1', code: 'PED-1', number: 42 }) });
+    assert(out.respostas[0].includes('Código do pedido: #42'), out.respostas[0]);
+    assert(!out.respostas[0].includes('PED-1'), out.respostas[0]);
+  });
+
   await test('falhou: não confirma, devolve o carrinho e o passo anterior', async () => {
     const out = await run({ routed: baseRouted(), httpRequest: async () => { throw new Error('ECONNREFUSED'); } });
     assert(out.order_saved === false, 'order_saved deve ser false');

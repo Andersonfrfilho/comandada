@@ -1,3 +1,4 @@
+import { numberOrdersWithoutNumber } from '@/modules/orders/shared/orderNumber'
 import { db } from '../connection'
 import * as schema from '../schema'
 import { daysAgo, money, randomInt, randomItem, ORDER_RECEIVED_HOURS_AGO } from './helpers/seed-helpers'
@@ -273,6 +274,7 @@ export async function seedOrders({ establishmentId, customerIds, tableIds }: See
   await db.insert(schema.orders).values(orderRows).onConflictDoNothing()
   await db.insert(schema.orderItems).values(orderItems).onConflictDoNothing()
   await db.insert(schema.orderStatusLogs).values(statusLogs).onConflictDoNothing()
+  await numberOrdersWithoutNumber(db)
 
   return orders
 }

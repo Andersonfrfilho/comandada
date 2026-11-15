@@ -18,7 +18,7 @@ function fakeDatabase(deliveryStatus: string, orderStatus: string): Database {
 
 const wsHub = { publishBroadcast: async () => undefined } as unknown as WebSocketHub
 
-async function run(deliveryStatus: string, orderStatus: string, newStatus: 'dispatched' | 'delivered' | 'failed') {
+async function run(deliveryStatus: string, orderStatus: string, newStatus: 'dispatched' | 'delivered' | 'failed', note?: string) {
   const calls: string[] = []
   const useCase = new UpdateDeliveryStatusUseCase(fakeDatabase(deliveryStatus, orderStatus), wsHub, {
     execute: async (input) => {
@@ -26,7 +26,7 @@ async function run(deliveryStatus: string, orderStatus: string, newStatus: 'disp
       return {} as never
     },
   })
-  await useCase.execute({ deliveryId: 'delivery-1', establishmentId: 'establishment-1', newStatus, userId: 'user-1' })
+  await useCase.execute({ deliveryId: 'delivery-1', establishmentId: 'establishment-1', newStatus, userId: 'user-1', note })
   return calls
 }
 
@@ -44,6 +44,15 @@ describe('UpdateDeliveryStatusUseCase', () => {
   })
 
   it('falha na entrega não mexe no pedido', async () => {
-    expect(await run('dispatched', 'in_delivery', 'failed')).toEqual([])
+    expect(await run('dispatched', 'in_delivery', 'failed', 'Cliente não atendeu')).toEqual([])
+  })
+
+  it('"não entregue" exige o motivo', async () => {
+    await expect(run('dispatched', 'in_delivery', 'failed', '  ')).rejects.toThrow('Diga o que aconteceu')
+  })
+
+  it('pedido cancelado não sai nem é entregue', async () => {
+    await expect(run('pending', 'cancelled', 'dispatched')).rejects.toThrow('já foi cancelado ou concluído')
+    await expect(run('dispatched', 'completed', 'delivered')).rejects.toThrow('já foi cancelado ou concluído')
   })
 })

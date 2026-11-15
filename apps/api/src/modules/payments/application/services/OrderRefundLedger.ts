@@ -1,3 +1,4 @@
+import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { CHARGE_STATUS } from '@adatechnology/payment-contracts'
@@ -64,7 +65,7 @@ function brl(value: number): string {
 }
 
 function orderCode(order: schema.Order): string {
-  return order.code ?? order.id.slice(0, 8).toUpperCase()
+  return orderDisplayCode(order)
 }
 
 /**

@@ -96,7 +96,9 @@ export class GetFiscalDocumentUseCase {
     return config?.razaoSocial ?? null
   }
 
-  async listByEstablishment(input: ListFiscalDocumentsInput): Promise<PageResult<schema.FiscalDocument>> {
+  async listByEstablishment(
+    input: ListFiscalDocumentsInput
+  ): Promise<PageResult<schema.FiscalDocument & { order: { number: number | null; code: string | null } | null }>> {
     const { where, orderBy } = buildFiscalDocumentFilters(input)
     const [rows, [totalRow]] = await Promise.all([
       this.db.query.fiscalDocuments.findMany({
@@ -104,6 +106,8 @@ export class GetFiscalDocumentUseCase {
         orderBy,
         limit: input.pageSize,
         offset: input.offset,
+        // Número do pedido (#123) para a nota bater com o que a equipe e o cliente veem.
+        with: { order: { columns: { number: true, code: true } } },
       }),
       this.db.select({ total: count() }).from(schema.fiscalDocuments).where(where),
     ])

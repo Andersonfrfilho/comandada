@@ -34,6 +34,7 @@ export const WS_EVENTS = {
   CONVERSATION_MESSAGE: 'conversation:message',
   CONVERSATION_MESSAGE_STATUS: 'conversation:message-status',
   CONVERSATION_MODE_CHANGED: 'conversation:mode-changed',
+  CONVERSATION_HANDOFF_REQUESTED: 'conversation:handoff-requested',
   CONVERSATION_DATA_CHANGED: 'conversation:data-changed',
 
   // Fiscal

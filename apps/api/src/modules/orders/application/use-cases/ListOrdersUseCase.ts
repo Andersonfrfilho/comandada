@@ -42,7 +42,10 @@ export class ListOrdersUseCase {
     // customerId é opcional e o id é UUID (compara como texto).
     if (input.search) {
       const pattern = containsPattern(input.search)
+      // "#123" ou "123": o número curto do pedido, o mesmo que o cliente recebe.
+      const orderNumber = /^#?\d{1,9}$/.test(input.search.trim()) ? Number(input.search.trim().replace('#', '')) : null
       const searchCondition = or(
+        ...(orderNumber !== null ? [eq(schema.orders.number, orderNumber)] : []),
         ilike(schema.customers.name, pattern),
         ilike(schema.customers.whatsappNumber, pattern),
         ilike(sql`${schema.orders.id}::text`, pattern)
@@ -80,6 +83,7 @@ export class ListOrdersUseCase {
           with: {
             items: true,
             customer: true,
+            table: { columns: { number: true } },
             payments: true,
             // Só o resumo da nota: a lista mostra o selo sem uma requisição por pedido.
             fiscalDocument: {

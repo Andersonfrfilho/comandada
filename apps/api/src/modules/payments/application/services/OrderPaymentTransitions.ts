@@ -1,3 +1,4 @@
+import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { and, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { CHARGE_KIND, CHARGE_STATUS } from '@adatechnology/payment-contracts'
@@ -46,7 +47,7 @@ export interface OrderPaymentTransitionsDependencies {
 }
 
 function orderCode(order: schema.Order): string {
-  return order.code ?? order.id.slice(0, 8).toUpperCase()
+  return orderDisplayCode(order)
 }
 
 // O que muda no pedido quando o pagamento online cai, expira ou volta. Cada passo é idempotente:

@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, text, numeric, timestamp, boolean } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, text, numeric, timestamp, boolean, integer } from 'drizzle-orm/pg-core'
 import { establishments } from './establishments'
 import { customers } from './customers'
 import { restaurantTables } from './tables'
@@ -23,6 +23,9 @@ export const orders = pgTable('orders', {
   whatsappMessageId: varchar('whatsapp_message_id', { length: 255 }).unique(),
   // Short code the WhatsApp bot shows the customer (e.g. PED-20261112210121-2233); null for orders from other channels.
   code: varchar('code', { length: 40 }),
+  // Número curto por restaurante (#123): o que painel, cozinha, entregas, notas e WhatsApp mostram.
+  // Vem de `order_counters`; null só em pedido que chegou pela sincronização da loja.
+  number: integer('number'),
   // Retirada/entrega marcada para um horário futuro. `null` é o caso comum — pedido para agora.
   scheduledFor: timestamp('scheduled_for', { withTimezone: true }),
   // Horário ocupado na agenda (schema `scheduling` do SDK) quando o pedido é encomenda.
@@ -48,3 +51,11 @@ export const orders = pgTable('orders', {
 
 export type Order = typeof orders.$inferSelect
 export type NewOrder = typeof orders.$inferInsert
+
+/** Último número de pedido de cada restaurante (`#123`); incrementado na criação do pedido. */
+export const orderCounters = pgTable('order_counters', {
+  establishmentId: uuid('establishment_id')
+    .primaryKey()
+    .references(() => establishments.id, { onDelete: 'cascade' }),
+  lastNumber: integer('last_number').notNull().default(0),
+})

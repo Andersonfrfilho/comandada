@@ -43,7 +43,12 @@ export class GetKitchenQueueUseCase {
         notInArray(schema.orders.paymentStatus, [...PAYMENT_STATUSES_HELD_FROM_KITCHEN])
       ),
       orderBy: [asc(schema.orders.receivedAt)],
-      with: { items: true },
+      // Mesa e nome do cliente: a cozinha dizia só "MANUAL · MESA", sem qual mesa nem para quem.
+      with: {
+        items: true,
+        table: { columns: { number: true } },
+        customer: { columns: { name: true } },
+      },
     })
 
     const now = Date.now()

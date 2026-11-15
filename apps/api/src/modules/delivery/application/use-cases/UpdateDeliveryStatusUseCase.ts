@@ -5,6 +5,7 @@ import type { NewDelivery } from '@/infra/database/schema'
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import { WS_EVENTS } from '@/infra/websocket/WebSocketEvents'
 import { NotFoundError, UnprocessableError } from '@/shared/errors/AppError'
+import { MessagesConstants } from '@/shared/constants/MessagesConstants'
 import type { DeliveryStatus, OrderStatus } from '@/shared/types'
 import { canTransitionTo } from '@/modules/orders/domain/entities/Order'
 import type { UpdateOrderStatusUseCase } from '@/modules/orders/application/use-cases/UpdateOrderStatusUseCase'
@@ -24,7 +25,11 @@ interface UpdateDeliveryStatusInput {
   newStatus: DeliveryStatus
   delivererId?: string | undefined
   userId?: string | undefined
+  /** Obrigatório para "não entregue": vai para a observação da entrega. */
+  note?: string | undefined
 }
+
+const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['cancelled', 'completed']
 
 // Entrega e pedido andam juntos: "saiu" põe o pedido em entrega e "entregue" conclui o pedido,
 // e o cliente é avisado pelo mesmo caminho das mudanças feitas na cozinha.
@@ -48,24 +53,43 @@ export class UpdateDeliveryStatusUseCase {
       ),
     })
 
-    if (!delivery) throw new NotFoundError('Delivery')
+    if (!delivery) throw new NotFoundError('entrega')
 
     const allowed = STATUS_TRANSITIONS[delivery.status]
     if (!allowed?.includes(input.newStatus)) {
-      throw new UnprocessableError(
-        `Cannot transition delivery from '${delivery.status}' to '${input.newStatus}'`
-      )
+      throw new UnprocessableError(MessagesConstants.delivery.invalidTransition)
+    }
+
+    // Pedido cancelado ou já concluído não sai mais para entrega nem vira "entregue".
+    const order = await this.db.query.orders.findFirst({
+      where: eq(schema.orders.id, delivery.orderId),
+      columns: { status: true },
+    })
+    if (order && CLOSED_ORDER_STATUSES.includes(order.status)) {
+      throw new UnprocessableError(MessagesConstants.delivery.orderClosed)
+    }
+
+    const note = input.note?.trim()
+    if (input.newStatus === 'failed' && !note) {
+      throw new UnprocessableError(MessagesConstants.delivery.failureReasonRequired)
     }
 
     const now = new Date()
     const updateValues: Partial<NewDelivery> = { status: input.newStatus }
+    // Quem saiu ou entregou fica registrado: o escolhido, o já atribuído ou quem tocou no botão.
+    const deliverer = input.delivererId ?? delivery.delivererId ?? input.userId
     if (input.newStatus === 'dispatched') {
       updateValues.dispatchedAt = now
-      if (input.delivererId) updateValues.delivererId = input.delivererId
+      if (deliverer) updateValues.delivererId = deliverer
     } else if (input.newStatus === 'delivered') {
       updateValues.deliveredAt = now
+      if (deliverer) updateValues.delivererId = deliverer
     } else if (input.newStatus === 'failed') {
       updateValues.failedAt = now
+      updateValues.notes = note ?? null
+    } else if (input.newStatus === 'pending') {
+      updateValues.dispatchedAt = null
+      updateValues.failedAt = null
     }
 
     const [updated] = await this.db

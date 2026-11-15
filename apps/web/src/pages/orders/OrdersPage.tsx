@@ -17,6 +17,8 @@ import { Plus, ChevronRight, X } from 'lucide-react'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
 import { Pagination } from '@/components/ui/Pagination'
 import { PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE, formatBRL, plural } from '@/lib/listing'
+import { orderNumberLabel } from '@/lib/orderLabel'
+import { CancelOrderDialog } from '@/components/orders/CancelOrderDialog'
 
 type OrderTypeValue = 'table' | 'delivery' | 'pickup'
 type OrderChannelValue = 'whatsapp' | 'ifood' | 'manual'
@@ -40,6 +42,9 @@ function parseCsvParam<TValue extends string>(value: string | null): TValue[] {
 
 interface Order {
   id: string
+  number: number | null
+  code: string | null
+  table: { number: number } | null
   channel: string
   type: string
   status: OrderStatus
@@ -246,15 +251,13 @@ export function OrdersPage() {
     }
   }
 
-  async function handleAdvance(orderId: string, nextStatus: OrderStatus) {
-    await api.patch(`/orders/${orderId}/status`, { status: nextStatus }, accessToken ?? undefined)
-    void queryClient.invalidateQueries({ queryKey: ['orders'] })
-  }
-
-  async function handleCancel(orderId: string) {
-    await api.patch(`/orders/${orderId}/status`, { status: 'cancelled', cancellationReason: 'Cancelado manualmente' }, accessToken ?? undefined)
-    void queryClient.invalidateQueries({ queryKey: ['orders'] })
-  }
+  // Erro vira aviso (cache do react-query) e o botão trava até a resposta, sem clique duplo.
+  const advanceMutation = useMutation({
+    mutationFn: ({ orderId, nextStatus }: { orderId: string; nextStatus: OrderStatus }) =>
+      api.patch(`/orders/${orderId}/status`, { status: nextStatus }, accessToken ?? undefined),
+    onSettled: () => void queryClient.invalidateQueries({ queryKey: ['orders'] }),
+  })
+  const [cancelTarget, setCancelTarget] = useState<{ id: string; status: OrderStatus; label: string } | null>(null)
 
   function startEditingNotes(orderId: string, currentNotes: string | null) {
     setEditingNotesId(orderId)
@@ -410,6 +413,7 @@ export function OrdersPage() {
             <div key={order.id} className="bg-white rounded-xl shadow-sm p-4">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-sm font-extrabold text-gray-900">{orderNumberLabel(order)}</span>
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLORS[order.status]}`}>
                     {ORDER_STATUS_LABELS[order.status]}
                   </span>
@@ -557,16 +561,17 @@ export function OrdersPage() {
                   )}
                   {order.status !== 'completed' && order.status !== 'cancelled' && (
                     <button
-                      onClick={() => handleCancel(order.id)}
-                      className="px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
+                      onClick={() => setCancelTarget({ id: order.id, status: order.status, label: orderNumberLabel(order) })}
+                      className="mr-2 px-2 py-1 text-xs text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
                     >
                       Cancelar
                     </button>
                   )}
                   {next && (
                     <button
-                      onClick={() => handleAdvance(order.id, next)}
-                      className="px-3 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
+                      onClick={() => advanceMutation.mutate({ orderId: order.id, nextStatus: next })}
+                      disabled={advanceMutation.isPending && advanceMutation.variables?.orderId === order.id}
+                      className="px-3 py-1.5 bg-brand-600 text-white text-xs font-semibold rounded-lg hover:bg-brand-700 transition-colors active:scale-95 disabled:opacity-50"
                     >
                       → {ORDER_STATUS_LABELS[next]}
                     </button>
@@ -594,6 +599,8 @@ export function OrdersPage() {
           onPageSizeChange={(nextSize) => updateFilters({ pageSize: nextSize === DEFAULT_PAGE_SIZE ? null : String(nextSize) })}
         />
       )}
+
+      <CancelOrderDialog order={cancelTarget} onClose={() => setCancelTarget(null)} />
     </div>
   )
 }

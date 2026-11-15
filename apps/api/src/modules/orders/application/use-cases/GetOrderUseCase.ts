@@ -19,6 +19,7 @@ export class GetOrderUseCase {
       with: {
         items: true,
         customer: true,
+        table: { columns: { number: true } },
         payments: true,
         delivery: true,
         fiscalDocument: true,

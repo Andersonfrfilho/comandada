@@ -1,3 +1,4 @@
+import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
@@ -54,7 +55,7 @@ export class DeliverFiscalDocumentUseCase {
         chaveAcesso: document.chaveAcesso,
         pdfUrl: document.danfePdfUrl ?? undefined,
         establishmentId: document.establishmentId,
-        orderCode: order ? (order.code ?? order.id.slice(0, 8).toUpperCase()) : undefined,
+        orderCode: order ? orderDisplayCode(order) : undefined,
       }
 
       const errors: string[] = []

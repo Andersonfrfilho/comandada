@@ -13,6 +13,10 @@ interface WsMessage {
 
 type MessageHandler = (message: WsMessage) => void
 
+// Sockets fechados de propósito (tela desmontada, token renovado) não reconectam: antes cada troca de
+// tela deixava uma conexão viva e os eventos chegavam em dobro.
+const closedOnPurpose = new WeakSet<WebSocket>()
+
 export function useWebSocket(onMessage: MessageHandler) {
   const wsRef = useRef<WebSocket | null>(null)
   const reconnectAttemptsRef = useRef(0)
@@ -24,7 +28,8 @@ export function useWebSocket(onMessage: MessageHandler) {
   const refresh = useAuthStore((state) => state.refresh)
 
   const connect = useCallback(() => {
-    if (wsRef.current?.readyState === WebSocket.OPEN) return
+    const current = wsRef.current
+    if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return
 
     const ws = new WebSocket(WS_URL)
     wsRef.current = ws
@@ -55,7 +60,8 @@ export function useWebSocket(onMessage: MessageHandler) {
     }
 
     ws.onclose = () => {
-      wsRef.current = null
+      if (wsRef.current === ws) wsRef.current = null
+      if (closedOnPurpose.has(ws)) return
       if (reconnectAttemptsRef.current < MAX_RECONNECT_ATTEMPTS) {
         reconnectAttemptsRef.current++
         reconnectTimerRef.current = setTimeout(connect, RECONNECT_DELAY_MS)
@@ -74,7 +80,12 @@ export function useWebSocket(onMessage: MessageHandler) {
 
     return () => {
       if (reconnectTimerRef.current) clearTimeout(reconnectTimerRef.current)
-      wsRef.current?.close()
+      const current = wsRef.current
+      if (current) {
+        closedOnPurpose.add(current)
+        current.close()
+        wsRef.current = null
+      }
     }
   }, [connect, accessToken])
 }
