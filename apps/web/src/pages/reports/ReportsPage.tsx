@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery } from '@tanstack/react-query'
+import { REVENUE_RULE_HINT } from '@/constants/paymentLabels'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { ORDER_CHANNEL_LABELS, ORDER_TYPE_LABELS, ORDER_STATUS_LABELS } from '@/constants/orderLabels'
@@ -311,6 +312,7 @@ export function ReportsPage() {
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <p className="text-xs text-gray-400 mb-1">Receita total</p>
               <p className="text-xl font-bold text-gray-900">{formatBRL(report.summary.totalRevenue)}</p>
+              <p className="text-[11px] text-gray-400 mt-0.5">{REVENUE_RULE_HINT}</p>
             </div>
             <div className="bg-white rounded-2xl p-4 shadow-sm">
               <p className="text-xs text-gray-400 mb-1">Pedidos concluídos</p>
@@ -340,11 +342,14 @@ export function ReportsPage() {
                 {report.dailyBreakdown.map((d) => {
                   const pct = getMiniBar(Number(d.revenue), maxDailyRevenue)
                   return (
-                    <div key={d.day} className="flex-1 flex flex-col items-center gap-1 group relative">
-                      <div
-                        className="w-full bg-brand-500 rounded-t-sm transition-all hover:bg-brand-600"
-                        style={{ height: `${Math.max(pct, 2)}%` }}
-                      />
+                    <div key={d.day} className="flex-1 h-full flex flex-col items-center gap-1 group relative">
+                      {/* A barra precisa de um pai com altura: altura em % dentro de flex sem altura dava 0. */}
+                      <div className="w-full flex-1 flex items-end">
+                        <div
+                          className="w-full bg-brand-500 rounded-t-sm transition-all hover:bg-brand-600"
+                          style={{ height: `${Math.max(pct, 2)}%` }}
+                        />
+                      </div>
                       {/* Tooltip on hover */}
                       <div className="absolute bottom-full mb-1 left-1/2 -translate-x-1/2 bg-gray-900 text-white text-xs rounded px-2 py-1 whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                         Dia {d.day}: {formatBRL(d.revenue)} · {d.orderCount} pedidos

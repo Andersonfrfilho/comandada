@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { REVENUE_RULE_HINT } from '@/constants/paymentLabels'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useUpload } from '@/hooks/useUpload'
@@ -824,6 +825,7 @@ export function FinancePage() {
                 <div className="bg-blue-50 rounded-2xl shadow-sm p-4">
                   <p className="text-xs text-blue-600 mb-1">Receita (mês)</p>
                   <p className="text-lg font-bold text-blue-700">{formatBRL(overviewData.currentMonth.revenue)}</p>
+                  <p className="text-[11px] text-blue-500 mt-0.5">{REVENUE_RULE_HINT}</p>
                 </div>
                 <div className="bg-orange-50 rounded-2xl shadow-sm p-4">
                   <p className="text-xs text-orange-600 mb-1">Custos (mês)</p>

@@ -7,8 +7,12 @@ import type { CloseCashRegisterUseCase } from '../../application/use-cases/Close
 import type { AddCashMovementUseCase } from '../../application/use-cases/AddCashMovementUseCase'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 import * as schema from '@/infra/database/schema'
+import { summarizeCashRegister } from '../../shared/cashRegisterSummary'
 
 type Database = NodePgDatabase<typeof schema>
+
+const HISTORY_DEFAULT_LIMIT = 10
+const HISTORY_MAX_LIMIT = 60
 
 const openRegisterSchema = z.object({
   openingAmount: z.number().nonnegative(),
@@ -16,6 +20,7 @@ const openRegisterSchema = z.object({
 
 const closeRegisterSchema = z.object({
   closingAmount: z.number().nonnegative(),
+  notes: z.string().trim().max(500).optional(),
 })
 
 const addMovementSchema = z.object({
@@ -56,23 +61,45 @@ export class CashierController {
       .where(eq(schema.cashMovements.cashRegisterId, register.id))
       .orderBy(desc(schema.cashMovements.createdAt))
 
-    const totalIn = movements
-      .filter((m) => m.type === 'payment' || m.type === 'supply')
-      .reduce((s, m) => s + Number(m.amount), 0)
-
-    const totalOut = movements
-      .filter((m) => m.type === 'withdrawal' || m.type === 'refund')
-      .reduce((s, m) => s + Number(m.amount), 0)
-
-    const balance = Number(register.openingAmount) + totalIn - totalOut
+    const summary = summarizeCashRegister(register.openingAmount, movements)
 
     response.json({
       ...register,
       movements,
-      totalIn: totalIn.toFixed(2),
-      totalOut: totalOut.toFixed(2),
-      balance: balance.toFixed(2),
+      ...summary,
     })
+  }
+
+  /** Últimos caixas fechados, com o esperado, o contado e a diferença de cada fechamento. */
+  history: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const requestedLimit = Number(request.query['limit'] ?? HISTORY_DEFAULT_LIMIT)
+    const limit = Number.isInteger(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, HISTORY_MAX_LIMIT)
+      : HISTORY_DEFAULT_LIMIT
+
+    const registers = await this.db
+      .select({
+        id: schema.cashRegisters.id,
+        openedAt: schema.cashRegisters.openedAt,
+        closedAt: schema.cashRegisters.closedAt,
+        openingAmount: schema.cashRegisters.openingAmount,
+        closingAmount: schema.cashRegisters.closingAmount,
+        expectedCashAmount: schema.cashRegisters.expectedCashAmount,
+        closingDifference: schema.cashRegisters.closingDifference,
+        closingNotes: schema.cashRegisters.closingNotes,
+        closedByName: schema.users.name,
+      })
+      .from(schema.cashRegisters)
+      .leftJoin(schema.users, eq(schema.cashRegisters.closedByUserId, schema.users.id))
+      .where(and(
+        eq(schema.cashRegisters.establishmentId, request.user.establishmentId),
+        eq(schema.cashRegisters.status, 'closed')
+      ))
+      .orderBy(desc(schema.cashRegisters.closedAt))
+      .limit(limit)
+
+    response.json(registers)
   }
 
   open: RouteHandler = async (request, response) => {
@@ -95,6 +122,8 @@ export class CashierController {
       registerId: request.params['id']!,
       establishmentId: request.user.establishmentId,
       closingAmount: parsed.data.closingAmount,
+      userId: request.user.id,
+      notes: parsed.data.notes,
     })
     response.json(register)
   }
@@ -106,6 +135,7 @@ export class CashierController {
     const movement = await this.addMovementUseCase.execute({
       establishmentId: request.user.establishmentId,
       ...parsed.data,
+      checkAsManualEntry: true,
     })
     response.json(movement, 201)
   }

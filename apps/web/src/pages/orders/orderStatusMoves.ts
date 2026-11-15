@@ -25,6 +25,14 @@ export function classifyStatusMove(steps: readonly OrderStatus[], from: OrderSta
   return 'skip'
 }
 
+/**
+ * A API só aceita sem `manual` os passos naturais. Cancelar um pedido Pronto, Retirado ou Concluído
+ * não é passo natural, então também vai como correção manual (antes dava erro 422 na tela).
+ */
+export function requiresManualFlag(from: OrderStatus, to: OrderStatus): boolean {
+  return !NATURAL_NEXT[from].includes(to)
+}
+
 /** Próximo passo natural dentro das etapas do tipo (entrega não oferece "retirado"). */
 export function nextStatus(steps: readonly OrderStatus[], current: OrderStatus): OrderStatus | null {
   return NATURAL_NEXT[current].find((status) => status !== 'cancelled' && steps.includes(status)) ?? null

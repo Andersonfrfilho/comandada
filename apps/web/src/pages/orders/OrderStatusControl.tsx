@@ -6,7 +6,7 @@ import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, type OrderStatus } from '@/constants/orderLabels'
 import { resolveSteps } from './OrderProgressBar'
-import { classifyStatusMove, nextStatus, type StatusMoveKind } from './orderStatusMoves'
+import { classifyStatusMove, nextStatus, requiresManualFlag, type StatusMoveKind } from './orderStatusMoves'
 import { REFUND_COPY, type OrderPaymentSummary } from '@/constants/onlinePayments'
 import { orderPaymentsQueryKey, refundErrorMessage } from './OrderPaymentCard'
 import { formatBrl } from './orderDetailFormat'
@@ -14,7 +14,7 @@ import { formatBrl } from './orderDetailFormat'
 const MOVE_WARNINGS: Record<Exclude<StatusMoveKind, 'forward'>, string> = {
   skip: 'Vai pular etapas. O histórico registra que foi uma mudança manual.',
   back: 'Vai voltar o pedido para uma etapa anterior. O cliente não recebe mensagem dessa correção.',
-  cancel: 'O pedido será cancelado e o cliente avisado pelo WhatsApp.',
+  cancel: 'O pedido será cancelado e o cliente avisado pelo WhatsApp. O que a receita tirou do estoque volta para o estoque.',
   reopen: 'O pedido cancelado volta a valer e reaparece nas filas.',
 }
 
@@ -48,13 +48,12 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
 
   const move = useMutation({
     mutationFn: async (variables: { to: OrderStatus; note?: string; refund?: boolean }) => {
-      const kind = classifyStatusMove(steps, status, variables.to)
       const reason = variables.note?.trim() || undefined
       await api.patch(
         `/orders/${orderId}/status`,
         {
           status: variables.to,
-          manual: kind !== 'forward' && kind !== 'cancel' ? true : undefined,
+          manual: requiresManualFlag(status, variables.to) ? true : undefined,
           note: reason,
           cancellationReason: variables.to === 'cancelled' ? reason ?? 'Cancelado no painel' : undefined,
         },

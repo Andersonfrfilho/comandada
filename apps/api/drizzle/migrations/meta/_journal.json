@@ -323,6 +323,13 @@
       "when": 1785001700000,
       "tag": "0046_payment_refunds",
       "breakpoints": true
+    },
+    {
+      "idx": 46,
+      "version": "7",
+      "when": 1785001800000,
+      "tag": "0047_cash_register_closing",
+      "breakpoints": true
     }
   ]
 }

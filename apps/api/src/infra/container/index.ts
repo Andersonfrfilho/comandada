@@ -35,6 +35,7 @@ import { IngredientController } from '@/modules/products/infra/http/IngredientCo
 import { StockBatchController } from '@/modules/products/infra/http/StockBatchController'
 import { CreateStockBatchUseCase } from '@/modules/products/application/use-cases/CreateStockBatchUseCase'
 import { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
+import { RestoreStockForOrderUseCase } from '@/modules/products/application/use-cases/RestoreStockForOrderUseCase'
 import { StockMovementController } from '@/modules/products/infra/http/StockMovementController'
 import { CreateStockMovementUseCase } from '@/modules/products/application/use-cases/CreateStockMovementUseCase'
 
@@ -381,7 +382,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     deductStockForOrderUseCase,
     notifiesCustomerHere ? notifyOrderStatusUseCase : undefined,
     recordOrderPaymentsUseCase,
-    async (order) => orderCancellationPayments?.releasePending(order)
+    async (order) => orderCancellationPayments?.releasePending(order),
+    new RestoreStockForOrderUseCase(db)
   )
 
   // Orders

@@ -32,3 +32,6 @@ export function paymentChangeText(payment: PaymentChangeInput): string | undefin
 function formatBrl(value: number): string {
   return `R$ ${value.toFixed(2).replace('.', ',')}`
 }
+
+/** A mesma regra de faturamento no Dashboard, nos Relatórios e no Financeiro (ver API: reports/shared/revenue). */
+export const REVENUE_RULE_HINT = 'Pedidos concluídos, menos devoluções'

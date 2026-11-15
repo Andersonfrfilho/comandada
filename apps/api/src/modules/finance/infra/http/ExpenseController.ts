@@ -1,5 +1,6 @@
-import { eq, and, gte, lte, sql, desc, inArray } from 'drizzle-orm'
-import { netCashAmount } from '@/modules/cashier/shared/cashMovementAmounts'
+import { eq, and, gte, lt, lte, sql, desc, inArray } from 'drizzle-orm'
+import { localMonthRange, localYearMonth, orderRevenueAmount, revenueOrdersWhere, type DateRange } from '@/modules/reports/shared/revenue'
+import { ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT } from '@/modules/products/shared/orderStockConsumption'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
@@ -247,36 +248,17 @@ export class ExpenseController {
     const periodMonths = !isNaN(months) && months > 0 ? months : 6
 
     const now = new Date()
-    const currentMonthStart = new Date(now.getFullYear(), now.getMonth(), 1)
-    const currentMonthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1)
+    const currentLocalMonth = localYearMonth(now)
+    const currentMonthRange = localMonthRange(currentLocalMonth.year, currentLocalMonth.month)
+    const currentMonthStart = currentMonthRange.from
+    const currentMonthEnd = currentMonthRange.to
 
     const currentMonthDateSlug = this.formatDateSlug(currentMonthStart)
     const currentMonthEndSlug = this.formatDateSlug(currentMonthEnd)
 
-    // Current month revenue from completed orders
-    const completedOrders = await this.db
-      .select({ total: sql<string>`COALESCE(SUM(${schema.orders.totalAmount}), '0')` })
-      .from(schema.orders)
-      .where(and(
-        eq(schema.orders.establishmentId, establishmentId),
-        eq(schema.orders.status, 'completed'),
-        gte(schema.orders.completedAt, currentMonthStart),
-        lte(schema.orders.completedAt, currentMonthEnd),
-      ))
-
-    // Current month cash register payments
-    const cashPayments = await this.db
-      .select({ total: sql<string>`COALESCE(SUM(${netCashAmount}), '0')` })
-      .from(schema.cashMovements)
-      .innerJoin(schema.cashRegisters, eq(schema.cashMovements.cashRegisterId, schema.cashRegisters.id))
-      .where(and(
-        eq(schema.cashRegisters.establishmentId, establishmentId),
-        inArray(schema.cashMovements.type, ['payment', 'refund']),
-        gte(schema.cashMovements.createdAt, currentMonthStart),
-        lte(schema.cashMovements.createdAt, currentMonthEnd),
-      ))
-
-    const monthlyRevenue = Number(completedOrders[0]?.total ?? '0') + Number(cashPayments[0]?.total ?? '0')
+    // Faturamento: a mesma regra do Dashboard e dos Relatórios (concluídos menos devoluções). Antes somava
+    // também os pagamentos do caixa, e o pedido pago no balcão contava duas vezes.
+    const monthlyRevenue = await this.revenueBetween(establishmentId, currentMonthRange)
 
     // Current month expenses
     const monthExpenses = await this.db
@@ -285,7 +267,7 @@ export class ExpenseController {
       .where(and(
         eq(schema.expenses.establishmentId, establishmentId),
         gte(schema.expenses.expenseDate, currentMonthDateSlug),
-        lte(schema.expenses.expenseDate, currentMonthEndSlug),
+        lt(schema.expenses.expenseDate, currentMonthEndSlug),
       ))
 
     // Total monthly accounts (pending)
@@ -299,18 +281,7 @@ export class ExpenseController {
 
     const totalMonthlyAccounts = Number(monthlyAccountsTotal[0]?.total ?? '0')
 
-    // Stock movement costs for current month
-    const stockCosts = await this.db
-      .select({ total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit}), '0')` })
-      .from(schema.stockMovements)
-      .innerJoin(schema.stockBatches, eq(schema.stockMovements.batchId, schema.stockBatches.id))
-      .where(and(
-        eq(schema.stockMovements.establishmentId, establishmentId),
-        gte(schema.stockMovements.createdAt, currentMonthStart),
-        lte(schema.stockMovements.createdAt, currentMonthEnd),
-      ))
-
-    const totalStockCosts = Number(stockCosts[0]?.total ?? '0')
+    const totalStockCosts = await this.stockCostBetween(establishmentId, currentMonthRange)
     const totalExpenses = Number(monthExpenses[0]?.total ?? '0')
 
     const totalCosts = totalExpenses + totalMonthlyAccounts + totalStockCosts
@@ -336,32 +307,15 @@ export class ExpenseController {
     }> = []
 
     for (let i = 0; i < periodMonths; i++) {
-      const monthDate = new Date(now.getFullYear(), now.getMonth() - i, 1)
-      const monthLabel = `${monthDate.getFullYear()}-${String(monthDate.getMonth() + 1).padStart(2, '0')}-01`
-      const nextMonthDate = new Date(monthDate.getFullYear(), monthDate.getMonth() + 1, 1)
+      const monthIndex = currentLocalMonth.month - 1 - i
+      const monthYear = currentLocalMonth.year + Math.floor(monthIndex / 12)
+      const monthNumber = ((monthIndex % 12) + 12) % 12 + 1
+      const monthRange = localMonthRange(monthYear, monthNumber)
+      const monthDate = monthRange.from
+      const monthLabel = `${monthYear}-${String(monthNumber).padStart(2, '0')}-01`
+      const nextMonthDate = monthRange.to
       const monthDateSlug = this.formatDateSlug(monthDate)
       const nextMonthDateSlug = this.formatDateSlug(nextMonthDate)
-
-      const monthOrders = await this.db
-        .select({ total: sql<string>`COALESCE(SUM(${schema.orders.totalAmount}), '0')` })
-        .from(schema.orders)
-        .where(and(
-          eq(schema.orders.establishmentId, establishmentId),
-          eq(schema.orders.status, 'completed'),
-          gte(schema.orders.completedAt, monthDate),
-          lte(schema.orders.completedAt, nextMonthDate),
-        ))
-
-      const monthCash = await this.db
-        .select({ total: sql<string>`COALESCE(SUM(${netCashAmount}), '0')` })
-        .from(schema.cashMovements)
-        .innerJoin(schema.cashRegisters, eq(schema.cashMovements.cashRegisterId, schema.cashRegisters.id))
-        .where(and(
-          eq(schema.cashRegisters.establishmentId, establishmentId),
-          inArray(schema.cashMovements.type, ['payment', 'refund']),
-          gte(schema.cashMovements.createdAt, monthDate),
-          lte(schema.cashMovements.createdAt, nextMonthDate),
-        ))
 
       const monthExp = await this.db
         .select({ total: sql<string>`COALESCE(SUM(${schema.expenses.amount}), '0')` })
@@ -369,21 +323,13 @@ export class ExpenseController {
         .where(and(
           eq(schema.expenses.establishmentId, establishmentId),
           gte(schema.expenses.expenseDate, monthDateSlug),
-          lte(schema.expenses.expenseDate, nextMonthDateSlug),
+          lt(schema.expenses.expenseDate, nextMonthDateSlug),
         ))
 
-      const monthStock = await this.db
-        .select({ total: sql<string>`COALESCE(SUM(${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit}), '0')` })
-        .from(schema.stockMovements)
-        .innerJoin(schema.stockBatches, eq(schema.stockMovements.batchId, schema.stockBatches.id))
-        .where(and(
-          eq(schema.stockMovements.establishmentId, establishmentId),
-          gte(schema.stockMovements.createdAt, monthDate),
-          lte(schema.stockMovements.createdAt, nextMonthDate),
-        ))
+      const monthStockCost = await this.stockCostBetween(establishmentId, monthRange)
 
-      const rev = Number(monthOrders[0]?.total ?? '0') + Number(monthCash[0]?.total ?? '0')
-      const cost = Number(monthExp[0]?.total ?? '0') + totalMonthlyAccounts + Number(monthStock[0]?.total ?? '0')
+      const rev = await this.revenueBetween(establishmentId, monthRange)
+      const cost = Number(monthExp[0]?.total ?? '0') + totalMonthlyAccounts + monthStockCost
       const mar = rev > 0 ? ((rev - cost) / rev) * 100 : 0
 
       monthlyEvolution.unshift({
@@ -404,5 +350,34 @@ export class ExpenseController {
       breakEvenPoint: breakEvenPoint.toFixed(2),
       monthlyEvolution,
     })
+  }
+
+  private async revenueBetween(establishmentId: string, range: DateRange): Promise<number> {
+    const [row] = await this.db
+      .select({ total: sql<string>`COALESCE(SUM(${orderRevenueAmount}), 0)` })
+      .from(schema.orders)
+      .where(revenueOrdersWhere(establishmentId, range))
+    return Number(row?.total ?? 0)
+  }
+
+  /**
+   * Custo do estoque no mês: o que saiu (baixa de pedido e perda) pelo custo do lote, menos o que voltou
+   * por cancelamento. Entrada de compra não é custo aqui: ela vira custo quando é consumida.
+   */
+  private async stockCostBetween(establishmentId: string, range: DateRange): Promise<number> {
+    const signedCost = sql`CASE WHEN ${schema.stockMovements.movementType} = ${ORDER_RETURN_MOVEMENT}
+      THEN -(${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit})
+      ELSE ${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit} END`
+    const [row] = await this.db
+      .select({ total: sql<string>`COALESCE(SUM(${signedCost}), 0)` })
+      .from(schema.stockMovements)
+      .innerJoin(schema.stockBatches, eq(schema.stockMovements.batchId, schema.stockBatches.id))
+      .where(and(
+        eq(schema.stockMovements.establishmentId, establishmentId),
+        inArray(schema.stockMovements.movementType, [ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT, 'loss']),
+        gte(schema.stockMovements.createdAt, range.from),
+        lt(schema.stockMovements.createdAt, range.to),
+      ))
+    return Number(row?.total ?? 0)
   }
 }

@@ -2,6 +2,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { formatBRL } from '@/lib/listing'
+import { REVENUE_RULE_HINT } from '@/constants/paymentLabels'
 
 interface DashboardMetrics {
   ordersToday: number
@@ -11,11 +12,12 @@ interface DashboardMetrics {
   cashRegisterId: string | null
 }
 
-function MetricCard({ label, value, accent = false }: { label: string; value: string | number; accent?: boolean }) {
+function MetricCard({ label, value, accent = false, hint }: { label: string; value: string | number; accent?: boolean; hint?: string }) {
   return (
-      <div className={`rounded-xl p-4 md:p-6 ${accent ? 'bg-brand-600 text-white' : 'bg-white shadow-sm'}`}>
+    <div className={`rounded-xl p-4 md:p-6 ${accent ? 'bg-brand-600 text-white' : 'bg-white shadow-sm'}`}>
       <p className={`text-sm font-medium ${accent ? 'text-brand-100' : 'text-gray-500'}`}>{label}</p>
       <p className={`text-3xl font-bold mt-1 ${accent ? 'text-white' : 'text-gray-900'}`}>{value}</p>
+      {hint && <p className={`text-xs mt-1 ${accent ? 'text-brand-100' : 'text-gray-400'}`}>{hint}</p>}
     </div>
   )
 }
@@ -39,6 +41,7 @@ export function DashboardPage() {
         <MetricCard
           label="Faturamento hoje"
           value={formatBRL(metrics?.revenuToday)}
+          hint={REVENUE_RULE_HINT}
           accent
         />
         <MetricCard label="Pedidos em aberto" value={metrics?.pendingOrders ?? 0} />

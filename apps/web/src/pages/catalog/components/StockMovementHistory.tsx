@@ -28,6 +28,7 @@ interface StockMovementHistoryProps {
 const MOVEMENT_LABELS: Record<string, { label: string; color: string }> = {
   in: { label: 'Entrada', color: 'text-green-600' },
   out: { label: 'Saída', color: 'text-gray-500' },
+  return: { label: 'Devolução (cancelado)', color: 'text-green-600' },
   adjustment: { label: 'Ajuste', color: 'text-blue-600' },
   loss: { label: 'Perda', color: 'text-red-600' },
 }

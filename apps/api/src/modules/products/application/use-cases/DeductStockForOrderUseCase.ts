@@ -2,6 +2,7 @@ import { eq, and, gt, asc, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import { ConflictError } from '@/shared/errors/AppError'
+import { ORDER_CONSUMPTION_MOVEMENT, findActiveOrderConsumption } from '../../shared/orderStockConsumption'
 
 type Database = NodePgDatabase<typeof schema>
 type Transaction = Parameters<Parameters<Database['transaction']>[0]>[0]
@@ -11,6 +12,11 @@ export interface DeductStockForOrderInput {
   orderId: string
   establishmentId: string
   userId?: string
+  /**
+   * Pedido que pulou a produção (marcado pronto ou concluído direto): a comida já saiu, então a baixa
+   * entra mesmo sem saldo, como negativo, em vez de travar a mudança de status.
+   */
+  allowShortage?: boolean
 }
 
 export interface DeductStockForOrderResult {
@@ -30,6 +36,7 @@ type ConsumeRecipeParams = {
   orderId: string
   establishmentId: string
   userId?: string
+  allowShortage?: boolean
 }
 
 export class DeductStockForOrderUseCase {
@@ -62,7 +69,7 @@ export class DeductStockForOrderUseCase {
   }
 
   private async consumeRecipe(params: ConsumeRecipeParams): Promise<number> {
-    const { transaction, line, orderId, establishmentId, userId } = params
+    const { transaction, line, orderId, establishmentId, userId, allowShortage } = params
 
     const recipe = await transaction.query.productIngredients.findMany({
       where: eq(schema.productIngredients.productId, line.product.id),
@@ -112,7 +119,7 @@ export class DeductStockForOrderUseCase {
           ingredientId: recipeLine.ingredientId,
           batchId: batch.id,
           orderId,
-          movementType: 'out',
+          movementType: ORDER_CONSUMPTION_MOVEMENT,
           quantity: String(consumeFromBatch),
           reason: `Baixa por pedido ${orderId}`,
           ...(userId ? { userId } : {}),
@@ -123,7 +130,7 @@ export class DeductStockForOrderUseCase {
       }
 
       if (remainingToConsume > 0) {
-        if (!line.product.allowNegativeStock) {
+        if (!line.product.allowNegativeStock && !allowShortage) {
           throw new ConflictError(
             `Estoque insuficiente para o ingrediente ${ingredient?.name ?? recipeLine.ingredientId} do produto ${line.product.name}`
           )
@@ -133,7 +140,7 @@ export class DeductStockForOrderUseCase {
           establishmentId,
           ingredientId: recipeLine.ingredientId,
           orderId,
-          movementType: 'out',
+          movementType: ORDER_CONSUMPTION_MOVEMENT,
           quantity: String(remainingToConsume),
           reason: `Baixa por pedido ${orderId} — saldo negativo permitido para ${line.product.name}`,
           ...(userId ? { userId } : {}),
@@ -154,14 +161,9 @@ export class DeductStockForOrderUseCase {
   }
 
   async execute(input: DeductStockForOrderInput): Promise<DeductStockForOrderResult> {
-    const alreadyProcessed = await this.db.query.stockMovements.findFirst({
-      where: and(
-        eq(schema.stockMovements.orderId, input.orderId),
-        eq(schema.stockMovements.movementType, 'out')
-      ),
-      columns: { id: true },
-    })
-    if (alreadyProcessed) return { alreadyProcessed: true, movementsCreated: 0 }
+    // Já baixado nesta rodada (sem devolução por cancelamento depois): não baixa de novo.
+    const activeConsumption = await findActiveOrderConsumption(this.db, input.orderId)
+    if (activeConsumption.length > 0) return { alreadyProcessed: true, movementsCreated: 0 }
 
     const items = await this.db.query.orderItems.findMany({
       where: eq(schema.orderItems.orderId, input.orderId),
@@ -190,6 +192,7 @@ export class DeductStockForOrderUseCase {
             orderId: input.orderId,
             establishmentId: input.establishmentId,
             ...(input.userId ? { userId: input.userId } : {}),
+            ...(input.allowShortage ? { allowShortage: true } : {}),
           })
         }
       }

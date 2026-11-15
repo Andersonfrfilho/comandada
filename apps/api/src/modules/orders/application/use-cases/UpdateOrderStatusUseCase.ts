@@ -12,6 +12,7 @@ import type { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/
 import type { NotifyOrderStatusUseCase } from './NotifyOrderStatusUseCase'
 import type { RecordOrderPaymentsUseCase } from '@/modules/cashier/application/use-cases/RecordOrderPaymentsUseCase'
 import type { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
+import type { RestoreStockForOrderUseCase } from '@/modules/products/application/use-cases/RestoreStockForOrderUseCase'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -29,6 +30,9 @@ export interface UpdateStatusInput {
 
 export const MANUAL_STATUS_NOTE = 'Alterado manualmente no painel'
 
+// Status em que a comida já foi feita: se o pedido pulou a produção, a baixa entra aqui.
+const PRODUCED_STATUSES: readonly OrderStatus[] = ['ready', 'in_delivery', 'picked_up', 'completed']
+
 
 export class UpdateOrderStatusUseCase {
   constructor(
@@ -39,7 +43,9 @@ export class UpdateOrderStatusUseCase {
     private readonly notifyCustomer?: Pick<NotifyOrderStatusUseCase, 'execute'>,
     private readonly recordPayments?: Pick<RecordOrderPaymentsUseCase, 'execute'>,
     // Cancelado com Pix em aberto: cancela a cobrança no provedor (pagamentos). Falha não desfaz o cancelamento.
-    private readonly onCancelled?: (order: schema.Order) => Promise<unknown>
+    private readonly onCancelled?: (order: schema.Order) => Promise<unknown>,
+    // Cancelado: devolve ao estoque o que a receita tinha baixado.
+    private readonly restoreStock?: Pick<RestoreStockForOrderUseCase, 'execute'>
   ) {}
 
   async execute(input: UpdateStatusInput) {
@@ -66,6 +72,16 @@ export class UpdateOrderStatusUseCase {
       await this.deductStock.execute({
         orderId: input.orderId,
         establishmentId: input.establishmentId,
+        ...(input.userId ? { userId: input.userId } : {}),
+      })
+    }
+
+    // Pulou a produção (ex.: Recebido → Concluído): a baixa não pode ficar de fora. Já baixado, não faz nada.
+    if (PRODUCED_STATUSES.includes(input.newStatus) && this.deductStock) {
+      await this.deductStock.execute({
+        orderId: input.orderId,
+        establishmentId: input.establishmentId,
+        allowShortage: true,
         ...(input.userId ? { userId: input.userId } : {}),
       })
     }
@@ -99,6 +115,14 @@ export class UpdateOrderStatusUseCase {
       .returning()
 
     await this.stampItemPreparation(input.orderId, input.newStatus, now)
+
+    if (input.newStatus === 'cancelled' && this.restoreStock) {
+      await this.restoreStock
+        .execute({ orderId: input.orderId, establishmentId: input.establishmentId, userId: input.userId })
+        .catch((error: unknown) =>
+          console.error('[Orders] stock return on cancel failed', error instanceof Error ? error.message : error)
+        )
+    }
 
     if (input.newStatus === 'cancelled' && this.onCancelled && updated) {
       await this.onCancelled(updated).catch((error: unknown) =>

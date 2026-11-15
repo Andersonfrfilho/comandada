@@ -20,11 +20,22 @@ export const MessagesConstants = {
     invalidStatusTransition: (from: string, to: string) =>
       `Cannot transition order from '${from}' to '${to}'`,
     alreadyCancelled: 'Order is already cancelled',
+    itemWithoutProduct: 'Todo item do pedido precisa ser um produto do cardápio.',
+    productNotInMenu: 'Um dos produtos não está no cardápio deste restaurante.',
+    productInactive: (name: string) => `${name} está fora do cardápio no momento.`,
+    changeBelowAmount: 'O valor do "troco para" é menor que o valor a pagar.',
+    paymentsAboveTotal: (total: number) =>
+      `Os pagamentos somam mais que o total do pedido (R$ ${total.toFixed(2).replace('.', ',')}).`,
+    scheduledInPast: 'A hora agendada já passou. Escolha um horário futuro.',
   },
   cashRegister: {
     alreadyOpen: 'A cash register is already open for this establishment',
     notOpen: 'No cash register is currently open',
     notFound: 'Cash register not found',
+    withdrawalAboveCash: (available: string) =>
+      `A sangria é maior que o dinheiro na gaveta (R$ ${available.replace('.', ',')}). Confira o valor.`,
+    paymentForCancelledOrder: 'Este pedido está cancelado. Não dá para lançar pagamento nele.',
+    orderNotFound: 'Pedido não encontrado neste restaurante.',
   },
   delivery: {
     notFound: 'Delivery not found',
