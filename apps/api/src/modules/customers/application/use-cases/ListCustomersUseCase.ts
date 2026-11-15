@@ -1,4 +1,10 @@
-import type { CustomerRepository, CustomerWithStats, CustomerSortField, SortDirection } from '../../domain/repositories/CustomerRepository'
+import type {
+  CustomerRepository,
+  CustomerWithStats,
+  CustomerSortField,
+  CustomerSegment,
+  SortDirection,
+} from '../../domain/repositories/CustomerRepository'
 
 interface ListCustomersInput {
   establishmentId: string
@@ -7,6 +13,8 @@ interface ListCustomersInput {
   search?: string
   sortBy?: CustomerSortField
   sortDirection?: SortDirection
+  segment?: CustomerSegment
+  minRating?: number
 }
 
 interface ListCustomersOutput {

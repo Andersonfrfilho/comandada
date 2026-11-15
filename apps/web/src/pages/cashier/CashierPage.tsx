@@ -89,9 +89,16 @@ export function CashierPage() {
     refetchInterval: 30_000,
   })
 
+  // Notas desde a abertura deste caixa (antes vinham as 50 últimas de qualquer dia).
+  const openedAt = register?.openedAt ?? null
   const { data: fiscalDocs = [] } = useQuery({
-    queryKey: ['fiscal-documents-list'],
-    queryFn: () => api.get<FiscalDoc[]>('/fiscal-documents', accessToken ?? undefined),
+    queryKey: ['fiscal-documents', 'cashier', openedAt],
+    queryFn: async () => {
+      const params = new URLSearchParams({ pageSize: '100', dateFrom: openedAt ?? '' })
+      const result = await api.get<{ data: FiscalDoc[] }>(`/fiscal-documents?${params.toString()}`, accessToken ?? undefined)
+      return result.data
+    },
+    enabled: !!openedAt,
     refetchInterval: 60_000,
   })
 
@@ -260,7 +267,7 @@ export function CashierPage() {
           {/* Fiscal documents */}
           {fiscalDocs.length > 0 && (
             <div className="bg-white rounded-2xl shadow-sm p-5">
-              <h2 className="font-semibold text-gray-900 mb-1">Notas Fiscais do dia</h2>
+              <h2 className="font-semibold text-gray-900 mb-1">Notas fiscais deste caixa</h2>
               <p className="text-xs text-gray-400 mb-3">{fiscalDocs.length} documento{fiscalDocs.length !== 1 ? 's' : ''}</p>
               <div className="space-y-2 max-h-64 overflow-y-auto">
                 {fiscalDocs.map((doc) => (

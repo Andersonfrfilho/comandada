@@ -5,6 +5,10 @@ import { api } from '@/lib/api'
 import { useUpload } from '@/hooks/useUpload'
 import { Modal } from '@/components/ui/Modal'
 import { Select, type SelectOption } from '@/components/ui/Select'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Pagination } from '@/components/ui/Pagination'
+import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
+import { matchesSearch, paginateRows, sortRows, toggleSort, type SortDirection, type SortState } from '@/lib/listing'
 import { Banknote, Plus, ChevronLeft, ChevronRight, CheckCircle, XCircle, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react'
 
 interface MonthlyAccount {
@@ -133,6 +137,10 @@ const MONTHS = [
 
 type Tab = 'fixed' | 'variable' | 'report'
 
+const EXPENSES_PAGE_SIZE = 20
+
+type ExpenseSortField = 'expenseDate' | 'description' | 'category' | 'amount'
+
 function formatBRL(value: string | number): string {
   return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
 }
@@ -206,6 +214,11 @@ export function FinancePage() {
   })
 
   // Expenses query
+  const [expenseSearch, setExpenseSearch] = useState('')
+  const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('')
+  const [expenseSort, setExpenseSort] = useState<SortState<ExpenseSortField>>({ field: 'expenseDate', direction: 'desc' })
+  const [expensePage, setExpensePage] = useState(1)
+
   const { data: expensesData, isLoading: expensesLoading } = useQuery({
     queryKey: ['expenses', currentMonth, currentYear],
     queryFn: () => api.get<ExpensesResponse>(`/expenses?month=${currentMonth + 1}&year=${currentYear}`, accessToken ?? undefined),
@@ -412,6 +425,116 @@ export function FinancePage() {
   const totalPaid = data?.totalPaid ?? '0.00'
 
   const expenses = expensesData?.expenses ?? []
+  const filteredExpenses = sortRows(
+    expenses.filter(
+      (expense) =>
+        (!expenseCategoryFilter || expense.category === expenseCategoryFilter) &&
+        matchesSearch(expenseSearch, [expense.description, expense.supplier, expense.notes])
+    ),
+    (expense) =>
+      expenseSort.field === 'amount'
+        ? Number(expense.amount)
+        : expenseSort.field === 'category'
+          ? EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category
+          : expense[expenseSort.field],
+    expenseSort.direction
+  )
+  const visibleExpenses = paginateRows(filteredExpenses, expensePage, EXPENSES_PAGE_SIZE)
+  const filteredExpensesTotal = filteredExpenses.reduce((sum, expense) => sum + Number(expense.amount), 0)
+  const hasExpenseFilters = !!expenseSearch.trim() || !!expenseCategoryFilter
+
+  function handleExpenseSort(field: ExpenseSortField, defaultDirection: SortDirection) {
+    setExpenseSort((current) => toggleSort(current, field, defaultDirection))
+    setExpensePage(1)
+  }
+
+  const expenseColumns: ReadonlyArray<DataTableColumn<Expense, ExpenseSortField>> = [
+    {
+      key: 'expenseDate',
+      header: 'Data',
+      sortField: 'expenseDate',
+      defaultDirection: 'desc',
+      render: (expense) => (
+        <span className="text-gray-600 whitespace-nowrap">
+          {expense.expenseDate ? new Date(expense.expenseDate + 'T12:00:00').toLocaleDateString('pt-BR') : '—'}
+        </span>
+      ),
+    },
+    {
+      key: 'description',
+      header: 'Descrição',
+      sortField: 'description',
+      render: (expense) => (
+        <div className="min-w-0">
+          <p className="font-medium text-gray-900">{expense.description}</p>
+          {expense.supplier && <p className="text-xs text-gray-400 sm:hidden">{expense.supplier}</p>}
+          {expense.notes && <p className="text-xs text-gray-400 truncate max-w-xs">{expense.notes}</p>}
+        </div>
+      ),
+    },
+    {
+      key: 'category',
+      header: 'Categoria',
+      sortField: 'category',
+      className: 'hidden md:table-cell',
+      render: (expense) => (
+        <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 whitespace-nowrap">
+          {EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}
+        </span>
+      ),
+    },
+    {
+      key: 'supplier',
+      header: 'Fornecedor',
+      className: 'hidden sm:table-cell',
+      render: (expense) => <span className="text-gray-600">{expense.supplier ?? '—'}</span>,
+    },
+    {
+      key: 'amount',
+      header: 'Valor',
+      align: 'right',
+      sortField: 'amount',
+      defaultDirection: 'desc',
+      render: (expense) => <span className="font-semibold text-gray-900 whitespace-nowrap">{formatBRL(expense.amount)}</span>,
+    },
+    {
+      key: 'actions',
+      header: 'Ações',
+      align: 'right',
+      render: (expense) => (
+        <div className="flex items-center justify-end gap-1">
+          {expense.receiptUrl && (
+            <a
+              href={expense.receiptUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs text-brand-600 hover:underline px-2 py-1"
+            >
+              Recibo
+            </a>
+          )}
+          <button
+            type="button"
+            onClick={() => openEditExpenseModal(expense)}
+            className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors"
+          >
+            Editar
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              if (window.confirm('Excluir este gasto?')) {
+                deleteExpenseMutation.mutate(expense.id)
+              }
+            }}
+            className="text-xs text-red-400 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors"
+          >
+            Excluir
+          </button>
+        </div>
+      ),
+    },
+  ]
   const totalExpenses = expensesData?.totalAmount ?? '0.00'
 
   const pendingMutation = payMutation.isPending || unpayMutation.isPending
@@ -618,78 +741,60 @@ export function FinancePage() {
             </button>
           </div>
 
-          {expensesLoading ? (
-            <p className="text-gray-400 text-center py-8">Carregando...</p>
-          ) : expenses.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Nenhum gasto registrado este mês.</p>
-          ) : (
-            <div className="space-y-2">
-              {expenses.map((expense) => {
-                const dateStr = expense.expenseDate
-                  ? new Date(expense.expenseDate + 'T12:00:00').toLocaleDateString('pt-BR')
-                  : '-'
-                return (
-                  <div
-                    key={expense.id}
-                    className="bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between gap-3"
-                  >
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 mb-1">
-                        <span className="font-medium text-gray-900 truncate">{expense.description}</span>
-                        <span className="text-xs font-semibold px-1.5 py-0.5 rounded-full bg-gray-100 text-gray-600 flex-shrink-0">
-                          {EXPENSE_CATEGORY_LABELS[expense.category] ?? expense.category}
-                        </span>
-                      </div>
-                      <div className="flex items-center gap-2 text-xs text-gray-400">
-                        <span>{dateStr}</span>
-                        {expense.supplier && (
-                          <>
-                            <span>·</span>
-                            <span className="truncate">{expense.supplier}</span>
-                          </>
-                        )}
-                      </div>
-                      {expense.notes && (
-                        <p className="text-xs text-gray-400 mt-0.5 truncate">{expense.notes}</p>
-                      )}
-                    </div>
+          <FilterBar
+            hasActiveFilters={hasExpenseFilters}
+            onClear={() => {
+              setExpenseSearch('')
+              setExpenseCategoryFilter('')
+              setExpensePage(1)
+            }}
+          >
+            <SearchField
+              value={expenseSearch}
+              onChange={(value) => {
+                setExpenseSearch(value)
+                setExpensePage(1)
+              }}
+              placeholder="Descrição, fornecedor ou observação"
+            />
+            <FilterField label="Categoria">
+              <FilterSelect
+                value={expenseCategoryFilter}
+                onChange={(value) => {
+                  setExpenseCategoryFilter(value)
+                  setExpensePage(1)
+                }}
+                options={Object.entries(EXPENSE_CATEGORY_LABELS).map(([value, label]) => ({ value, label }))}
+                allLabel="Todas"
+              />
+            </FilterField>
+          </FilterBar>
 
-                    <div className="flex items-center gap-2 flex-shrink-0">
-                      <span className="font-semibold text-gray-900 text-sm">{formatBRL(expense.amount)}</span>
-                      {expense.receiptUrl && (
-                        <a
-                          href={expense.receiptUrl}
-                          target="_blank"
-                          rel="noopener noreferrer"
-                          className="text-xs text-brand-600 hover:underline"
-                        >
-                          Recibo
-                        </a>
-                      )}
-                      <button
-                        type="button"
-                        onClick={() => openEditExpenseModal(expense)}
-                        className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors"
-                      >
-                        Editar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          if (window.confirm('Excluir este gasto?')) {
-                            deleteExpenseMutation.mutate(expense.id)
-                          }
-                        }}
-                        className="text-xs text-red-400 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors"
-                      >
-                        Excluir
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+          {hasExpenseFilters && filteredExpenses.length > 0 && (
+            <p className="text-sm text-gray-500 mb-2">
+              {filteredExpenses.length} de {expenses.length} gastos · {formatBRL(filteredExpensesTotal)}
+            </p>
           )}
+
+          <DataTable
+            caption="Gastos do mês"
+            columns={expenseColumns}
+            rows={visibleExpenses}
+            rowKey={(expense) => expense.id}
+            isLoading={expensesLoading}
+            emptyMessage={hasExpenseFilters ? 'Nenhum gasto com esses filtros.' : 'Nenhum gasto registrado este mês.'}
+            sort={expenseSort}
+            onSort={handleExpenseSort}
+            minWidthClassName="min-w-0"
+            footer={
+              <Pagination
+                page={expensePage}
+                pageSize={EXPENSES_PAGE_SIZE}
+                total={filteredExpenses.length}
+                onPageChange={setExpensePage}
+              />
+            }
+          />
         </>
       )}
 

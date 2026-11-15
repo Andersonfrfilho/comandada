@@ -15,6 +15,8 @@ import { Select, type SelectOption } from '@/components/ui/Select'
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { Plus, ChevronRight, X } from 'lucide-react'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import { Pagination } from '@/components/ui/Pagination'
+import { PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE, formatBRL, plural } from '@/lib/listing'
 
 type OrderTypeValue = 'table' | 'delivery' | 'pickup'
 type OrderChannelValue = 'whatsapp' | 'ifood' | 'manual'
@@ -49,6 +51,25 @@ interface Order {
   payments: Array<{ paymentTypeName: string; amount: string; changeFor: string | null; splitLabel: string | null }>
   // Pagamento online pelo WhatsApp (Pix/link). `awaiting` ainda não foi para a cozinha.
   paymentStatus?: string
+  // Resumo da nota fiscal, já vem na lista (null = sem nota).
+  fiscalDocument?: FiscalDoc | null
+}
+
+// Ordenações oferecidas na lista. O valor vai para a URL como "campo:sentido".
+const SORT_OPTIONS = [
+  { value: 'receivedAt:desc', label: 'Mais recentes' },
+  { value: 'receivedAt:asc', label: 'Mais antigos' },
+  { value: 'totalAmount:desc', label: 'Maior valor' },
+  { value: 'totalAmount:asc', label: 'Menor valor' },
+] as const
+type SortOptionValue = (typeof SORT_OPTIONS)[number]['value']
+
+function formatOrderMoment(receivedAt: string): string {
+  const date = new Date(receivedAt)
+  const time = date.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+  // Pedido de hoje mostra só a hora; de outro dia, a data junto (a lista "Todos" cruza dias).
+  if (date.toDateString() === new Date().toDateString()) return time
+  return `${date.toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' })} · ${time}`
 }
 
 const ONLINE_PAYMENT_BADGES: Record<string, { label: string; className: string }> = {
@@ -63,6 +84,7 @@ interface OrdersResponse {
   total: number
   page: number
   pageSize: number
+  totalPages?: number
 }
 
 type FiscalDocStatus = 'pending' | 'emitting' | 'authorized' | 'rejected' | 'cancelled'
@@ -116,6 +138,11 @@ export function OrdersPage() {
   const dateFrom = searchParams.get('dateFrom') ?? ''
   const dateTo = searchParams.get('dateTo') ?? ''
   const page = Math.max(1, parseInt(searchParams.get('page') ?? '1', 10) || 1)
+  const pageSizeParam = parseInt(searchParams.get('pageSize') ?? '', 10)
+  const pageSize = PAGE_SIZE_OPTIONS.some((option) => option === pageSizeParam) ? pageSizeParam : DEFAULT_PAGE_SIZE
+  const sortParam = `${searchParams.get('sortBy') ?? 'receivedAt'}:${searchParams.get('sortDirection') ?? 'desc'}`
+  const sortValue: SortOptionValue = SORT_OPTIONS.find((option) => option.value === sortParam)?.value ?? 'receivedAt:desc'
+  const [sortBy, sortDirection] = sortValue.split(':') as [string, string]
 
   const [searchInput, setSearchInput] = useState(searchParams.get('search') ?? '')
   const [debouncedSearch, setDebouncedSearch] = useState(searchParams.get('search') ?? '')
@@ -176,37 +203,14 @@ export function OrdersPage() {
   if (dateFrom) queryParams.set('dateFrom', `${dateFrom}T00:00:00`)
   if (dateTo) queryParams.set('dateTo', `${dateTo}T23:59:59`)
   queryParams.set('page', String(page))
-  queryParams.set('pageSize', '20')
+  queryParams.set('pageSize', String(pageSize))
+  queryParams.set('sortBy', sortBy)
+  queryParams.set('sortDirection', sortDirection)
 
   const { data, isLoading } = useQuery({
     queryKey: ['orders', queryParams.toString()],
     queryFn: () => api.get<OrdersResponse>(`/orders?${queryParams.toString()}`, accessToken ?? undefined),
     refetchInterval: 15_000,
-  })
-
-  // Fetch fiscal documents for current orders
-  const { data: fiscalDocs } = useQuery({
-    queryKey: ['fiscal-docs', (data?.data ?? []).map((o) => o.id).join(',')],
-    queryFn: async () => {
-      const orders = data?.data ?? []
-      if (orders.length === 0) return {} as Record<string, FiscalDoc>
-      const results: Record<string, FiscalDoc> = {}
-      await Promise.all(
-        orders.map(async (order) => {
-          try {
-            const doc = await api.get<FiscalDoc>(
-              `/orders/${order.id}/fiscal-document`,
-              accessToken ?? undefined
-            )
-            results[order.id] = doc
-          } catch {
-            // No fiscal document for this order
-          }
-        })
-      )
-      return results
-    },
-    enabled: (data?.data ?? []).length > 0,
   })
 
   // Listen to WebSocket events for both orders and fiscal
@@ -215,7 +219,7 @@ export function OrdersPage() {
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
     }
     if (message.type.startsWith('fiscal:')) {
-      void queryClient.invalidateQueries({ queryKey: ['fiscal-docs'] })
+      void queryClient.invalidateQueries({ queryKey: ['orders'] })
       setEmitiringOrderId(null)
     }
   })
@@ -234,7 +238,7 @@ export function OrdersPage() {
     setFiscalError(null)
     try {
       await api.post(`/orders/${orderId}/fiscal-document`, {}, accessToken ?? undefined)
-      void queryClient.invalidateQueries({ queryKey: ['fiscal-docs'] })
+      void queryClient.invalidateQueries({ queryKey: ['orders'] })
     } catch (e) {
       setFiscalError(e instanceof Error ? e.message : 'Erro ao emitir NF')
       setEmitiringOrderId(null)
@@ -262,13 +266,15 @@ export function OrdersPage() {
 
   const orders = data?.data ?? []
   const total = data?.total ?? 0
-  const totalPages = Math.ceil(total / 20)
 
   return (
     <div className="p-4 md:p-6">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-bold text-gray-900">Pedidos</h1>
-        <div className="flex gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Pedidos</h1>
+          {data && <p className="text-sm text-gray-500">{plural(total, 'pedido', 'pedidos')}</p>}
+        </div>
+        <div className="flex flex-wrap gap-2">
           <button
             onClick={() => navigate('/orders/new')}
             className="flex items-center gap-2 px-4 py-2 text-sm font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
@@ -282,7 +288,7 @@ export function OrdersPage() {
               statusFilter === 'active' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-300'
             }`}
           >
-            Ativos ({statusFilter === 'active' ? total : ''})
+            Ativos{statusFilter === 'active' && data ? ` (${total})` : ''}
           </button>
           <button
             onClick={() => updateFilters({ status: 'all' })}
@@ -325,6 +331,24 @@ export function OrdersPage() {
             onChange={(value) => updateFilters({ channel: value.join(',') || null })}
             placeholder="Todos"
           />
+        </div>
+        <div className="w-40">
+          <label className="block text-xs font-medium text-gray-500 mb-1">Ordenar por</label>
+          <select
+            value={sortValue}
+            onChange={(e) => {
+              const [field, direction] = e.target.value.split(':')
+              updateFilters({
+                sortBy: field === 'receivedAt' ? null : field ?? null,
+                sortDirection: direction === 'desc' ? null : direction ?? null,
+              })
+            }}
+            className="w-full text-sm border border-gray-300 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            {SORT_OPTIONS.map((option) => (
+              <option key={option.value} value={option.value}>{option.label}</option>
+            ))}
+          </select>
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">De</label>
@@ -380,7 +404,7 @@ export function OrdersPage() {
       <div className="space-y-3">
         {orders.map((order) => {
           const next = NEXT_STATUS[order.status]
-          const fiscalDoc = fiscalDocs?.[order.id]
+          const fiscalDoc = order.fiscalDocument ?? null
           return (
             <div key={order.id} className="bg-white rounded-xl shadow-sm p-4">
               <div className="flex items-start justify-between mb-2">
@@ -404,7 +428,7 @@ export function OrdersPage() {
                 </div>
                 <div className="flex items-center gap-2">
                   <span className="text-sm font-bold text-gray-900">
-                    R$ {parseFloat(order.totalAmount).toFixed(2)}
+                    {formatBRL(order.totalAmount)}
                   </span>
                   {/* Link só no cabeçalho: o card inteiro navegável engoliria os botões de ação. */}
                   <Link
@@ -517,7 +541,7 @@ export function OrdersPage() {
 
               <div className="flex items-center justify-between">
                 <span className="text-xs text-gray-400">
-                  {new Date(order.receivedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                  {formatOrderMoment(order.receivedAt)}
                 </span>
                 <div className="flex gap-2">
                   {/* Emitir NF button */}
@@ -559,24 +583,15 @@ export function OrdersPage() {
         )}
       </div>
 
-      {totalPages > 1 && (
-        <div className="flex justify-center items-center gap-2 mt-6">
-          <button
-            onClick={() => updateFilters({ page: String(Math.max(1, page - 1)) })}
-            disabled={page === 1}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 transition-colors active:scale-95"
-          >
-            Anterior
-          </button>
-          <span className="px-3 py-1 text-sm text-gray-600">{page} / {totalPages}</span>
-          <button
-            onClick={() => updateFilters({ page: String(Math.min(totalPages, page + 1)) })}
-            disabled={page === totalPages}
-            className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 transition-colors active:scale-95"
-          >
-            Próxima
-          </button>
-        </div>
+      {!isLoading && orders.length > 0 && (
+        <Pagination
+          variant="standalone"
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={(nextPage) => updateFilters({ page: nextPage > 1 ? String(nextPage) : null })}
+          onPageSizeChange={(nextSize) => updateFilters({ pageSize: nextSize === DEFAULT_PAGE_SIZE ? null : String(nextSize) })}
+        />
       )}
     </div>
   )
