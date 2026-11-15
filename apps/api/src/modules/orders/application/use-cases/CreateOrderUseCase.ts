@@ -1,9 +1,10 @@
-import { eq } from 'drizzle-orm'
+import { and, eq, inArray } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import { WS_EVENTS } from '@/infra/websocket/WebSocketEvents'
-import { ConflictError } from '@/shared/errors/AppError'
+import { ConflictError, UnprocessableError } from '@/shared/errors/AppError'
+import { MessagesConstants } from '@/shared/constants/MessagesConstants'
 import type { OrderType, OrderChannel } from '@/shared/types'
 import type { CalculateDeliveryFeeUseCase } from '@/modules/delivery/application/use-cases/CalculateDeliveryFeeUseCase'
 
@@ -47,7 +48,17 @@ interface CreateOrderInput {
   delivery?: CreateOrderDeliveryInput | undefined
   // Quem lançou o pedido no painel; ausente para WhatsApp e iFood.
   userId?: string | undefined
+  /**
+   * Pedido digitado no painel: preço e nome vêm do cardápio, nunca do navegador, e a hora agendada
+   * não pode estar no passado. O bot já precifica pelo cardápio antes; o iFood manda o preço dele.
+   */
+  priceFromCatalog?: boolean | undefined
 }
+
+// Folga para arredondamento de divisão por pessoa (3 x 33,33 de um pedido de 100,00).
+const PAYMENT_ROUNDING_TOLERANCE = 0.05
+// Folga para o relógio do navegador e o tempo de preencher o formulário.
+const SCHEDULE_PAST_TOLERANCE_MS = 5 * 60 * 1000
 
 export class CreateOrderUseCase {
   constructor(
@@ -69,7 +80,18 @@ export class CreateOrderUseCase {
       throw new ConflictError('Order must have at least one item')
     }
 
-    const itemsTotal = input.items.reduce(
+    const items = input.priceFromCatalog
+      ? await this.priceFromCatalog(input.establishmentId, input.items)
+      : input.items
+
+    if (input.priceFromCatalog && input.scheduledFor) {
+      const scheduledAt = new Date(input.scheduledFor).getTime()
+      if (scheduledAt < Date.now() - SCHEDULE_PAST_TOLERANCE_MS) {
+        throw new UnprocessableError(MessagesConstants.order.scheduledInPast)
+      }
+    }
+
+    const itemsTotal = items.reduce(
       (sum, item) => sum + item.unitPrice * item.quantity,
       0
     )
@@ -84,6 +106,8 @@ export class CreateOrderUseCase {
       : null
     const deliveryFee = feeResult?.feeAmount ?? 0
     const totalAmount = Math.round((itemsTotal + deliveryFee) * 100) / 100
+
+    this.checkPayments(input.payments ?? [], totalAmount)
 
     const [order] = await this.db
       .insert(schema.orders)
@@ -105,7 +129,7 @@ export class CreateOrderUseCase {
 
     if (!order) throw new ConflictError('Failed to create order')
 
-    const itemValues = input.items.map((item) => ({
+    const itemValues = items.map((item) => ({
       orderId: order.id,
       productId: item.productId ?? null,
       productName: item.productName,
@@ -177,5 +201,38 @@ export class CreateOrderUseCase {
     })
 
     return order
+  }
+
+  private async priceFromCatalog(establishmentId: string, items: CreateOrderItemInput[]): Promise<CreateOrderItemInput[]> {
+    const productIds = items.map((item) => item.productId).filter((productId): productId is string => Boolean(productId))
+    if (productIds.length !== items.length) {
+      throw new UnprocessableError(MessagesConstants.order.itemWithoutProduct)
+    }
+
+    const products = await this.db
+      .select({ id: schema.products.id, name: schema.products.name, price: schema.products.price, active: schema.products.active })
+      .from(schema.products)
+      .where(and(eq(schema.products.establishmentId, establishmentId), inArray(schema.products.id, productIds)))
+    const productsById = new Map(products.map((product) => [product.id, product]))
+
+    return items.map((item) => {
+      const product = productsById.get(item.productId!)
+      if (!product) throw new UnprocessableError(MessagesConstants.order.productNotInMenu)
+      if (!product.active) throw new UnprocessableError(MessagesConstants.order.productInactive(product.name))
+      return { ...item, productName: product.name, unitPrice: Number(product.price) }
+    })
+  }
+
+  /** Pagamento não pode passar do total, e "troco para" tem que cobrir o valor daquela parte. */
+  private checkPayments(payments: CreateOrderPaymentInput[], totalAmount: number): void {
+    for (const payment of payments) {
+      if (payment.changeFor !== undefined && payment.changeFor < payment.amount) {
+        throw new UnprocessableError(MessagesConstants.order.changeBelowAmount)
+      }
+    }
+    const paid = payments.reduce((sum, payment) => sum + payment.amount, 0)
+    if (paid > totalAmount + PAYMENT_ROUNDING_TOLERANCE) {
+      throw new UnprocessableError(MessagesConstants.order.paymentsAboveTotal(totalAmount))
+    }
   }
 }

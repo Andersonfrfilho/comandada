@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { classifyStatusMove, nextStatus } from './orderStatusMoves'
+import { classifyStatusMove, nextStatus, requiresManualFlag } from './orderStatusMoves'
 import type { OrderStatus } from '@/constants/orderLabels'
 
 const delivery: OrderStatus[] = ['received', 'in_production', 'ready', 'in_delivery', 'completed']
@@ -37,5 +37,18 @@ describe('nextStatus', () => {
 
   it('concluído não tem próximo', () => {
     expect(nextStatus(delivery, 'completed')).toBeNull()
+  })
+})
+
+describe('requiresManualFlag', () => {
+  it('passo natural vai sem manual', () => {
+    expect(requiresManualFlag('received', 'in_production')).toBe(false)
+    expect(requiresManualFlag('received', 'cancelled')).toBe(false)
+  })
+
+  it('cancelar pedido concluído ou pronto vai como manual', () => {
+    expect(requiresManualFlag('completed', 'cancelled')).toBe(true)
+    expect(requiresManualFlag('ready', 'cancelled')).toBe(true)
+    expect(requiresManualFlag('picked_up', 'cancelled')).toBe(true)
   })
 })

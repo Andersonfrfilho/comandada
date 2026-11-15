@@ -1,7 +1,8 @@
-import { eq, and, count, sum, gte, sql } from 'drizzle-orm'
+import { eq, and, count, gte, lt, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
+import { localDayRange, orderRevenueAmount, revenueOrdersWhere } from '@/modules/reports/shared/revenue'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -18,19 +19,24 @@ export class GetDashboardMetricsUseCase {
     const cached = await this.cache.get(cacheKey)
     if (cached) return JSON.parse(cached)
 
-    const today = new Date()
-    today.setHours(0, 0, 0, 0)
+    // "Hoje" é o dia do restaurante, não o do servidor.
+    const today = localDayRange(new Date())
 
-    const [ordersToday, pendingOrders, openRegister] = await Promise.all([
+    const [ordersToday, revenueToday, pendingOrders, openRegister] = await Promise.all([
       this.db
-        .select({ count: count(), totalAmount: sum(schema.orders.totalAmount) })
+        .select({ count: count() })
         .from(schema.orders)
         .where(
           and(
             eq(schema.orders.establishmentId, establishmentId),
-            gte(schema.orders.receivedAt, today)
+            gte(schema.orders.receivedAt, today.from),
+            lt(schema.orders.receivedAt, today.to)
           )
         ),
+      this.db
+        .select({ total: sql<string>`coalesce(sum(${orderRevenueAmount}), 0)` })
+        .from(schema.orders)
+        .where(revenueOrdersWhere(establishmentId, today)),
       this.db
         .select({ count: count() })
         .from(schema.orders)
@@ -50,7 +56,7 @@ export class GetDashboardMetricsUseCase {
 
     const metrics = {
       ordersToday: ordersToday[0]?.count ?? 0,
-      revenuToday: ordersToday[0]?.totalAmount ?? '0.00',
+      revenuToday: Number(revenueToday[0]?.total ?? 0).toFixed(2),
       pendingOrders: pendingOrders[0]?.count ?? 0,
       cashRegisterOpen: !!openRegister,
       cashRegisterId: openRegister?.id ?? null,

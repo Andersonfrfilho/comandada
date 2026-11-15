@@ -1,7 +1,8 @@
 import { eq, and, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
-import { NotFoundError } from '@/shared/errors/AppError'
+import { NotFoundError, UnprocessableError } from '@/shared/errors/AppError'
+import { summarizeCashRegister } from '../../shared/cashRegisterSummary'
 import { MessagesConstants } from '@/shared/constants/MessagesConstants'
 import type { CashMovementType, PaymentMethod } from '@/shared/types'
 import type { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/use-cases/TriggerFiscalEmissionUseCase'
@@ -15,6 +16,11 @@ interface AddMovementInput {
   amount: number
   orderId?: string | undefined
   notes?: string | undefined
+  /**
+   * Lançamento digitado no painel: confere se a sangria cabe no dinheiro da gaveta e se o pedido
+   * existe e não está cancelado. Lançamentos do sistema (conclusão, webhook, estorno) não passam aqui.
+   */
+  checkAsManualEntry?: boolean | undefined
 }
 
 export class AddCashMovementUseCase {
@@ -35,6 +41,8 @@ export class AddCashMovementUseCase {
       throw new NotFoundError(MessagesConstants.cashRegister.notOpen)
     }
 
+    if (input.checkAsManualEntry) await this.checkManualEntry(input, openRegister)
+
     const [movement] = await this.db
       .insert(schema.cashMovements)
       .values({
@@ -54,6 +62,34 @@ export class AddCashMovementUseCase {
     }
 
     return movement!
+  }
+
+  private async checkManualEntry(input: AddMovementInput, register: schema.CashRegister): Promise<void> {
+    if (input.orderId) {
+      const order = await this.db.query.orders.findFirst({
+        where: and(eq(schema.orders.id, input.orderId), eq(schema.orders.establishmentId, input.establishmentId)),
+        columns: { status: true },
+      })
+      if (!order) throw new NotFoundError(MessagesConstants.cashRegister.orderNotFound)
+      if (input.type === 'payment' && order.status === 'cancelled') {
+        throw new UnprocessableError(MessagesConstants.cashRegister.paymentForCancelledOrder)
+      }
+    }
+
+    if (input.type === 'withdrawal') {
+      const movements = await this.db
+        .select({
+          type: schema.cashMovements.type,
+          paymentMethod: schema.cashMovements.paymentMethod,
+          amount: schema.cashMovements.amount,
+        })
+        .from(schema.cashMovements)
+        .where(eq(schema.cashMovements.cashRegisterId, register.id))
+      const { expectedCash } = summarizeCashRegister(register.openingAmount, movements)
+      if (Math.round(input.amount * 100) > Math.round(Number(expectedCash) * 100)) {
+        throw new UnprocessableError(MessagesConstants.cashRegister.withdrawalAboveCash(expectedCash))
+      }
+    }
   }
 
   private async maybeTriggerOnFullyPaid(orderId: string, establishmentId: string): Promise<void> {

@@ -1,4 +1,5 @@
 import { eq, and, count, sum, gte, lt, sql, inArray } from 'drizzle-orm'
+import { localMonthRange, localYearMonth, orderRevenueAmount, revenueLocalDay, revenueOrdersWhere } from '../../shared/revenue'
 import { netCashAmount } from '@/modules/cashier/shared/cashMovementAmounts'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
@@ -53,10 +54,14 @@ export class GetMonthlyReportUseCase {
     const cached = await this.cache.get(cacheKey)
     if (cached) return JSON.parse(cached) as MonthlyReport
 
-    const from = new Date(year, month - 1, 1)
-    const to = new Date(year, month, 1)
+    // Mês do restaurante. Faturamento = pedidos concluídos no mês, menos devoluções (ver shared/revenue).
+    const range = localMonthRange(year, month)
+    const { from, to } = range
+    const revenueWhere = revenueOrdersWhere(establishmentId, range)
+    const revenueSum = sql<string>`coalesce(sum(${orderRevenueAmount}), 0)`
 
     const [
+      revenueTotals,
       statusBreakdown,
       channelBreakdown,
       typeBreakdown,
@@ -64,7 +69,12 @@ export class GetMonthlyReportUseCase {
       paymentMethods,
       dailyRows,
     ] = await Promise.all([
-      // By status
+      this.db
+        .select({ count: count(), revenue: revenueSum })
+        .from(schema.orders)
+        .where(revenueWhere),
+
+      // By status (pedidos que chegaram no mês: funil de criados e cancelados)
       this.db
         .select({ status: schema.orders.status, count: count() })
         .from(schema.orders)
@@ -75,36 +85,26 @@ export class GetMonthlyReportUseCase {
         ))
         .groupBy(schema.orders.status),
 
-      // By channel (completed + non-cancelled for revenue)
+      // By channel (vendas concluídas no mês)
       this.db
         .select({
           channel: schema.orders.channel,
           count: count(),
-          revenue: sum(schema.orders.totalAmount),
+          revenue: revenueSum,
         })
         .from(schema.orders)
-        .where(and(
-          eq(schema.orders.establishmentId, establishmentId),
-          gte(schema.orders.receivedAt, from),
-          lt(schema.orders.receivedAt, to),
-          sql`${schema.orders.status} NOT IN ('cancelled')`,
-        ))
+        .where(revenueWhere)
         .groupBy(schema.orders.channel),
 
-      // By type
+      // By type (vendas concluídas no mês)
       this.db
         .select({
           type: schema.orders.type,
           count: count(),
-          revenue: sum(schema.orders.totalAmount),
+          revenue: revenueSum,
         })
         .from(schema.orders)
-        .where(and(
-          eq(schema.orders.establishmentId, establishmentId),
-          gte(schema.orders.receivedAt, from),
-          lt(schema.orders.receivedAt, to),
-          sql`${schema.orders.status} NOT IN ('cancelled')`,
-        ))
+        .where(revenueWhere)
         .groupBy(schema.orders.type),
 
       // Top 10 products (completed orders only)
@@ -116,12 +116,7 @@ export class GetMonthlyReportUseCase {
         })
         .from(schema.orderItems)
         .innerJoin(schema.orders, eq(schema.orderItems.orderId, schema.orders.id))
-        .where(and(
-          eq(schema.orders.establishmentId, establishmentId),
-          gte(schema.orders.receivedAt, from),
-          lt(schema.orders.receivedAt, to),
-          eq(schema.orders.status, 'completed'),
-        ))
+        .where(revenueWhere)
         .groupBy(schema.orderItems.productName)
         .orderBy(sql`sum(${schema.orderItems.quantity}) DESC`)
         .limit(10),
@@ -142,29 +137,23 @@ export class GetMonthlyReportUseCase {
         ))
         .groupBy(schema.cashMovements.paymentMethod),
 
-      // Daily breakdown (completed orders)
+      // Daily breakdown (vendas concluídas, pelo dia do restaurante)
       this.db
         .select({
-          day: sql<number>`extract(day from ${schema.orders.receivedAt})::integer`,
+          day: revenueLocalDay,
           count: count(),
-          revenue: sum(schema.orders.totalAmount),
+          revenue: revenueSum,
         })
         .from(schema.orders)
-        .where(and(
-          eq(schema.orders.establishmentId, establishmentId),
-          gte(schema.orders.receivedAt, from),
-          lt(schema.orders.receivedAt, to),
-          sql`${schema.orders.status} NOT IN ('cancelled')`,
-        ))
-        .groupBy(sql`extract(day from ${schema.orders.receivedAt})`)
-        .orderBy(sql`extract(day from ${schema.orders.receivedAt})`),
+        .where(revenueWhere)
+        .groupBy(revenueLocalDay)
+        .orderBy(revenueLocalDay),
     ])
 
-    const completedRow = statusBreakdown.find((r) => r.status === 'completed')
     const cancelledRow = statusBreakdown.find((r) => r.status === 'cancelled')
 
-    const totalRevenueNum = channelBreakdown.reduce((s, r) => s + Number(r.revenue ?? 0), 0)
-    const completedOrders = completedRow?.count ?? 0
+    const totalRevenueNum = Number(revenueTotals[0]?.revenue ?? 0)
+    const completedOrders = revenueTotals[0]?.count ?? 0
     const cancelledOrders = cancelledRow?.count ?? 0
     const totalCreated = statusBreakdown.reduce((s, r) => s + r.count, 0)
     const avgTicket = completedOrders > 0 ? totalRevenueNum / completedOrders : 0
@@ -212,8 +201,8 @@ export class GetMonthlyReportUseCase {
     }
 
     // Cache for 5 min; no cache for current month (data still coming in)
-    const now = new Date()
-    const isCurrentMonth = now.getFullYear() === year && now.getMonth() + 1 === month
+    const current = localYearMonth(new Date())
+    const isCurrentMonth = current.year === year && current.month === month
     if (!isCurrentMonth) {
       await this.cache.set(cacheKey, JSON.stringify(report), 300)
     }

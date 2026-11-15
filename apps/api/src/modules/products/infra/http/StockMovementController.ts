@@ -9,7 +9,7 @@ import type { CreateStockMovementUseCase } from '@/modules/products/application/
 
 type Database = NodePgDatabase<typeof schema>
 
-const STOCK_MOVEMENT_TYPES = ['in', 'out', 'adjustment', 'loss'] as const
+const STOCK_MOVEMENT_TYPES = ['in', 'out', 'return', 'adjustment', 'loss'] as const
 
 const createStockMovementSchema = z.object({
   ingredientId: z.string().uuid(),

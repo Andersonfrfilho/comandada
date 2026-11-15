@@ -1,13 +1,16 @@
-import { eq, and, count, sum, gte, sql, desc } from 'drizzle-orm'
+import { eq, and, sum, gte, sql, desc, inArray } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
+import { ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT } from '@/modules/products/shared/orderStockConsumption'
 
 type Database = NodePgDatabase<typeof schema>
 
 // Baixa de estoque por pedido, gravada pelo `DeductStockForOrderUseCase`. O
 // ranking media `consumption`, que nenhum ponto do sistema escreve — a lista
 // vinha sempre vazia, e a tela dizia "sem consumo" com o estoque baixando.
-const CONSUMPTION_MOVEMENT_TYPE = 'out'
+// Cancelado devolve a baixa (`return`), então o consumo é a saída menos o que voltou.
+const CONSUMPTION_MOVEMENT_TYPES = [ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT]
+const netConsumption = sql`CASE WHEN ${schema.stockMovements.movementType} = ${ORDER_RETURN_MOVEMENT} THEN -${schema.stockMovements.quantity} ELSE ${schema.stockMovements.quantity} END`
 
 interface IngredientsRankingInput {
   establishmentId: string
@@ -57,18 +60,19 @@ export class GetIngredientsRankingUseCase {
       .select({
         ingredientId: schema.stockMovements.ingredientId,
         ingredientName: schema.ingredients.name,
-        totalQuantityUsed: sql<string>`ROUND(SUM(ABS(${schema.stockMovements.quantity})::numeric), 2)`,
-        movementCount: count(),
+        totalQuantityUsed: sql<string>`ROUND(SUM(${netConsumption})::numeric, 2)`,
+        movementCount: sql<number>`CAST(COUNT(*) FILTER (WHERE ${schema.stockMovements.movementType} = ${ORDER_CONSUMPTION_MOVEMENT}) AS INTEGER)`,
       })
       .from(schema.stockMovements)
       .innerJoin(schema.ingredients, eq(schema.stockMovements.ingredientId, schema.ingredients.id))
       .where(and(
         eq(schema.stockMovements.establishmentId, establishmentId),
-        eq(schema.stockMovements.movementType, CONSUMPTION_MOVEMENT_TYPE),
+        inArray(schema.stockMovements.movementType, CONSUMPTION_MOVEMENT_TYPES),
         gte(schema.stockMovements.createdAt, from),
       ))
       .groupBy(schema.stockMovements.ingredientId, schema.ingredients.name)
-      .orderBy(desc(sql`SUM(ABS(${schema.stockMovements.quantity}))`))
+      .having(sql`SUM(${netConsumption}) > 0`)
+      .orderBy(desc(sql`SUM(${netConsumption})`))
       .limit(10)
 
     const productProfitData = await this.db

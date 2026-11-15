@@ -178,6 +178,7 @@ export class OrderController {
       ...parsed.data,
       establishmentId: request.user.establishmentId,
       userId: request.user.id,
+      priceFromCatalog: true,
     })
     response.json(order, 201)
   }

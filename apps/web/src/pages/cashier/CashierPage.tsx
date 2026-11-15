@@ -3,6 +3,9 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Select, type SelectOption } from '@/components/ui/Select'
+import { CloseRegisterCard, type PaymentMethodTotal } from './CloseRegisterCard'
+import { CashRegisterHistory } from './CashRegisterHistory'
+import { PAYMENT_LABELS, formatBRL } from './cashierFormat'
 
 interface CashMovement {
   id: string
@@ -22,6 +25,9 @@ interface CurrentRegister {
   totalIn: string
   totalOut: string
   balance: string
+  /** Só dinheiro: abertura + vendas em dinheiro + suprimentos - sangrias - devoluções em dinheiro. */
+  expectedCash: string
+  byMethod: PaymentMethodTotal[]
 }
 
 interface FiscalDoc {
@@ -35,9 +41,6 @@ interface FiscalDoc {
 }
 
 const MOVEMENT_LABELS = { payment: 'Pagamento', withdrawal: 'Retirada', supply: 'Suprimento', refund: 'Devolução' }
-const PAYMENT_LABELS: Record<string, string> = {
-  pix: 'Pix', card_credit: 'Crédito', card_debit: 'Débito', cash: 'Dinheiro', voucher: 'Voucher',
-}
 
 const MOVEMENT_TYPE_OPTIONS: readonly SelectOption<'payment' | 'withdrawal' | 'supply'>[] = [
   { value: 'payment', label: 'Pagamento' },
@@ -53,13 +56,6 @@ const PAYMENT_METHOD_OPTIONS: readonly SelectOption<'pix' | 'card_credit' | 'car
   { value: 'voucher', label: 'Voucher' },
 ]
 
-const HIDDEN_VALUE_PLACEHOLDER = 'R$ ••••••'
-
-function formatBRL(value: string | number, hidden: boolean) {
-  if (hidden) return HIDDEN_VALUE_PLACEHOLDER
-  return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
-}
-
 function formatTime(iso: string) {
   return new Date(iso).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
 }
@@ -69,18 +65,18 @@ export function CashierPage() {
   const queryClient = useQueryClient()
 
   const [openingAmount, setOpeningAmount] = useState('0')
-  const [closingAmount, setClosingAmount] = useState('0')
   const [movementAmount, setMovementAmount] = useState('')
   const [movementType, setMovementType] = useState<'payment' | 'withdrawal' | 'supply'>('payment')
   const [paymentMethod, setPaymentMethod] = useState<'pix' | 'card_credit' | 'card_debit' | 'cash' | 'voucher'>('cash')
   const [movementNotes, setMovementNotes] = useState('')
   const [openError, setOpenError] = useState('')
-  const [closeError, setCloseError] = useState('')
+  const [movementError, setMovementError] = useState('')
   const [showValues, setShowValues] = useState(false)
 
   const invalidate = () => {
     void queryClient.invalidateQueries({ queryKey: ['cashier-current'] })
     void queryClient.invalidateQueries({ queryKey: ['dashboard', 'metrics'] })
+    void queryClient.invalidateQueries({ queryKey: ['cashier-history'] })
   }
 
   const { data: register, isLoading } = useQuery({
@@ -109,13 +105,6 @@ export function CashierPage() {
     onError: (e: Error) => setOpenError(e.message),
   })
 
-  const closeMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.patch(`/cashier/registers/${id}/close`, { closingAmount: parseFloat(closingAmount) }, accessToken ?? undefined),
-    onSuccess: () => { setCloseError(''); invalidate() },
-    onError: (e: Error) => setCloseError(e.message),
-  })
-
   const movementMutation = useMutation({
     mutationFn: () =>
       api.post('/cashier/movements', {
@@ -124,7 +113,8 @@ export function CashierPage() {
         amount: parseFloat(movementAmount),
         ...(movementNotes ? { notes: movementNotes } : {}),
       }, accessToken ?? undefined),
-    onSuccess: () => { setMovementAmount(''); setMovementNotes(''); invalidate() },
+    onSuccess: () => { setMovementAmount(''); setMovementNotes(''); setMovementError(''); invalidate() },
+    onError: (error: Error) => setMovementError(error.message),
   })
 
   if (isLoading) {
@@ -159,35 +149,38 @@ export function CashierPage() {
       </div>
 
       {!isOpen ? (
-        <div className="bg-white rounded-2xl shadow-sm p-6">
-          <h2 className="font-semibold text-gray-900 mb-4">Abrir caixa</h2>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">Valor inicial (R$)</label>
-            <input
-              type="number"
-              value={openingAmount}
-              onChange={(e) => setOpeningAmount(e.target.value)}
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
-              min="0"
-              step="0.01"
-            />
+        <div className="space-y-4">
+          <div className="bg-white rounded-2xl shadow-sm p-6">
+            <h2 className="font-semibold text-gray-900 mb-4">Abrir caixa</h2>
+            <div className="mb-4">
+              <label className="block text-sm font-medium text-gray-700 mb-1">Valor inicial (R$)</label>
+              <input
+                type="number"
+                value={openingAmount}
+                onChange={(e) => setOpeningAmount(e.target.value)}
+                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
+                min="0"
+                step="0.01"
+              />
+            </div>
+            {openError && <p className="text-sm text-red-600 mb-3">{openError}</p>}
+            <button
+              onClick={() => openMutation.mutate()}
+              disabled={openMutation.isPending}
+              className="w-full py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 hover:bg-green-700 transition-colors"
+            >
+              {openMutation.isPending ? 'Abrindo...' : 'Abrir caixa'}
+            </button>
           </div>
-          {openError && <p className="text-sm text-red-600 mb-3">{openError}</p>}
-          <button
-            onClick={() => openMutation.mutate()}
-            disabled={openMutation.isPending}
-            className="w-full py-3 bg-green-600 text-white font-bold rounded-xl disabled:opacity-50 hover:bg-green-700 transition-colors"
-          >
-            {openMutation.isPending ? 'Abrindo...' : 'Abrir caixa'}
-          </button>
+          <CashRegisterHistory hidden={false} />
         </div>
       ) : (
         <div className="space-y-4">
           {/* Balance cards */}
           <div className="grid grid-cols-3 gap-3">
             <div className="bg-white rounded-2xl shadow-sm p-4 text-center">
-              <p className="text-xs text-gray-400 mb-1">Saldo atual</p>
-              <p className="text-lg font-bold text-gray-900">{formatBRL(register.balance, !showValues)}</p>
+              <p className="text-xs text-gray-400 mb-1">Dinheiro na gaveta</p>
+              <p className="text-lg font-bold text-gray-900">{formatBRL(register.expectedCash, !showValues)}</p>
             </div>
             <div className="bg-green-50 rounded-2xl shadow-sm p-4 text-center">
               <p className="text-xs text-green-600 mb-1">Entradas</p>
@@ -231,6 +224,7 @@ export function CashierPage() {
             >
               {movementMutation.isPending ? 'Registrando...' : 'Registrar'}
             </button>
+            {movementError && <p className="text-sm text-red-600 mt-2">{movementError}</p>}
           </div>
 
           {/* Movements list */}
@@ -298,35 +292,15 @@ export function CashierPage() {
           )}
 
           {/* Close register */}
-          <div className="bg-white rounded-2xl shadow-sm p-5">
-            <h2 className="font-semibold text-gray-900 mb-1">Fechar caixa</h2>
-            <p className="text-xs text-gray-400 mb-3">Saldo esperado: {formatBRL(register.balance, !showValues)}</p>
-            <div className="mb-3">
-              <label className="block text-sm font-medium text-gray-700 mb-1">Valor contado em caixa (R$)</label>
-              <input
-                type="number"
-                value={closingAmount}
-                onChange={(e) => setClosingAmount(e.target.value)}
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-base focus:outline-none focus:ring-2 focus:ring-brand-500"
-                min="0"
-                step="0.01"
-              />
-            </div>
-            {closingAmount !== '0' && Number(closingAmount) !== Number(register.balance) && (
-              <p className={`text-xs mb-3 ${Number(closingAmount) < Number(register.balance) ? 'text-red-600' : 'text-orange-500'}`}>
-                Diferença: {formatBRL(Math.abs(Number(closingAmount) - Number(register.balance)), !showValues)}
-                {Number(closingAmount) < Number(register.balance) ? ' a menos' : ' a mais'}
-              </p>
-            )}
-            {closeError && <p className="text-sm text-red-600 mb-3">{closeError}</p>}
-            <button
-              onClick={() => closeMutation.mutate(register.id)}
-              disabled={closeMutation.isPending}
-              className="w-full py-3 bg-red-600 text-white font-bold rounded-xl disabled:opacity-50 hover:bg-red-700 transition-colors"
-            >
-              {closeMutation.isPending ? 'Fechando...' : 'Fechar caixa'}
-            </button>
-          </div>
+          <CloseRegisterCard
+            registerId={register.id}
+            expectedCash={register.expectedCash}
+            byMethod={register.byMethod}
+            hidden={!showValues}
+            onClosed={invalidate}
+          />
+
+          <CashRegisterHistory hidden={!showValues} />
         </div>
       )}
     </div>

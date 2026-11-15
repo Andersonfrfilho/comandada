@@ -280,6 +280,20 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
   cliente cancela e devolve tudo. Painel: quadro **Pagamento** no detalhe do pedido (`GET /orders/:id/payments`).
 - Teste de banco: `TEST_DATABASE_URL=postgres://… bun test integration` (inclui o livro de estornos).
 
+## Dinheiro e estoque (regras únicas)
+
+- **Faturamento** (`modules/reports/shared/revenue.ts`): pedidos **concluídos** no período, pela hora da conclusão,
+  `total_amount - refunded_amount`, no dia/mês de São Paulo. Dashboard, Relatórios e Financeiro usam a mesma regra.
+- **Caixa** (`modules/cashier/shared/cashRegisterSummary.ts`): "dinheiro na gaveta" = abertura + pagamentos em dinheiro +
+  suprimentos − sangrias − devoluções em dinheiro (Pix/cartão ficam fora). O fechamento grava `expected_cash_amount`,
+  `closing_difference` (contado − esperado), quem fechou e o motivo; `GET /cashier/registers/history` lista. Lançamento
+  manual (`POST /cashier/movements`) recusa sangria acima da gaveta e pagamento em pedido cancelado.
+- **Estoque do pedido**: a receita baixa ao entrar em produção (`out`); se o pedido pulou a produção, baixa ao ficar
+  pronto/concluído (com saldo negativo se faltar). Cancelar devolve aos mesmos lotes (`return`,
+  `RestoreStockForOrderUseCase`); reaberto e produzido de novo baixa outra vez.
+- **Pedido do painel** (`POST /orders`): preço e nome vêm do cardápio (`priceFromCatalog`), pagamento não passa do total,
+  "troco para" ≥ valor da parte e agendamento não fica no passado. iFood mantém o preço dele.
+
 ## Agenda (encomendas e reservas)
 
 `@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.
