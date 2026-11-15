@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Banknote, Clock, ExternalLink, Map as MapIcon, MapPin, MessageCircle, Navigation, Phone, Route, StickyNote } from 'lucide-react'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore, useCan } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { buildConversationLink } from '@/constants/conversationLinks'
@@ -115,6 +115,8 @@ function DeliveryCard({
   onUpdateStatus: (deliveryId: string, status: string) => Promise<void>
 }) {
   const accessToken = useAuthStore((state) => state.accessToken)
+  // Entregador não acessa Conversas: o botão levava a uma tela proibida.
+  const canChat = useCan({ resource: 'conversations', action: 'read' })
   const [showMap, setShowMap] = useState(false)
   const { order } = delivery
   const address = formatDeliveryAddress(delivery.addressSnapshot)
@@ -161,6 +163,7 @@ function DeliveryCard({
                 {formatPhoneBr(order.customer.whatsappNumber)}
               </a>
             </div>
+            {canChat && (
             <Link
               to={buildConversationLink(order.customer.whatsappNumber)}
               className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-brand-600 px-2.5 py-1.5 text-xs font-medium text-brand-600 hover:bg-brand-50"
@@ -168,6 +171,7 @@ function DeliveryCard({
               <MessageCircle className="h-3.5 w-3.5" />
               Conversar
             </Link>
+            )}
           </div>
         )}
 

@@ -16,7 +16,8 @@ export class ChangePasswordUseCase {
     if (!user) throw new UnauthorizedError()
 
     const passwordMatches = await argon2.verify(user.passwordHash, input.currentPassword)
-    if (!passwordMatches) throw new UnauthorizedError('current_password_invalid')
+    // 400 e não 401: o painel trata 401 como sessão expirada e desloga.
+    if (!passwordMatches) throw new ValidationError('Senha atual incorreta')
 
     if (input.newPassword.length < 6) {
       throw new ValidationError('Nova senha deve ter pelo menos 6 caracteres')

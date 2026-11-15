@@ -1,26 +1,44 @@
 import { useEffect, useState } from 'react'
-import { Navigate } from 'react-router-dom'
+import { Navigate, useLocation } from 'react-router-dom'
+import { hasPermission } from '@/lib/permissions'
+import { homePathFor, permissionForPath } from '@/constants/navigation'
 import { useAuthStore } from '@/stores/authStore'
 
-interface RoleGuardProps {
-  allowedRoles: string[]
-  children: React.ReactNode
-  redirectTo?: string
-}
-
-export function RoleGuard({ allowedRoles, children, redirectTo = '/' }: RoleGuardProps) {
+/**
+ * Rota protegida pela permissão do item de menu correspondente (a mesma que a API confere).
+ * Sem a permissão, volta para a tela inicial do cargo, nunca para um Dashboard que daria 403.
+ */
+export function PermissionGate({ children }: { children: React.ReactNode }) {
   const user = useAuthStore((state) => state.user)
-  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
+  const location = useLocation()
 
-  if (!isAuthenticated || !user) {
-    return <Navigate to="/login" replace />
-  }
+  if (!user) return <Navigate to="/login" replace />
 
-  if (!allowedRoles.includes(user.role)) {
-    return <Navigate to={redirectTo} replace />
+  const required = permissionForPath(location.pathname)
+  if (required && !hasPermission(user.permissions, required)) {
+    return <Navigate to={homePathFor(user.permissions) ?? '/'} replace />
   }
 
   return <>{children}</>
+}
+
+/** "/" abre o Dashboard só para quem vê relatórios; os outros vão para a primeira tela do cargo. */
+export function HomeRoute({ dashboard }: { dashboard: React.ReactNode }) {
+  const permissions = useAuthStore((state) => state.user?.permissions)
+  const home = homePathFor(permissions)
+
+  if (home === '/') return <>{dashboard}</>
+  if (home) return <Navigate to={home} replace />
+
+  return (
+    <div className="p-6 max-w-lg">
+      <h1 className="text-lg font-semibold text-gray-900">Nenhuma tela liberada</h1>
+      <p className="mt-2 text-sm text-gray-600">
+        Seu cargo ainda não tem acesso a nenhuma tela do painel. Peça a um administrador para ajustar o cargo em
+        Administração → Cargos.
+      </p>
+    </div>
+  )
 }
 
 export function AuthGuard({ children }: { children: React.ReactNode }) {

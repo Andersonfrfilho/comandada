@@ -60,6 +60,7 @@ export type Resource =
   | 'settings'
   | 'conversations'
   | 'fiscal'
+  | 'customers'
   | 'finance'
 
 export type Action = 'read' | 'write' | 'delete' | 'manage'

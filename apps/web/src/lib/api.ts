@@ -52,8 +52,9 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
     headers: buildHeaders(fetchOptions, token),
   })
 
-  // As próprias rotas de sessão não podem entrar no ciclo de renovação.
-  const isAuthRoute = path.startsWith('/auth/')
+  // As próprias rotas de sessão não podem entrar no ciclo de renovação. Trocar senha entra: depois de
+  // recarregar a página o access token ainda não existe, e sem renovar a troca respondia 401.
+  const isAuthRoute = ['/auth/login', '/auth/refresh', '/auth/logout'].includes(path)
 
   if (response.status === 401 && !isAuthRoute && authBridge) {
     const renewed = await refreshOnce()

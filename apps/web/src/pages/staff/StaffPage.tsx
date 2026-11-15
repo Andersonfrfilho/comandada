@@ -1,6 +1,6 @@
 import { useState } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore, useCan } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Select } from '@/components/ui/Select'
 import { Modal } from '@/components/ui/Modal'
@@ -30,6 +30,8 @@ interface StaffRole {
   id: string
   name: string
   description: string | null
+  /** false quando o cargo tem mais acesso que o de quem está logado (a API recusa dar ou mexer). */
+  assignable?: boolean
 }
 
 type ModalMode = 'create' | 'edit' | 'reset-password' | 'delete' | null
@@ -46,6 +48,9 @@ const EMPTY_FORM: FormData = { name: '', email: '', password: '', roleId: '' }
 export function StaffPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const currentUserId = useAuthStore((state) => state.user?.id)
+  const canResetPassword = useCan({ resource: 'users', action: 'manage' })
+  const canDeleteStaff = useCan({ resource: 'users', action: 'delete' })
+  const [listError, setListError] = useState<string | null>(null)
   const queryClient = useQueryClient()
 
   const [modal, setModal] = useState<ModalMode>(null)
@@ -84,7 +89,8 @@ export function StaffPage() {
   const toggleMutation = useMutation({
     mutationFn: (id: string) =>
       api.patch(`/staff/${id}/toggle-active`, {}, accessToken ?? undefined),
-    onSuccess: invalidate,
+    onSuccess: () => { setListError(null); invalidate() },
+    onError: (toggleError: Error) => setListError(toggleError.message),
   })
 
   const resetPasswordMutation = useMutation({
@@ -101,7 +107,8 @@ export function StaffPage() {
   })
 
   function openCreate() {
-    setForm({ ...EMPTY_FORM, roleId: roles[0]?.id ?? '' })
+    // Sem cargo pré-escolhido: o primeiro da lista era "Administrador", e um toque criava um admin.
+    setForm({ ...EMPTY_FORM })
     setError(null)
     setModal('create')
   }
@@ -235,7 +242,13 @@ export function StaffPage() {
         {hasStaffFilters && visibleStaff.length === 0 && (
           <p className="text-gray-400 text-center py-10">Nenhum funcionário com esses filtros</p>
         )}
-        {visibleStaff.map((member) => (
+        {listError && (
+          <p role="alert" className="text-sm text-red-600 bg-red-50 rounded-xl px-4 py-3">{listError}</p>
+        )}
+        {visibleStaff.map((member) => {
+          // Funcionário com mais acesso que o seu: a API recusa editar, desativar ou excluir.
+          const manageable = roles.find((role) => role.id === member.roleId)?.assignable !== false
+          return (
           <div key={member.id} className="bg-white rounded-xl shadow-sm p-4 flex items-center gap-4">
             <div className="w-10 h-10 rounded-full bg-brand-100 text-brand-700 font-bold text-sm flex items-center justify-center flex-shrink-0">
               {member.name.charAt(0).toUpperCase()}
@@ -262,6 +275,7 @@ export function StaffPage() {
               <p className="text-sm text-gray-400 truncate">{member.email}</p>
             </div>
 
+            {manageable && (
             <div className="flex items-center gap-1.5 flex-shrink-0">
               <button
                 onClick={() => openEdit(member)}
@@ -284,6 +298,7 @@ export function StaffPage() {
                     <ToggleRight className="h-4 w-4" />
                     {member.active ? 'Desativar' : 'Ativar'}
                   </button>
+                  {canResetPassword && (
                   <button
                     onClick={() => openResetPassword(member)}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-blue-600 border border-blue-200 rounded-lg hover:bg-blue-50 transition-colors"
@@ -291,6 +306,8 @@ export function StaffPage() {
                     <Lock className="h-4 w-4" />
                     Senha
                   </button>
+                  )}
+                  {canDeleteStaff && (
                   <button
                     onClick={() => openDelete(member)}
                     className="flex items-center gap-1 px-3 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
@@ -298,11 +315,14 @@ export function StaffPage() {
                     <Trash2 className="h-4 w-4" />
                     Excluir
                   </button>
+                  )}
                 </>
               )}
             </div>
+            )}
           </div>
-        ))}
+          )
+        })}
 
         {!isLoading && staff.length === 0 && (
           <p className="text-gray-400 text-center py-12">Nenhum funcionário cadastrado</p>
@@ -382,7 +402,11 @@ export function StaffPage() {
                       onChange={(value) => setForm((prev) => ({ ...prev, roleId: value }))}
                       options={[
                         { value: '', label: 'Selecionar cargo...' },
-                        ...roles.map((role) => ({
+                        // Só os cargos que cabem no acesso de quem cadastra (a API recusa os outros);
+                        // o cargo atual do funcionário fica na lista para a edição não trocá-lo sozinha.
+                        ...roles
+                          .filter((role) => role.assignable !== false || role.id === selected?.roleId)
+                          .map((role) => ({
                           value: role.id,
                           label: role.description ? `${role.name} — ${role.description}` : role.name,
                         })),

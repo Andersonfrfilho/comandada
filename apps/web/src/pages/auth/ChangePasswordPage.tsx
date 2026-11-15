@@ -1,5 +1,5 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { AppFooter } from '@/components/brand/AppFooter'
@@ -16,6 +16,7 @@ export function ChangePasswordPage() {
   const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const isAuthenticated = useAuthStore((state) => state.isAuthenticated)
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -46,6 +47,8 @@ export function ChangePasswordPage() {
       setLoading(false)
     }
   }
+
+  if (!isAuthenticated) return <Navigate to="/login" replace />
 
   return (
     // Mesmo layout do login: card centralizado e rodapé no fim da tela.

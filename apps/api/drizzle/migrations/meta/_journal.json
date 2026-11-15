@@ -330,6 +330,13 @@
       "when": 1785001800000,
       "tag": "0047_cash_register_closing",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1785088200000,
+      "tag": "0048_customers_fiscal_permissions",
+      "breakpoints": true
     }
   ]
 }

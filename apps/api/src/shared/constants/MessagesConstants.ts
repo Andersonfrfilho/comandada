@@ -53,9 +53,15 @@ export const MessagesConstants = {
     replayDetected: 'Duplicate request detected',
     processingError: 'Failed to process webhook payload',
   },
+  staff: {
+    roleAboveActor: 'Você não pode dar um cargo com mais acesso que o seu',
+    memberAboveActor: 'Este funcionário tem mais acesso que você; peça a um administrador',
+    cannotChangeSelf: 'Você não pode desativar nem excluir o próprio acesso',
+    invalidFields: (fields: string[]) => `Confira: ${fields.join(', ')}`,
+  },
   generic: {
     notFound: (resource: string) => `${resource} not found`,
-    forbidden: 'Access denied',
+    forbidden: 'Seu cargo não tem acesso a esta ação',
     internalError: 'An internal error occurred',
     serviceUnavailable: (service: string) => `${service} is temporarily unavailable`,
   },
