@@ -193,6 +193,8 @@ import { createMetaWhatsAppModuleRegistry } from '@/modules/conversations/infra/
 import { createConversationObjectStorage } from '@/modules/conversations/infra/storage/conversationObjectStorage'
 import { isStorageEnabled } from '@/infra/config/storageEnvironment'
 import { ConversationController } from '@/modules/conversations/infra/http/ConversationController'
+import { DrizzleConversationHistoryReader } from '@/modules/conversations/application/services/ConversationHistoryReader'
+import { DrizzleConversationPanelContextReader } from '@/modules/conversations/application/services/ConversationPanelContext'
 import { WhatsAppTemplateProvider } from '@adatechnology/meta-whatsapp-provider'
 import { WhatsAppSettingsController } from '@/modules/conversations/infra/http/WhatsAppSettingsController'
 
@@ -603,7 +605,14 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   )
 
   // Conversations
-  const conversationController = new ConversationController(metaWhatsAppModules, objectStorage?.forModule)
+  const conversationController = new ConversationController(
+    metaWhatsAppModules,
+    {
+      history: new DrizzleConversationHistoryReader(db),
+      panelContext: new DrizzleConversationPanelContextReader(db, botConfigRepository),
+    },
+    objectStorage?.forModule
+  )
   const whatsAppSettingsController = new WhatsAppSettingsController(
     metaWhatsAppModules,
     new WhatsAppTemplateProvider({
