@@ -2,6 +2,8 @@ import { eq, and, inArray, notInArray, asc } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import { PAYMENT_STATUSES_HELD_FROM_KITCHEN } from '@/modules/payments/shared/payments.constant'
+import type { KitchenTimeProfile } from '@/modules/orders/application/use-cases/EstimateOrderTimeUseCase'
+import { rankKitchenOrders } from '../services/KitchenPriority'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -21,8 +23,16 @@ function releaseTime(order: { scheduledFor: Date | null; type: string; receivedA
   return Math.max(received, new Date(order.scheduledFor).getTime() - lead * 60000)
 }
 
+/** Fonte dos tempos de preparo e de rua (o mesmo estimador da previsão dada ao cliente). */
+export interface KitchenTimeProfileSource {
+  loadKitchenTimeProfile(establishmentId: string, productIds: readonly string[], now: Date): Promise<KitchenTimeProfile>
+}
+
 export class GetKitchenQueueUseCase {
-  constructor(private readonly db: Database) {}
+  constructor(
+    private readonly db: Database,
+    private readonly timeProfileSource: KitchenTimeProfileSource
+  ) {}
 
   async execute(establishmentId: string) {
     const orders = await this.db.query.orders.findMany({
@@ -39,11 +49,19 @@ export class GetKitchenQueueUseCase {
     const now = Date.now()
 
     // Encomenda de mais tarde fica fora até a hora de começar; já iniciada, continua na fila.
-    const due = orders
-      .filter((order) => order.status === 'in_production' || releaseTime(order) <= now)
-      .sort((first, second) => releaseTime(first) - releaseTime(second))
+    const due = orders.filter((order) => order.status === 'in_production' || releaseTime(order) <= now)
 
-    return due.map((order) => {
+    const productIds = [
+      ...new Set(due.flatMap((order) => order.items.flatMap((item) => (item.productId ? [item.productId] : [])))),
+    ]
+    const profile = await this.timeProfileSource.loadKitchenTimeProfile(establishmentId, productIds, new Date(now))
+    const ranked = rankKitchenOrders(
+      due.map((order) => ({ ...order, releasedAt: releaseTime(order) })),
+      profile,
+      now
+    )
+
+    return ranked.map((order) => {
       // O relógio do SLA começa quando a encomenda entra na fila, não quando foi feita.
       const ageMinutes = Math.max(0, Math.floor((now - releaseTime(order)) / 60000))
       const slaStatus =
@@ -53,7 +71,9 @@ export class GetKitchenQueueUseCase {
             ? 'warning'
             : 'ok'
 
-      return { ...order, ageMinutes, slaStatus }
+      // Cronômetro da tela parte daqui.
+      const waitingSince = new Date(order.releasedAt).toISOString()
+      return { ...order, ageMinutes, slaStatus, waitingSince }
     })
   }
 }

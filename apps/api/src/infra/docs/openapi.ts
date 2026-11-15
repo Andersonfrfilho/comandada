@@ -396,7 +396,7 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
       '/kitchen/queue': {
         get: {
           tags: ['Kitchen'],
-          summary: 'Fila da cozinha (pedidos em produção/prontos)',
+          summary: 'Fila da cozinha: em preparo primeiro, depois os aguardando pela hora limite de começar (campo priority)',
           operationId: 'getKitchenQueue',
           security: [{ bearerAuth: [] }],
           responses: {
