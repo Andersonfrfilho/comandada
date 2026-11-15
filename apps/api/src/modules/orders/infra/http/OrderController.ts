@@ -6,6 +6,8 @@ import type { UpdateOrderNotesUseCase } from '../../application/use-cases/Update
 import type { GetOrderUseCase } from '../../application/use-cases/GetOrderUseCase'
 import { ORDER_SORT_FIELDS, type ListOrdersUseCase } from '../../application/use-cases/ListOrdersUseCase'
 import type { RequestPartialOrderConfirmationUseCase } from '../../application/use-cases/RequestPartialOrderConfirmationUseCase'
+import type { GetOrderRouteUseCase } from '../../application/use-cases/GetOrderRouteUseCase'
+import type { ListOrderItemSubstitutesUseCase } from '../../application/use-cases/ListOrderItemSubstitutesUseCase'
 import { ValidationError, UnauthorizedError } from '@/shared/errors/AppError'
 import { IfoodProvider } from '@/shared/providers/IfoodProvider'
 import { orderChannelEnum, orderStatusEnum, orderTypeEnum } from '@/infra/database/schema'
@@ -49,6 +51,9 @@ const createOrderSchema = z.object({
 const updateStatusSchema = z.object({
   status: z.enum(['received', 'in_production', 'ready', 'in_delivery', 'picked_up', 'completed', 'cancelled']),
   cancellationReason: z.string().max(500).optional(),
+  // Detalhe do pedido: mover para qualquer status (voltar, pular etapa, reabrir).
+  manual: z.boolean().optional(),
+  note: z.string().trim().max(500).optional(),
 })
 
 const updateNotesSchema = z.object({
@@ -57,6 +62,7 @@ const updateNotesSchema = z.object({
 
 const partialConfirmationSchema = z.object({
   unavailableItemIds: z.array(z.string().uuid()).min(1),
+  substitutions: z.array(z.object({ itemId: z.string().uuid(), productId: z.string().uuid() })).optional(),
 })
 
 const ifoodRejectSchema = z.object({
@@ -102,8 +108,22 @@ export class OrderController {
     private readonly updateNotesUseCase: UpdateOrderNotesUseCase,
     private readonly getOrderUseCase: GetOrderUseCase,
     private readonly listOrdersUseCase: ListOrdersUseCase,
-    private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase
+    private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase,
+    private readonly getOrderRouteUseCase?: GetOrderRouteUseCase,
+    private readonly listItemSubstitutesUseCase?: ListOrderItemSubstitutesUseCase
   ) {}
+
+  /** Produtos do mesmo tipo para oferecer no lugar de cada item, caso falte. */
+  substitutes: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    if (!this.listItemSubstitutesUseCase) {
+      response.json({ items: [] })
+      return
+    }
+    response.json(
+      await this.listItemSubstitutesUseCase.execute(request.params['id']!, request.user.establishmentId)
+    )
+  }
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
@@ -137,6 +157,17 @@ export class OrderController {
     response.json(order)
   }
 
+  /** Distância, tempo e coordenadas do restaurante até o endereço de entrega (mapa do detalhe do pedido). */
+  route: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    if (!this.getOrderRouteUseCase) {
+      response.json({ origin: null, destination: null, distanceKm: null, durationMin: null, source: null })
+      return
+    }
+    const route = await this.getOrderRouteUseCase.execute(request.params['id']!, request.user.establishmentId)
+    response.json(route)
+  }
+
   create: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
     const parsed = createOrderSchema.safeParse(request.body)
@@ -163,6 +194,8 @@ export class OrderController {
       newStatus: parsed.data.status,
       cancellationReason: parsed.data.cancellationReason,
       userId: request.user.id,
+      manual: parsed.data.manual,
+      note: parsed.data.note,
     })
     response.json(order)
   }
@@ -193,6 +226,7 @@ export class OrderController {
       establishmentId: request.user.establishmentId,
       userId: request.user.id,
       unavailableItemIds: parsed.data.unavailableItemIds,
+      substitutions: parsed.data.substitutions,
     })
     response.json(result)
   }

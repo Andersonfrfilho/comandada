@@ -54,12 +54,27 @@ export interface ProductPreparationSample {
  */
 export function pickPreparationMinutes(products: readonly ProductPreparationSample[]): number | undefined {
   const minutes = products.flatMap((product) => {
-    if (product.realAverageMinutes !== null && product.samples >= ORDER_ESTIMATE_HISTORY.minSamples) {
-      return [Math.max(1, Math.round(product.realAverageMinutes))]
-    }
-    return product.registeredMinutes ? [product.registeredMinutes] : []
+    const resolved = resolveProductPreparationMinutes(product)
+    return resolved === undefined ? [] : [resolved]
   })
   return minutes.length > 0 ? Math.max(...minutes) : undefined
+}
+
+/** Tempo de um produto: média real com medições suficientes, senão o cadastrado. */
+export function resolveProductPreparationMinutes(product: ProductPreparationSample): number | undefined {
+  if (product.realAverageMinutes !== null && product.samples >= ORDER_ESTIMATE_HISTORY.minSamples) {
+    return Math.max(1, Math.round(product.realAverageMinutes))
+  }
+  return product.registeredMinutes ? product.registeredMinutes : undefined
+}
+
+export interface KitchenTimeProfile {
+  /** Minutos de preparo por produto (só os que têm tempo cadastrado ou medido). */
+  readonly productMinutes: ReadonlyMap<string, number>
+  /** Preparo quando o produto não tem tempo nenhum (configuração ou padrão). */
+  readonly defaultPreparationMinutes: number
+  /** Tempo de rua: média real dos últimos dias ou a configuração. */
+  readonly deliveryMinutes: number
 }
 
 /** Tempo de rua médio, só com amostras suficientes. */
@@ -92,6 +107,26 @@ export class EstimateOrderTimeUseCase {
     return { estimatedAt: new Date(params.now.getTime() + minutes * 60_000), minutes }
   }
 
+  /** Tempos que a fila da cozinha usa para decidir o que começar primeiro. */
+  async loadKitchenTimeProfile(establishmentId: string, productIds: readonly string[], now: Date): Promise<KitchenTimeProfile> {
+    const since = new Date(now.getTime() - ORDER_ESTIMATE_HISTORY.days * 24 * 60 * 60_000)
+    const [settings, samples, deliveryMinutes] = await Promise.all([
+      this.loadSettings(establishmentId),
+      this.preparationSamples(establishmentId, productIds, since),
+      this.averageDeliveryMinutes(establishmentId, since),
+    ])
+    const productMinutes = new Map<string, number>()
+    for (const [productId, sample] of samples) {
+      const minutes = resolveProductPreparationMinutes(sample)
+      if (minutes !== undefined) productMinutes.set(productId, minutes)
+    }
+    return {
+      productMinutes,
+      defaultPreparationMinutes: settings.preparationMinutes,
+      deliveryMinutes: deliveryMinutes ?? settings.deliveryMinutes,
+    }
+  }
+
   private async loadSettings(establishmentId: string) {
     const rows = await this.db.query.settings.findMany({
       where: and(
@@ -115,6 +150,16 @@ export class EstimateOrderTimeUseCase {
     since: Date
   ): Promise<number | undefined> {
     if (productIds.length === 0) return undefined
+    const samples = await this.preparationSamples(establishmentId, productIds, since)
+    return pickPreparationMinutes([...samples.values()])
+  }
+
+  private async preparationSamples(
+    establishmentId: string,
+    productIds: readonly string[],
+    since: Date
+  ): Promise<Map<string, ProductPreparationSample>> {
+    if (productIds.length === 0) return new Map()
     const ids = [...new Set(productIds)]
     const [products, realTimes] = await Promise.all([
       this.db.query.products.findMany({
@@ -140,14 +185,17 @@ export class EstimateOrderTimeUseCase {
         )
         .groupBy(schema.orderItems.productId),
     ])
-    return pickPreparationMinutes(
+    return new Map(
       products.map((product) => {
         const real = realTimes.find((row) => row.productId === product.id)
-        return {
-          registeredMinutes: product.preparationTimeMinutes,
-          realAverageMinutes: real?.averageMinutes != null ? Number(real.averageMinutes) : null,
-          samples: real?.samples ?? 0,
-        }
+        return [
+          product.id,
+          {
+            registeredMinutes: product.preparationTimeMinutes,
+            realAverageMinutes: real?.averageMinutes != null ? Number(real.averageMinutes) : null,
+            samples: real?.samples ?? 0,
+          },
+        ]
       })
     )
   }

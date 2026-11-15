@@ -13,7 +13,12 @@ import { ORDER_ISSUE_CATEGORIES } from '@/modules/issues/shared/issues.constant'
 
 const whatsappNumberSchema = z.string().regex(/^\d{8,15}$/)
 
-const partialAnswerSchema = z.object({ establishmentId: z.string().uuid(), accept: z.boolean() })
+const partialAnswerSchema = z.object({
+  establishmentId: z.string().uuid(),
+  accept: z.boolean(),
+  // Item em falta → produto escolhido pelo cliente (null = sem o item). Ausente = aceitou a troca sugerida.
+  replacements: z.record(z.string().uuid(), z.string().uuid().nullable()).optional(),
+})
 
 const contextQuerySchema = z.object({ instance: z.string().max(40).optional() })
 

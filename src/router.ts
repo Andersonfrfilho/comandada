@@ -1,6 +1,6 @@
 // ── Fechado? Retorno antecipado ───────────────────────────────────────────────
 // Resposta à confirmação parcial passa mesmo fora do horário: o pedido já está em andamento.
-if (!isOpen && !(partialConfirmation && partialAnswerOf(texto) !== null)) {
+if (!isOpen && !isPartialReply(texto)) {
   _earlyResponse = {
     tel, instancia,
     respostas: [msgClosed],

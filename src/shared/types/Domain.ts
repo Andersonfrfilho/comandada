@@ -177,15 +177,38 @@ interface N8nInputData {
 }
 
 // A equipe avisou que itens acabaram e espera o SIM (segue sem eles) ou NÃO (cancela) do cliente.
+// Com troca sugerida: aceitar a troca, escolher outro produto da lista ou seguir sem o item.
 interface PartialConfirmation {
   order_code: string;
   unavailable: string[];
+  // Com troca: total aceitando as sugestões; sem troca: total sem os itens em falta.
   new_total: number;
+  total_without?: number;
+  // Itens que continuam no pedido; 0 = tudo faltou e só sobra o que for trocado.
+  items_kept?: number;
+  substitutions?: PartialSubstitution[];
+}
+
+interface PartialSubstituteOption {
+  product_id: string;
+  name: string;
+  price: number;
+}
+
+interface PartialSubstitution {
+  item_id: string;
+  item_name: string;
+  quantity: number;
+  suggested: PartialSubstituteOption;
+  // Opções do mesmo tipo; a sugestão da equipe vem primeiro.
+  alternatives: PartialSubstituteOption[];
 }
 
 interface PartialConfirmationAnswer {
   order_code: string;
   accept: boolean;
+  // Item em falta → produto escolhido (null = sem o item). Ausente = aceitou a troca sugerida.
+  replacements?: Record<string, string | null>;
 }
 
 // Conversa na inbox do painel: 'human' = atendente assumiu; human_requested = pedido sem atendente ainda.

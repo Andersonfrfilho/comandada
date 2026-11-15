@@ -17,6 +17,17 @@ export const PARTIAL_CONFIRMATION_MESSAGES = {
   newTotal: (formattedTotal: string) => `💰 Novo valor dos itens: *${formattedTotal}*`,
   confirmationRequest:
     'Podemos seguir só com o que temos? Responda *SIM* para continuar ou *NÃO* para cancelar o pedido.',
+  // Com troca sugerida pela equipe.
+  substituteLine: (quantity: number, from: string, to: string, formattedPrice: string) =>
+    `• ${quantity}× ${from}\n   🔄 no lugar, sugerimos *${to}* (${formattedPrice} cada)`,
+  newTotalWithSubstitutes: (formattedTotal: string) => `💰 Com a troca, o valor dos itens fica: *${formattedTotal}*`,
+  substituteOptions: [
+    'Como prefere seguir? Responda com o número:',
+    '*1* ✅ Aceitar a troca',
+    '*2* 🔄 Escolher outro item',
+    '*3* ➖ Seguir sem o item',
+    '*NÃO* ❌ Cancelar o pedido',
+  ].join('\n'),
 } as const
 
 // Pergunta de confirmação parcial: uma pendente por pedido; pedir de novo substitui a anterior.
@@ -35,6 +46,9 @@ export const ORDER_ERROR_MESSAGES = {
   unknownItems: 'Um ou mais itens informados não pertencem a este pedido.',
   allItemsUnavailable:
     'Todos os itens estão em falta — cancele o pedido em vez de pedir confirmação parcial.',
+  substituteForAvailableItem: 'Só dá para sugerir troca para um item marcado como em falta.',
+  unknownSubstitute: 'O produto sugerido não está ativo no cardápio.',
+  substituteNotOffered: 'Esse produto não foi oferecido como troca para este item.',
 } as const
 
 // Previsão de entrega: sem histórico ainda, a estimativa é o preparo do item mais demorado,

@@ -322,6 +322,39 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
         },
       },
 
+      '/orders/{id}/route': {
+        get: {
+          tags: ['Orders'],
+          summary: 'Distância e tempo do restaurante até o endereço de entrega',
+          description:
+            'Geocodifica o endereço (Nominatim) e calcula a rota de carro (OSRM). Sem rota, devolve a distância em linha reta (source = straight_line) e durationMin nulo.',
+          operationId: 'getOrderRoute',
+          security: [{ bearerAuth: [] }],
+          parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string', format: 'uuid' } }],
+          responses: {
+            '200': {
+              description: 'Trajeto da entrega',
+              content: {
+                'application/json': {
+                  schema: {
+                    type: 'object',
+                    properties: {
+                      origin: { type: 'object', nullable: true, properties: { lat: { type: 'number' }, lng: { type: 'number' } } },
+                      destination: { type: 'object', nullable: true, properties: { lat: { type: 'number' }, lng: { type: 'number' } } },
+                      distanceKm: { type: 'number', nullable: true },
+                      durationMin: { type: 'integer', nullable: true },
+                      source: { type: 'string', enum: ['route', 'straight_line'], nullable: true },
+                    },
+                  },
+                },
+              },
+            },
+            '401': { $ref: '#/components/responses/Unauthorized' },
+            '404': { $ref: '#/components/responses/NotFound' },
+          },
+        },
+      },
+
       '/orders/{id}': {
         get: {
           tags: ['Orders'],
@@ -412,7 +445,7 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
       '/kitchen/queue': {
         get: {
           tags: ['Kitchen'],
-          summary: 'Fila da cozinha (pedidos em produção/prontos)',
+          summary: 'Fila da cozinha: em preparo primeiro, depois os aguardando pela hora limite de começar (campo priority)',
           operationId: 'getKitchenQueue',
           security: [{ bearerAuth: [] }],
           responses: {

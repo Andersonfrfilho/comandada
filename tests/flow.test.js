@@ -1273,6 +1273,78 @@ async function runTests() {
     assertResponseContains(r, 'cancelamos o pedido');
   });
 
+  const partialSwap = {
+    order_code: 'PED-2', unavailable: ['Ceviche Mix', 'Temaki Atum'], new_total: 165.9, total_without: 75, items_kept: 1,
+    substitutions: [
+      { item_id: 'item-ceviche', item_name: 'Ceviche Mix', quantity: 1,
+        suggested: { product_id: 'prod-salmao', name: 'Ceviche de Salmão', price: 58 },
+        alternatives: [
+          { product_id: 'prod-salmao', name: 'Ceviche de Salmão', price: 58 },
+          { product_id: 'prod-peixe', name: 'Ceviche de Peixe Branco', price: 45 },
+        ] },
+      { item_id: 'item-temaki', item_name: 'Temaki Atum', quantity: 1,
+        suggested: { product_id: 'prod-temaki-salmao', name: 'Temaki Salmão', price: 32.9 },
+        alternatives: [{ product_id: 'prod-temaki-salmao', name: 'Temaki Salmão', price: 32.9 }] },
+    ],
+  };
+
+  await test('troca sugerida: 1 aceita as trocas da equipe', async () => {
+    const r = await exec({ texto: '1', state: 'start', partial_confirmation: partialSwap });
+    const json = r?.[0]?.json;
+    assert(json.save_partial_answer === true, 'deve gravar a resposta');
+    assert(json.partial_answer.accept === true, 'aceitou');
+    assert(json.partial_answer.replacements['item-ceviche'] === 'prod-salmao', 'troca do ceviche');
+    assertResponseContains(r, 'Ceviche de Salmão');
+    assertResponseContains(r, '165,90');
+  });
+
+  await test('troca sugerida: 3 segue sem os itens', async () => {
+    const r = await exec({ texto: '3', state: 'start', partial_confirmation: partialSwap });
+    const json = r?.[0]?.json;
+    assert(json.partial_answer.accept === true, 'segue');
+    assert(json.partial_answer.replacements['item-ceviche'] === null, 'sem troca');
+    assertResponseContains(r, '75,00');
+  });
+
+  await test('troca sugerida: NÃO cancela', async () => {
+    const r = await exec({ texto: 'não', state: 'start', partial_confirmation: partialSwap });
+    assert(r?.[0]?.json?.partial_answer.accept === false, 'recusou');
+    assertResponseContains(r, 'cancelamos o pedido');
+  });
+
+  await test('troca sugerida: 2 abre a lista do primeiro item', async () => {
+    const r = await exec({ texto: '2', state: 'start', partial_confirmation: partialSwap });
+    const json = r?.[0]?.json;
+    assert(json.state === 'awaiting_partial_choice', 'estado: ' + json.state);
+    assert(json.save_partial_answer === false, 'ainda não grava');
+    assertResponseType(r, 'list');
+    assertResponseContains(r, 'Ceviche de Peixe Branco');
+  });
+
+  await test('troca sugerida: escolhe outro no primeiro, tira o segundo e grava', async () => {
+    const cart = { items: [], partial_picks: {}, partial_pick_index: 0 };
+    const first = await exec({ texto: 'partial:pick:1', state: 'awaiting_partial_choice', cart, partial_confirmation: partialSwap });
+    const firstJson = first?.[0]?.json;
+    assert(firstJson.state === 'awaiting_partial_choice', 'segue para o segundo item');
+    assert(firstJson.cart.partial_pick_index === 1, 'índice avançou');
+    assertResponseContains(first, 'Temaki Atum');
+
+    const second = await exec({ texto: 'partial:none', state: 'awaiting_partial_choice', cart: firstJson.cart, partial_confirmation: partialSwap });
+    const json = second?.[0]?.json;
+    assert(json.save_partial_answer === true, 'grava');
+    assert(json.partial_answer.replacements['item-ceviche'] === 'prod-peixe', 'escolheu peixe branco');
+    assert(json.partial_answer.replacements['item-temaki'] === null, 'tirou o temaki');
+    assertResponseContains(second, 'Ceviche de Peixe Branco');
+    assertResponseContains(second, '120,00');
+  });
+
+  await test('troca sugerida: tudo faltou e cliente não quer troca → cancela', async () => {
+    const onlyMissing = { ...partialSwap, items_kept: 0, total_without: 0 };
+    const r = await exec({ texto: '3', state: 'start', partial_confirmation: onlyMissing });
+    assert(r?.[0]?.json?.partial_answer.accept === false, 'vira recusa');
+    assertResponseContains(r, 'cancelamos o pedido');
+  });
+
   await test('sem pergunta pendente, "sim" segue o fluxo normal', async () => {
     const r = await exec({ texto: 'sim', state: 'start' });
     assert(r?.[0]?.json?.save_partial_answer === false, 'não grava resposta');
