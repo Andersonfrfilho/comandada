@@ -57,7 +57,9 @@ const STATE_LABELS: Record<string, string> = {
   awaiting_issue_detail: 'Relatando problema',
 }
 
-const KNOWN_FIELDS: ReadonlyArray<{ key: string; label: string; icon: string }> = [
+type FieldKey = 'name' | 'address' | 'complement' | 'deliveryType' | 'paymentType' | 'change'
+
+const KNOWN_FIELDS: ReadonlyArray<{ key: FieldKey; label: string; icon: string }> = [
   { key: 'name', label: 'Nome', icon: '👤' },
   { key: 'address', label: 'Endereço', icon: '📍' },
   { key: 'complement', label: 'Complemento', icon: '🏠' },
@@ -65,6 +67,29 @@ const KNOWN_FIELDS: ReadonlyArray<{ key: string; label: string; icon: string }> 
   { key: 'paymentType', label: 'Pagamento', icon: '💳' },
   { key: 'change', label: 'Troco', icon: '💵' },
 ]
+
+/**
+ * Passos do bot em que o campo é a pergunta da vez: aí ele aparece "a coletar" mesmo vazio.
+ * Fora deles, campo vazio some — troco no cartão, complemento na retirada ou endereço sem pedido
+ * nenhum não são pendências, e contavam como "a coletar" no resumo.
+ */
+const ASKED_IN_STATES: Readonly<Partial<Record<FieldKey, ReadonlyArray<string>>>> = {
+  name: ['awaiting_name'],
+  address: ['awaiting_address', 'awaiting_address_number'],
+  complement: ['awaiting_complement'],
+  deliveryType: ['awaiting_type', 'offer_pickup'],
+  paymentType: [
+    'awaiting_payment',
+    'awaiting_split_count',
+    'awaiting_split_payment',
+    'awaiting_mixed_method',
+    'awaiting_mixed_amount',
+  ],
+  change: ['awaiting_change', 'awaiting_split_change', 'awaiting_mixed_change'],
+}
+
+/** Campos que todo pedido em andamento ainda vai pedir: aparecem pendentes enquanto há carrinho. */
+const REQUIRED_WHILE_ORDERING: ReadonlySet<FieldKey> = new Set(['deliveryType', 'paymentType'])
 
 interface CartItem {
   name?: string
@@ -99,23 +124,36 @@ function cartSummary(value: unknown): string | undefined {
 export function toContextEntries(context: Record<string, unknown> | undefined): ConversationContextEntry[] {
   const source = context ?? {}
   const handled = new Set([CURRENT_STATE_KEY, CART_KEY, LAST_ORDER_KEY, ...KNOWN_FIELDS.map((field) => field.key)])
+  const currentState = typeof source[CURRENT_STATE_KEY] === 'string' ? source[CURRENT_STATE_KEY] : 'start'
+  const cartValue = cartSummary(source[CART_KEY])
+  const isOrdering = cartValue !== undefined
 
-  const known = KNOWN_FIELDS.map((field) => ({
-    key: field.key,
-    label: field.label,
-    icon: field.icon,
-    value: asDisplayValue(source[field.key]),
-  }))
+  const known = KNOWN_FIELDS.flatMap((field) => {
+    const value = asDisplayValue(source[field.key])
+    const isAsked = ASKED_IN_STATES[field.key]?.includes(currentState) ?? false
+    const isPending = isAsked || (isOrdering && REQUIRED_WHILE_ORDERING.has(field.key))
+    // Nome fica sempre: é o primeiro dado que o atendente procura.
+    if (!value && !isPending && field.key !== 'name') return []
+    return [{ key: field.key, label: field.label, icon: field.icon, value }]
+  })
 
-  const cart = { key: CART_KEY, label: 'Pedido em andamento', icon: '🧾', value: cartSummary(source[CART_KEY]) }
+  // Carrinho vazio no início (pedido já confirmado ou nem começado) não é pendência.
+  const cart =
+    isOrdering || currentState !== 'start'
+      ? [{ key: CART_KEY, label: 'Pedido em andamento', icon: '🛒', value: cartValue }]
+      : []
 
-  // Só aparece quando existe: depois de confirmar, o bot zera o carrinho e é aqui que o pedido fica.
+  // Depois de confirmar, o bot zera o carrinho e é aqui que o pedido fica.
   const lastOrderValue = asDisplayValue(source[LAST_ORDER_KEY])
-  const lastOrder = lastOrderValue ? [{ key: LAST_ORDER_KEY, label: 'Último pedido', icon: '🔖', value: lastOrderValue }] : []
+  const lastOrder = lastOrderValue ? [{ key: LAST_ORDER_KEY, label: 'Último pedido', icon: '🧾', value: lastOrderValue }] : []
 
+  // Chave que o painel ainda não conhece só entra preenchida: vazia viraria pendência sem sentido.
   const extra = Object.keys(source)
     .filter((key) => !handled.has(key))
-    .map((key) => ({ key, label: key, icon: '•', value: asDisplayValue(source[key]) }))
+    .flatMap((key) => {
+      const value = asDisplayValue(source[key])
+      return value ? [{ key, label: key, icon: '•', value }] : []
+    })
 
-  return [...known, cart, ...lastOrder, ...extra]
+  return [...known, ...cart, ...lastOrder, ...extra]
 }
