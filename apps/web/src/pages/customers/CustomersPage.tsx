@@ -1,10 +1,20 @@
-import { useState, useCallback, useRef } from 'react'
+import { useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { ORDER_STATUS_LABELS, ORDER_STATUS_COLORS, ORDER_CHANNEL_LABELS, type OrderStatus } from '@/constants/orderLabels'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton, SkeletonList } from '@/components/ui/Skeleton'
+import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
+import { Pagination } from '@/components/ui/Pagination'
+import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
+import { useListParams } from '@/hooks/useListParams'
+import {
+  formatBRL as formatCurrencyBRL,
+  formatDate as formatCalendarDate,
+  formatRelativeDays,
+  plural,
+} from '@/lib/listing'
 import { Plus, Pencil, Trash2, MessageSquare, Star, MapPin } from 'lucide-react'
 import { AddressForm, type AddressFormData, AddressCard } from './components/AddressForm'
 
@@ -22,6 +32,7 @@ interface Customer {
 interface CustomerWithStats extends Customer {
   orderCount: number
   totalSpent: string
+  averageTicket: string
   lastOrderAt: string | null
 }
 
@@ -89,7 +100,7 @@ function stripNonDigits(value: string): string {
 }
 
 function formatDate(dateStr: string) {
-  return new Date(dateStr).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', year: 'numeric' })
+  return formatCalendarDate(dateStr)
 }
 
 function formatDateTime(dateStr: string) {
@@ -97,7 +108,7 @@ function formatDateTime(dateStr: string) {
 }
 
 function formatBRL(value: string | number) {
-  return Number(value).toLocaleString('pt-BR', { style: 'currency', currency: 'BRL' })
+  return formatCurrencyBRL(value)
 }
 
 function calcAge(birthDate: string): number {
@@ -130,60 +141,152 @@ interface CustomerFormData {
 
 const emptyForm: CustomerFormData = { name: '', whatsappNumber: '', document: '', birthDate: '', rating: null }
 
-type CustomerSortField = 'name' | 'orderCount' | 'totalSpent' | 'createdAt'
-type SortDirection = 'asc' | 'desc'
+const CUSTOMER_SORT_FIELDS = ['name', 'orderCount', 'totalSpent', 'averageTicket', 'lastOrderAt', 'createdAt'] as const
+type CustomerSortField = (typeof CUSTOMER_SORT_FIELDS)[number]
+
+type CustomerSegment = 'with_orders' | 'without_orders' | 'inactive' | 'birthday_month'
+const SEGMENT_OPTIONS: ReadonlyArray<{ value: CustomerSegment; label: string }> = [
+  { value: 'with_orders', label: 'Já compraram' },
+  { value: 'without_orders', label: 'Nunca compraram' },
+  { value: 'inactive', label: 'Sem pedir há 30+ dias' },
+  { value: 'birthday_month', label: 'Aniversariantes do mês' },
+]
+type RatingFilter = '3' | '4' | '5'
+const RATING_OPTIONS: ReadonlyArray<{ value: RatingFilter; label: string }> = [
+  { value: '5', label: '★★★★★' },
+  { value: '4', label: '★★★★ ou mais' },
+  { value: '3', label: '★★★ ou mais' },
+]
+
+function isCustomerSegment(value: string): value is CustomerSegment {
+  return SEGMENT_OPTIONS.some((option) => option.value === value)
+}
+function isRatingFilter(value: string): value is RatingFilter {
+  return RATING_OPTIONS.some((option) => option.value === value)
+}
 
 export function CustomersPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
-  const [page, setPage] = useState(1)
-  const [search, setSearch] = useState('')
-  const [debouncedSearch, setDebouncedSearch] = useState('')
+  const list = useListParams<CustomerSortField>({
+    sortFields: CUSTOMER_SORT_FIELDS,
+    defaultSort: { field: 'createdAt', direction: 'desc' },
+  })
+  const segmentParam = list.filter('segment')
+  const segment: CustomerSegment | '' = isCustomerSegment(segmentParam) ? segmentParam : ''
+  const ratingParam = list.filter('minRating')
+  const minRating: RatingFilter | '' = isRatingFilter(ratingParam) ? ratingParam : ''
+  const hasActiveFilters = !!list.search || !!segment || !!minRating
   const [selectedId, setSelectedId] = useState<string | null>(null)
   const [modalMode, setModalMode] = useState<'create' | 'edit' | null>(null)
   const [form, setForm] = useState<CustomerFormData>(emptyForm)
   const [formLoading, setFormLoading] = useState(false)
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
-  const [sortBy, setSortBy] = useState<CustomerSortField>('createdAt')
-  const [sortDirection, setSortDirection] = useState<SortDirection>('desc')
-  const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
-  const pageSize = 20
   const [addressModalOpen, setAddressModalOpen] = useState(false)
   const [editingAddress, setEditingAddress] = useState<AddressFormData | null>(null)
   const [addressDeleteId, setAddressDeleteId] = useState<string | null>(null)
 
-  const handleSearch = useCallback((value: string) => {
-    setSearch(value)
-    if (debounceTimer.current) clearTimeout(debounceTimer.current)
-    debounceTimer.current = setTimeout(() => {
-      setDebouncedSearch(value)
-      setPage(1)
-    }, 300)
-  }, [])
-
-  function handleSort(field: CustomerSortField) {
-    if (field === sortBy) {
-      setSortDirection((direction) => (direction === 'asc' ? 'desc' : 'asc'))
-      return
-    }
-    setSortBy(field)
-    setSortDirection('asc')
-  }
+  const customerQueryParams = new URLSearchParams({
+    page: String(list.page),
+    pageSize: String(list.pageSize),
+    sortBy: list.sort.field,
+    sortDirection: list.sort.direction,
+  })
+  if (list.search) customerQueryParams.set('search', list.search)
+  if (segment) customerQueryParams.set('segment', segment)
+  if (minRating) customerQueryParams.set('minRating', minRating)
 
   const { data, isLoading } = useQuery({
-    queryKey: ['customers', page, debouncedSearch, sortBy, sortDirection],
-    queryFn: () => {
-      const params = new URLSearchParams({
-        page: String(page),
-        pageSize: String(pageSize),
-        sortBy,
-        sortDirection,
-      })
-      if (debouncedSearch) params.set('search', debouncedSearch)
-      return api.get<CustomersResponse>(`/customers?${params}`, accessToken ?? undefined)
-    },
+    queryKey: ['customers', customerQueryParams.toString()],
+    queryFn: () => api.get<CustomersResponse>(`/customers?${customerQueryParams.toString()}`, accessToken ?? undefined),
+    placeholderData: (previous) => previous,
   })
+
+  const customerColumns: ReadonlyArray<DataTableColumn<CustomerWithStats, CustomerSortField>> = [
+    {
+      key: 'name',
+      header: 'Cliente',
+      sortField: 'name',
+      render: (customer) => (
+        <div className="flex items-center gap-3">
+          <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
+            {customer.name.charAt(0).toUpperCase()}
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-1.5">
+              <p className="font-medium text-gray-900 truncate">{customer.name}</p>
+              {customer.rating != null && <StarDisplay rating={customer.rating} size="sm" />}
+            </div>
+            {/* No celular as colunas de contato somem: o WhatsApp vem embaixo do nome. */}
+            <p className="text-xs text-gray-500 font-mono sm:hidden">{formatWhatsApp(customer.whatsappNumber)}</p>
+            {customer.document && (
+              <p className="text-xs text-gray-400 font-mono">{formatDocument(customer.document)}</p>
+            )}
+          </div>
+        </div>
+      ),
+    },
+    {
+      key: 'whatsapp',
+      header: 'WhatsApp',
+      className: 'hidden sm:table-cell',
+      render: (customer) => <span className="text-gray-600 font-mono whitespace-nowrap">{formatWhatsApp(customer.whatsappNumber)}</span>,
+    },
+    {
+      key: 'orderCount',
+      header: 'Pedidos',
+      align: 'right',
+      sortField: 'orderCount',
+      defaultDirection: 'desc',
+      className: 'hidden md:table-cell',
+      render: (customer) => (
+        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+          {customer.orderCount}
+        </span>
+      ),
+    },
+    {
+      key: 'averageTicket',
+      header: 'Ticket médio',
+      align: 'right',
+      sortField: 'averageTicket',
+      defaultDirection: 'desc',
+      className: 'hidden xl:table-cell',
+      render: (customer) => (
+        <span className="text-gray-700 whitespace-nowrap">{customer.orderCount > 0 ? formatBRL(customer.averageTicket) : '—'}</span>
+      ),
+    },
+    {
+      key: 'totalSpent',
+      header: 'Total gasto',
+      align: 'right',
+      sortField: 'totalSpent',
+      defaultDirection: 'desc',
+      className: 'hidden md:table-cell',
+      render: (customer) => <span className="font-medium text-gray-900 whitespace-nowrap">{formatBRL(customer.totalSpent)}</span>,
+    },
+    {
+      key: 'lastOrderAt',
+      header: 'Último pedido',
+      sortField: 'lastOrderAt',
+      defaultDirection: 'desc',
+      className: 'hidden lg:table-cell',
+      render: (customer) => (
+        <span className="text-gray-600 whitespace-nowrap" title={customer.lastOrderAt ? formatDateTime(customer.lastOrderAt) : undefined}>
+          {formatRelativeDays(customer.lastOrderAt)}
+        </span>
+      ),
+    },
+    {
+      key: 'createdAt',
+      header: 'Cliente desde',
+      sortField: 'createdAt',
+      defaultDirection: 'desc',
+      className: 'hidden 2xl:table-cell',
+      render: (customer) => <span className="text-gray-500 whitespace-nowrap">{formatDate(customer.createdAt)}</span>,
+    },
+  ]
 
   const { data: details, isLoading: detailsLoading } = useQuery({
     queryKey: ['customer-details', selectedId],
@@ -346,124 +449,69 @@ export function CustomersPage() {
     <div className="p-4 md:p-6 flex gap-6">
       {/* Lista principal */}
       <div className="flex-1 min-w-0">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
             <h1 className="text-xl md:text-2xl font-bold text-gray-900">Clientes</h1>
             <p className="text-gray-500 text-sm mt-1">
-              {data?.total ?? 0} cliente{(data?.total ?? 0) !== 1 ? 's' : ''} cadastrado{(data?.total ?? 0) !== 1 ? 's' : ''}
+              {hasActiveFilters
+                ? `${plural(data?.total ?? 0, 'cliente encontrado', 'clientes encontrados')}`
+                : `${plural(data?.total ?? 0, 'cliente cadastrado', 'clientes cadastrados')}`}
             </p>
           </div>
-          <div className="flex gap-2">
-            <input
-              type="search"
-              placeholder="Buscar por nome ou WhatsApp..."
-              value={search}
-              onChange={(e) => handleSearch(e.target.value)}
-              className="w-full sm:w-64 border border-gray-300 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-transparent"
+          <button
+            onClick={openCreate}
+            className="flex items-center justify-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95 whitespace-nowrap"
+          >
+            <Plus className="h-4 w-4" />
+            Novo cliente
+          </button>
+        </div>
+
+        <FilterBar hasActiveFilters={hasActiveFilters} onClear={list.clearAll}>
+          <SearchField
+            value={list.searchInput}
+            onChange={list.setSearchInput}
+            placeholder="Nome, WhatsApp ou CPF/CNPJ"
+          />
+          <FilterField label="Perfil">
+            <FilterSelect
+              value={segment}
+              onChange={(value) => list.setFilter('segment', value || null)}
+              options={SEGMENT_OPTIONS}
             />
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95 whitespace-nowrap"
-            >
-              <Plus className="h-4 w-4" />
-              Novo
-            </button>
-          </div>
-        </div>
+          </FilterField>
+          <FilterField label="Avaliação" className="w-full sm:w-40">
+            <FilterSelect
+              value={minRating}
+              onChange={(value) => list.setFilter('minRating', value || null)}
+              options={RATING_OPTIONS}
+              allLabel="Todas"
+            />
+          </FilterField>
+        </FilterBar>
 
-        <div className="bg-white rounded-xl shadow-sm overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[620px]">
-              <thead className="bg-gray-50 border-b border-gray-200">
-                <tr>
-                  <SortableHeader field="name" label="Cliente" align="left" sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} />
-                  <th className="text-left px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider hidden sm:table-cell">Contato</th>
-                  <SortableHeader field="orderCount" label="Pedidos" align="right" className="hidden md:table-cell" sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} />
-                  <SortableHeader field="totalSpent" label="Total gasto" align="right" className="hidden md:table-cell" sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} />
-                  <SortableHeader field="createdAt" label="Desde" align="left" className="hidden lg:table-cell" sortBy={sortBy} sortDirection={sortDirection} onSort={handleSort} />
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {isLoading ? (
-                  <tr><td colSpan={5} className="px-4 py-6"><SkeletonList rows={4} rowClassName="h-12 w-full" /></td></tr>
-                ) : data?.data.length === 0 ? (
-                  <tr>
-                    <td colSpan={5} className="px-4 py-10 text-center text-gray-400">
-                      {debouncedSearch ? 'Nenhum cliente encontrado para esta busca' : 'Nenhum cliente cadastrado'}
-                    </td>
-                  </tr>
-                ) : (
-                  data?.data.map((customer, index) => (
-                    <tr
-                      key={customer.id}
-                      onClick={() => setSelectedId(customer.id === selectedId ? null : customer.id)}
-                      className={`hover:bg-gray-100 transition-colors cursor-pointer ${
-                        selectedId === customer.id
-                          ? 'bg-brand-50 border-l-2 border-l-brand-500'
-                          : index % 2 === 1
-                            ? 'bg-gray-50'
-                            : 'bg-white'
-                      }`}
-                    >
-                      <td className="px-4 py-3">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-brand-100 text-brand-600 flex items-center justify-center text-sm font-semibold flex-shrink-0">
-                            {customer.name.charAt(0).toUpperCase()}
-                          </div>
-                          <div className="min-w-0">
-                            <div className="flex items-center gap-1.5">
-                              <p className="font-medium text-gray-900 truncate">{customer.name}</p>
-                              {customer.rating != null && <StarDisplay rating={customer.rating} size="sm" />}
-                            </div>
-                            {customer.document && (
-                              <p className="text-xs text-gray-400 font-mono">{formatDocument(customer.document)}</p>
-                            )}
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-3 hidden sm:table-cell">
-                        <p className="text-gray-600 font-mono text-sm">{formatWhatsApp(customer.whatsappNumber)}</p>
-                      </td>
-                      <td className="px-4 py-3 text-right hidden md:table-cell">
-                        <span className="inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
-                          {customer.orderCount}
-                        </span>
-                      </td>
-                      <td className="px-4 py-3 text-right text-sm font-medium text-gray-900 hidden md:table-cell">
-                        {formatBRL(customer.totalSpent)}
-                      </td>
-                      <td className="px-4 py-3 text-gray-500 text-sm hidden lg:table-cell">
-                        {formatDate(customer.createdAt)}
-                      </td>
-                    </tr>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
-
-          {data && data.totalPages > 1 && (
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 px-4 py-3 border-t border-gray-200 bg-gray-50">
-              <p className="text-sm text-gray-500">Página {data.page} de {data.totalPages}</p>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => setPage((p) => Math.max(1, p - 1))}
-                  disabled={page === 1}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 transition-colors active:scale-95"
-                >
-                  Anterior
-                </button>
-                <button
-                  onClick={() => setPage((p) => Math.min(data.totalPages, p + 1))}
-                  disabled={page === data.totalPages}
-                  className="px-4 py-2 text-sm border border-gray-300 rounded-lg disabled:opacity-40 hover:bg-gray-100 transition-colors active:scale-95"
-                >
-                  Próxima
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
+        <DataTable
+          caption="Lista de clientes"
+          columns={customerColumns}
+          rows={data?.data ?? []}
+          rowKey={(customer) => customer.id}
+          isLoading={isLoading}
+          emptyMessage={hasActiveFilters ? 'Nenhum cliente encontrado com esses filtros' : 'Nenhum cliente cadastrado'}
+          sort={list.sort}
+          onSort={list.setSort}
+          onRowClick={(customer) => setSelectedId(customer.id === selectedId ? null : customer.id)}
+          isRowSelected={(customer) => customer.id === selectedId}
+          minWidthClassName="min-w-0"
+          footer={
+            <Pagination
+              page={list.page}
+              pageSize={list.pageSize}
+              total={data?.total ?? 0}
+              onPageChange={list.setPage}
+              onPageSizeChange={list.setPageSize}
+            />
+          }
+        />
       </div>
 
       {/* Painel de detalhes — desktop */}
@@ -872,32 +920,5 @@ function StarRatingInput({
         )}
       </div>
     </div>
-  )
-}
-
-interface SortableHeaderProps {
-  field: CustomerSortField
-  label: string
-  align: 'left' | 'right'
-  sortBy: CustomerSortField
-  sortDirection: SortDirection
-  onSort: (field: CustomerSortField) => void
-  className?: string
-}
-
-function SortableHeader({ field, label, align, sortBy, sortDirection, onSort, className }: SortableHeaderProps) {
-  const isActive = sortBy === field
-  return (
-    <th className={`px-4 py-3 text-xs font-semibold text-gray-500 uppercase tracking-wider ${align === 'right' ? 'text-right' : 'text-left'} ${className ?? ''}`}>
-      <button
-        onClick={() => onSort(field)}
-        className={`inline-flex items-center gap-1 hover:text-gray-700 transition-colors ${isActive ? 'text-gray-900' : ''} ${align === 'right' ? 'flex-row-reverse' : ''}`}
-      >
-        {label}
-        <span className="text-[10px] leading-none">
-          {isActive ? (sortDirection === 'asc' ? '▲' : '▼') : '⇅'}
-        </span>
-      </button>
-    </th>
   )
 }

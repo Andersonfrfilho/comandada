@@ -47,7 +47,7 @@ jobs:
       - run: bun test
 
   web:
-    name: Web (typecheck e build)
+    name: Web (testes, typecheck e build)
     runs-on: ubuntu-latest
     defaults:
       run:
@@ -60,6 +60,11 @@ jobs:
           cache: npm
           cache-dependency-path: apps/web/package-lock.json
       - run: npm ci
+      # Testes das regras puras (listagens, filtros). Rodam com o bun, sem dependência nova no app.
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: '1.3.14'
+      - run: bun test src
       - run: npm run build
 
   # As imagens são construídas em todo PR, e não só na main: os Dockerfiles instalam cada app

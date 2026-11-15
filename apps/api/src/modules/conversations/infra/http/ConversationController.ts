@@ -14,6 +14,8 @@ import type { ObjectStorageInterface } from '@adatechnology/meta-whatsapp-contra
 import type { RouteHandler } from '@/infra/http/router'
 import { ValidationError, UnauthorizedError, NotFoundError } from '@/shared/errors/AppError'
 import type { MetaWhatsAppModuleRegistry } from '../whatsapp/metaWhatsAppModule'
+import type { ConversationHistoryReader } from '../../application/services/ConversationHistoryReader'
+import type { ConversationPanelContextReader } from '../../application/services/ConversationPanelContext'
 import {
   CONVERSATION_AGENT_SENDER as AGENT_SENDER,
   CONVERSATION_START_STATE as START_STATE,
@@ -87,6 +89,10 @@ export class ConversationController {
    */
   constructor(
     private readonly modules: MetaWhatsAppModuleRegistry,
+    private readonly readers: {
+      readonly history: ConversationHistoryReader
+      readonly panelContext: ConversationPanelContextReader
+    },
     private readonly objectStorage?: ObjectStorageInterface | undefined
   ) {}
 
@@ -132,12 +138,15 @@ export class ConversationController {
     const { before, limit } = request.query
 
     const pageLimit = boundedInteger(limit, DEFAULT_HISTORY_LIMIT, MAX_HISTORY_LIMIT)
-    const rows = await this.modules.forEstablishment(companyId).conversations.listMessages.execute({
+    // Mais nova primeiro: o `listMessages` do módulo corta a página em ordem crescente e devolvia
+    // o começo da conversa, nunca as mensagens de hoje.
+    const rows = await this.readers.history.recentMessages({
       companyId,
       whatsappNumber: this.numberOf(request),
       limit: pageLimit + 1,
-      ...(before ? { before } : {}),
+      before,
     })
+    if (!rows) throw new NotFoundError('Conversation not found')
 
     const hasMore = rows.length > pageLimit
     response.json({ data: hasMore ? rows.slice(0, pageLimit) : rows, hasMore })
@@ -145,12 +154,15 @@ export class ConversationController {
 
   context: RouteHandler = async (request, response) => {
     const { companyId } = this.tenantOf(request)
+    const whatsappNumber = this.numberOf(request)
     const session = await this.modules
       .forEstablishment(companyId)
-      .conversations.repository.getContext(companyId, this.numberOf(request))
+      .conversations.repository.getContext(companyId, whatsappNumber)
 
     if (!session) throw new NotFoundError('Conversation not found')
-    response.json({ currentState: session.currentState, context: session.context })
+    // O contexto da sessão do módulo fica vazio neste projeto: quem anota o pedido é o bot do n8n,
+    // em `bot_sessions`. O resumo do painel sai de lá e do último pedido gravado.
+    response.json(await this.readers.panelContext.read({ establishmentId: companyId, whatsappNumber }))
   }
 
   send: RouteHandler = async (request, response) => {

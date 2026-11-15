@@ -247,6 +247,7 @@ async function runTests() {
       const mockHelpers = {
         httpRequest: async (opts) => {
           if (opts?.url?.includes('viacep')) return { cep: '14403-380', logradouro: 'Av Presidente Vargas', bairro: 'Centro', localidade: 'Franca', uf: 'SP' };
+          if (opts?.url?.includes('nominatim') && opts?.url?.includes('search') && args.geocodeMiss && args.geocodeMiss(decodeURIComponent(String(opts.url) + ' ' + JSON.stringify(opts.qs || {})))) return [];
           if (opts?.url?.includes('nominatim') && opts?.url?.includes('search')) return [{ lat: '-20.5', lon: '-47.4', display_name: 'Av Presidente Vargas, Franca, SP' }];
           if (opts?.url?.includes('nominatim') && opts?.url?.includes('reverse')) return { address: { road: 'Av Presidente Vargas', house_number: '123', city: 'Franca', state_code: 'SP' } };
           if (opts?.url?.includes('osrm')) return { routes: [{ distance: 3000, duration: 600 }] };
@@ -266,7 +267,7 @@ async function runTests() {
         setTimeout: (fn) => fn(),
       });
 
-      fn(jsonData, calcHoraData, mockHelpers).then(resolve).catch(e => resolve(null, e));
+      fn.call({ helpers: mockHelpers }, jsonData, calcHoraData, mockHelpers).then(resolve).catch(e => resolve(null, e));
     });
   };
 
@@ -982,6 +983,54 @@ async function runTests() {
     const chosen = await exec({ texto: 'time:18:30', state: 'awaiting_schedule_time', cart: { ...cart, scheduled_date: '2026-11-14' }, schedule_slots: SLOTS });
     assertState(chosen, 'ordering_cat');
     assertResponseContains(chosen, 'Agendado para sáb 14/11 às 18:30');
+  });
+
+  // ── Endereço: complemento com botões e prévia do mapa ────────────────
+  const STREET_TEMP = JSON.stringify({ logradouro: 'Av Presidente Vargas', bairro: 'Franca Pólo Club', localidade: 'Franca', uf: 'SP' });
+  const deliveryCart = { ...filledCart, order_type: 'delivery', address_street_temp: STREET_TEMP };
+  const NEAR = { establishment_lat: '-20.51', establishment_lng: '-47.41' };
+  const buttonIds = (message) => (message && message.buttons || []).map((button) => button.id);
+
+  await test('endereço achado: pin do mapa e "Tem complemento?" em botões (Sem complemento / Corrigir / Voltar)', async () => {
+    const r = await exec({ texto: '6531', state: 'awaiting_address_number', cart: deliveryCart, config: NEAR });
+    assertState(r, 'awaiting_complement');
+    const resps = r[0].json.respostas;
+    assert(resps[0].type === 'location', JSON.stringify(resps[0]));
+    const buttons = resps.find((m) => m && m.type === 'buttons');
+    assert(buttons && buttons.body.includes('Achei seu endereço') && buttons.body.includes('Tem complemento?'), JSON.stringify(resps));
+    assert(JSON.stringify(buttonIds(buttons)) === JSON.stringify(['sem complemento', 'endereco:corrigir', '0']), JSON.stringify(buttons.buttons));
+    assert(!JSON.stringify(resps).includes('responder *ok*'), 'não pede mais para responder ok');
+  });
+
+  await test('bairro que o mapa não conhece: tenta sem o bairro e acha o endereço', async () => {
+    const r = await exec({ texto: '6531', state: 'awaiting_address_number', cart: deliveryCart, config: NEAR, geocodeMiss: (url) => url.includes('Pólo Club') });
+    assertState(r, 'awaiting_complement');
+    assert(r[0].json.respostas[0].type === 'location', JSON.stringify(r[0].json.respostas));
+  });
+
+  await test('endereço sem coordenadas: texto com o link do mapa (prévia) e depois os botões do complemento', async () => {
+    const r = await exec({ texto: '6531', state: 'awaiting_address_number', cart: deliveryCart, geocodeMiss: () => true });
+    assertState(r, 'awaiting_complement');
+    const resps = r[0].json.respostas;
+    assert(typeof resps[0] === 'string' && resps[0].includes('Endereço anotado') && resps[0].includes('https://maps.google.com/?q='), JSON.stringify(resps));
+    assert(!resps[0].includes('Tem complemento?'), 'pergunta sai do texto do link');
+    assert(JSON.stringify(buttonIds(resps[1])) === JSON.stringify(['sem complemento', 'endereco:corrigir', '0']), JSON.stringify(resps[1]));
+  });
+
+  await test('botões do complemento: sem complemento → pagamento, corrigir → endereço, voltar → forma de receber', async () => {
+    const cart = { ...filledCart, order_type: 'delivery', address: 'Av Presidente Vargas, 6531, Franca, SP', delivery_fee: 5 };
+    const none = await exec({ texto: 'sem complemento', state: 'awaiting_complement', cart });
+    assertState(none, 'awaiting_payment');
+    assert(none[0].json.cart.complement === '', 'complemento vazio');
+    const typed = await exec({ texto: 'Apto 42', state: 'awaiting_complement', cart });
+    assertState(typed, 'awaiting_payment');
+    assert(typed[0].json.cart.complement === 'Apto 42', typed[0].json.cart.complement);
+    const fix = await exec({ texto: 'endereco:corrigir', state: 'awaiting_complement', cart });
+    assertState(fix, 'awaiting_address');
+    assert(!fix[0].json.cart.address, 'endereço deveria sair');
+    assertResponseContains(fix, 'Pra onde a gente leva');
+    const back = await exec({ texto: '0', state: 'awaiting_complement', cart });
+    assertState(back, 'awaiting_type');
   });
 
   await test('agendar mostra os dias e depois os horários livres', async () => {
