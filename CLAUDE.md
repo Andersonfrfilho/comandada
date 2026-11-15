@@ -133,6 +133,7 @@ no n8n, mínimo 32 caracteres; sem ele as rotas respondem 401):
 | Salvar Sessão | `PUT /internal/bot/:whatsapp/session` (tabela `bot_sessions`) |
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/orders` e `POST /internal/bot/:whatsapp/reservations` |
 | Atualizar Nome Cliente | `PUT /internal/bot/:whatsapp/customer` |
+| Salvar Preferência Marketing | `PUT /internal/bot/:whatsapp/marketing-opt-in` (`customers.marketing_opt_in`) |
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/issues` (problema relatado pelo cliente) |
 | Gravar Pedido e Reserva | `POST /internal/bot/:whatsapp/partial-confirmation` (SIM/NÃO à confirmação parcial) |
 
@@ -233,6 +234,11 @@ histórico de status chega pela sincronização. Fora da janela de 24 h vai o te
 (`ORDER_UPDATE_TEMPLATE`, criar no WhatsApp Manager: pt_BR, Utilidade, corpo
 `Oi! Temos novidades sobre o seu pedido *{{1}}*: {{2}} Qualquer dúvida, é só responder esta mensagem. 😊`). A nota
 fiscal vai pelo mesmo WhatsApp (sem n8n).
+
+**Lembretes (workflows 04 e 05)** saem da API (`apps/api/src/modules/reminders/`): o n8n só chama
+`POST /internal/reminders/reorder` (a cada hora) e `POST /internal/reminders/reservations` (a cada 15 min). Telefone vem do
+cliente vinculado; fora da janela vão os templates `lembrete_pedido` (marketing) e `lembrete_reserva` (utilidade).
+Detalhes em `n8n/workflows/README.md`.
 
 **Total do pedido = itens + taxa de entrega** (`orders.delivery_fee` guarda a taxa; a nota fiscal leva só os itens).
 Pago na entrega/retirada entra no caixa ao concluir (`RecordOrderPaymentsUseCase`, uma entrada por parte). Encomenda só

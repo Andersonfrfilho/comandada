@@ -27,9 +27,9 @@ N8N_URL=https://n8n-comandada-yuyaki.up.railway.app N8N_API_KEY=$(cat ~/.config/
 | `01-receber-mensagem.json` | Bot principal: recebe a mensagem da Meta, roteia (`src/` → `make build`), grava pela API e responde | Webhook da Meta |
 | `01-whatsapp-receiver.json` | Receptor alternativo que repassa para o roteamento | Webhook |
 | `02-cron-limpeza-sessoes.json` | Apaga sessões antigas | A cada hora |
-| `03-cron-promocoes.json` | Disparo de promoções | A cada 5 min |
-| `04-cron-lembretes.json` | "Faz X dias que você pediu..." | Diário |
-| `05-cron-lembretes-reserva.json` | Lembrete de reserva (véspera e no dia) | Diário |
+| `03-cron-promocoes.json` | Disparo de promoções (desligado: não existe cadastro de promoções) | A cada 5 min |
+| `04-cron-lembretes.json` | "Faz X dias que você pediu..." (`POST /internal/reminders/reorder`) | A cada hora |
+| `05-cron-lembretes-reserva.json` | Lembrete de reserva de mesa nas 24 h antes (`POST /internal/reminders/reservations`) | A cada 15 min |
 | `07-cron-retry-fiscal.json` | Reenvia notas fiscais pendentes (`POST /fiscal-documents/retry-pending`) | A cada 5 min |
 
 **Aviso de status do pedido ao cliente não é workflow.** Sai da API quando alguém da equipe muda o status
@@ -37,10 +37,30 @@ N8N_URL=https://n8n-comandada-yuyaki.up.railway.app N8N_API_KEY=$(cat ~/.config/
 Fora da janela de 24 h vai como template `atualizacao_pedido` (ver `ORDER_UPDATE_TEMPLATE` na API). O antigo
 `06-notificar-status-pedido.json` foi removido: lia tabelas que não existem mais.
 
-> **Atenção — 03, 04 e 05 ainda são do modelo antigo:** enviam pela Evolution API e consultam colunas que
-> não existem mais (`customers.phone` como chave, `orders.customer_phone`, `promotions`). Os textos já estão
-> no tom novo, mas precisam ser migrados para a API (e, para mensagens fora da janela, templates de
-> marketing aprovados na Meta) antes de serem ativados.
+## Lembretes (04 e 05)
+
+O n8n só dá o horário: os dois workflows chamam a API (mesmo `ORDER_HUB_API_URL` e
+`ORDER_HUB_N8N_INTERNAL_TOKEN` do 01), que acha o telefone pelo cliente vinculado ao pedido ou à reserva
+(`customers.whatsapp_number`) e envia pelo mesmo canal da inbox. Dentro da janela de 24 h vai texto; fora dela,
+o template aprovado na Meta. Sem template aprovado, o lembrete fora da janela é pulado (não dá erro).
+Código em `apps/api/src/modules/reminders/`.
+
+- **04 — "faz X dias que você pediu"**: só para quem respondeu *sim* à pergunta de novidades do bot
+  (`customers.marketing_opt_in`, gravado pelo nó Salvar Preferência Marketing do 01). Sai na hora
+  `reminder_send_hour` (padrão 11) para quem fez o último pedido há exatamente `reminder_interval_days` dias
+  (padrão 15; 0 desliga), no máximo um a cada `reminder_min_gap_days` (padrão 7). Texto em
+  `reminder_message_template`. Template de marketing `lembrete_pedido` (pt_BR):
+  `Oi, {{1}}! Faz {{2}} dias que você pediu {{3}} e a gente já está com saudade. Que tal pedir de novo hoje? É só responder esta mensagem. 😋`
+- **05 — lembrete de reserva**: a agenda (scheduling SDK) marca cada reserva confirmada que começa nas próximas
+  24 h e manda um lembrete por reserva (`reminder_sent_at` evita repetir). Reserva feita há menos de 2 h não
+  recebe. Template de utilidade `lembrete_reserva` (pt_BR):
+  `Oi, {{1}}! Passando para lembrar da sua reserva {{2}}: mesa para {{3}} pessoas {{4}}. Se não puder vir, é só responder esta mensagem. 😊`
+
+Os nomes dos templates podem ser trocados nas Configurações (`whatsapp_reorder_reminder_template`,
+`whatsapp_reservation_reminder_template`; vazio desliga o envio fora da janela).
+
+> **03 continua desligado:** consulta a tabela `promotions`, que não existe no banco atual, e envia pela
+> Evolution API. Precisa de um cadastro de promoções na API antes de voltar.
 
 ## Roteamento no workflow 01
 

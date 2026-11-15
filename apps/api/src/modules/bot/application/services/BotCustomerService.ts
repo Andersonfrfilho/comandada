@@ -42,6 +42,23 @@ export class BotCustomerService {
     return created
   }
 
+  // Resposta do cliente à pergunta do bot sobre novidades; é o que libera o lembrete do workflow 04.
+  async setMarketingOptIn(params: {
+    establishmentId: string
+    whatsappNumber: string
+    optIn: boolean
+  }): Promise<schema.Customer> {
+    const customer = await this.findOrCreate(params)
+    const now = new Date()
+    const [updated] = await this.db
+      .update(schema.customers)
+      .set({ marketingOptIn: params.optIn, marketingOptInAt: now, updatedAt: now })
+      .where(eq(schema.customers.id, customer.id))
+      .returning()
+    if (!updated) throw new Error('Failed to save marketing opt-in')
+    return updated
+  }
+
   private async rename(customerId: string, name: string): Promise<schema.Customer> {
     const [updated] = await this.db
       .update(schema.customers)

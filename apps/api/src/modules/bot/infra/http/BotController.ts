@@ -76,6 +76,11 @@ const customerSchema = z.object({
   name: z.string().trim().min(1).max(255),
 })
 
+const marketingOptInSchema = z.object({
+  establishmentId: z.string().uuid(),
+  optIn: z.boolean(),
+})
+
 const issueSchema = z.object({
   establishmentId: z.string().uuid(),
   category: z.enum(ORDER_ISSUE_CATEGORIES),
@@ -156,5 +161,16 @@ export class BotController {
       name: body.name,
     })
     response.json({ id: customer.id, name: customer.name })
+  }
+
+  updateMarketingOptIn: RouteHandler = async (request, response) => {
+    const whatsappNumber = parseOrThrow(whatsappNumberSchema, request.params['whatsapp'])
+    const body = parseOrThrow(marketingOptInSchema, request.body)
+    const customer = await this.customerService.setMarketingOptIn({
+      establishmentId: body.establishmentId,
+      whatsappNumber,
+      optIn: body.optIn,
+    })
+    response.json({ id: customer.id, marketingOptIn: customer.marketingOptIn })
   }
 }

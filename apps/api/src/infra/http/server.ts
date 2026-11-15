@@ -38,6 +38,7 @@ import { registerMonthlyAccountRoutes } from '@/modules/finance/infra/http/Month
 import { registerExpenseRoutes } from '@/modules/finance/infra/http/ExpenseRoutes'
 import { registerUploadRoutes } from '@/modules/uploads/infra/http/UploadRoutes'
 import { registerBotRoutes } from '@/modules/bot/infra/http/BotRoutes'
+import { registerReminderRoutes } from '@/modules/reminders/infra/http/ReminderRoutes'
 import { registerPaymentRoutes } from '@/modules/payments/infra/http/PaymentRoutes'
 import { STALE_CHARGE_SWEEP_INTERVAL_MS } from '@/modules/payments/shared/payments.constant'
 import { registerOrderIssueRoutes } from '@/modules/issues/infra/http/OrderIssueRoutes'
@@ -144,6 +145,7 @@ export async function createServer() {
   registerExpenseRoutes(router, container.expenseController)
   registerUploadRoutes(router, container.uploadController)
   registerBotRoutes(router, container.botController)
+  registerReminderRoutes(router, container.reminderController)
   registerPaymentRoutes(router, container.paymentController)
   registerOrderIssueRoutes(router, container.orderIssueController)
   registerAgendaRoutes(router, container.agendaController)

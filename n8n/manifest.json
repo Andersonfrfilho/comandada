@@ -6,8 +6,8 @@
     "01-whatsapp-receiver.json": { "active": "keep" },
     "02-cron-limpeza-sessoes.json": { "active": true },
     "03-cron-promocoes.json": { "active": false },
-    "04-cron-lembretes.json": { "active": false },
-    "05-cron-lembretes-reserva.json": { "active": false },
+    "04-cron-lembretes.json": { "active": true },
+    "05-cron-lembretes-reserva.json": { "active": true },
     "07-cron-retry-fiscal.json": { "active": true }
   }
 }

@@ -11,4 +11,5 @@ export function registerBotRoutes(router: Router, controller: BotController): vo
   router.post('/internal/bot/:whatsapp/partial-confirmation', internalAuth, controller.answerPartialConfirmation)
   router.post('/internal/bot/:whatsapp/transcriptions', internalAuth, controller.transcribeAudio)
   router.put('/internal/bot/:whatsapp/customer', internalAuth, controller.updateCustomer)
+  router.put('/internal/bot/:whatsapp/marketing-opt-in', internalAuth, controller.updateMarketingOptIn)
 }

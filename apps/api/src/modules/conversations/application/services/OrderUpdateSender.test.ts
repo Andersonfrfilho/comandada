@@ -48,4 +48,24 @@ describe('OrderUpdateSender', () => {
     const { sender } = harness([{ key: 'whatsapp_order_update_template', value: '' }], new WindowExpiredError(30))
     await expect(sender.send(message)).rejects.toThrow()
   })
+
+  it('lembrete usa o template dele, com o nome trocado nas Configurações', async () => {
+    const { sender, sent } = harness(
+      [{ key: 'whatsapp_reservation_reminder_template', value: 'lembrete_reserva_v2' }],
+      new WindowExpiredError(30)
+    )
+    await sender.send({
+      ...message,
+      outsideWindow: {
+        template: {
+          defaultName: 'lembrete_reserva',
+          defaultLanguage: 'pt_BR',
+          nameSettingKey: 'whatsapp_reservation_reminder_template',
+          languageSettingKey: 'whatsapp_reservation_reminder_template_language',
+        },
+        parameters: ['Ana', 'RES-1'],
+      },
+    })
+    expect(sent).toEqual([{ kind: 'template', name: 'lembrete_reserva_v2', parameters: ['Ana', 'RES-1'] }])
+  })
 })

@@ -2,7 +2,7 @@ import { eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { META_WHATSAPP_ERROR_CODES } from '@adatechnology/meta-whatsapp-contracts'
 import * as schema from '@/infra/database/schema'
-import type { OutsideWindowTemplate } from '@/shared/providers/OutsideWindowTemplate'
+import type { OutsideWindowTemplate, WhatsAppTemplateSetting } from '@/shared/providers/OutsideWindowTemplate'
 import {
   CONVERSATION_START_STATE,
   ORDER_UPDATE_TEMPLATE,
@@ -75,7 +75,7 @@ export class OrderUpdateSender {
       })
     } catch (error) {
       if (!message.outsideWindow || !isWindowExpired(error)) throw error
-      const template = await this.templateFor(message.establishmentId)
+      const template = await this.templateFor(message.establishmentId, message.outsideWindow.template ?? ORDER_UPDATE_TEMPLATE)
       if (!template.name) throw error
       await conversations.sendTemplate({
         companyId: message.establishmentId,
@@ -91,7 +91,10 @@ export class OrderUpdateSender {
   }
 
   // Cada restaurante pode usar outro nome de template (Configurações); vazio desliga o envio fora da janela.
-  private async templateFor(establishmentId: string): Promise<{ name: string; language: string }> {
+  private async templateFor(
+    establishmentId: string,
+    setting: WhatsAppTemplateSetting
+  ): Promise<{ name: string; language: string }> {
     const rows = await this.db.query.settings.findMany({
       where: eq(schema.settings.establishmentId, establishmentId),
     })
@@ -100,8 +103,8 @@ export class OrderUpdateSender {
       return row && typeof row.value === 'string' ? row.value : undefined
     }
     return {
-      name: value(ORDER_UPDATE_TEMPLATE.nameSettingKey) ?? ORDER_UPDATE_TEMPLATE.defaultName,
-      language: value(ORDER_UPDATE_TEMPLATE.languageSettingKey) ?? ORDER_UPDATE_TEMPLATE.defaultLanguage,
+      name: value(setting.nameSettingKey) ?? setting.defaultName,
+      language: value(setting.languageSettingKey) ?? setting.defaultLanguage,
     }
   }
 }

@@ -107,7 +107,11 @@ import { OrderUpdateSender } from '@/modules/conversations/application/services/
 import { NotifyOrderStatusUseCase } from '@/modules/orders/application/use-cases/NotifyOrderStatusUseCase'
 import { EstimateOrderTimeUseCase } from '@/modules/orders/application/use-cases/EstimateOrderTimeUseCase'
 import { CreateBotReservationUseCase } from '@/modules/bot/application/use-cases/CreateBotReservationUseCase'
-import { schedulingModule } from '@/infra/scheduling/schedulingModule'
+import { schedulingModule, setBookingReminderHandler } from '@/infra/scheduling/schedulingModule'
+import { DrizzleReminderRepository } from '@/modules/reminders/infra/database/DrizzleReminderRepository'
+import { SendReorderRemindersUseCase } from '@/modules/reminders/application/use-cases/SendReorderRemindersUseCase'
+import { ReservationReminderService } from '@/modules/reminders/application/services/ReservationReminderService'
+import { ReminderController } from '@/modules/reminders/infra/http/ReminderController'
 import { AgendaSetupService } from '@/modules/agenda/application/services/AgendaSetupService'
 import { ListScheduledOrderSlotsUseCase } from '@/modules/agenda/application/use-cases/ListScheduledOrderSlotsUseCase'
 import { BookScheduledOrderUseCase } from '@/modules/agenda/application/use-cases/BookScheduledOrderUseCase'
@@ -248,6 +252,7 @@ export interface AppContainer {
   menuPdfController: MenuPdfController
   deliveryFeeController: DeliveryFeeController
   botController: BotController
+  reminderController: ReminderController
   orderIssueController: OrderIssueController
   agendaController: AgendaController
   webhookController: WebhookController
@@ -523,6 +528,14 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase),
     transcribeBotAudioUseCase
   )
+  // Lembretes dos crons do n8n (04: "faz X dias que você pediu", 05: reserva de mesa).
+  const reminderRepository = new DrizzleReminderRepository(db)
+  const reservationReminderService = new ReservationReminderService(reminderRepository, botMessages)
+  setBookingReminderHandler((event) => reservationReminderService.handle(event))
+  const reminderController = new ReminderController(
+    new SendReorderRemindersUseCase(reminderRepository, botMessages),
+    scheduling.sweepDueReminders
+  )
   const orderIssueController = new OrderIssueController(new GetOrderIssueReportUseCase(db), new ResolveOrderIssueUseCase(db))
 
   // Webhook — assinatura, replay e persistência ficam no módulo
@@ -714,6 +727,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     menuPdfController,
     deliveryFeeController,
     botController,
+    reminderController,
     orderIssueController,
     agendaController,
     webhookController,
