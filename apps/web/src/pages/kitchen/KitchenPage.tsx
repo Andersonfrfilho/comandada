@@ -1,3 +1,4 @@
+import { toast } from '@/stores/toastStore'
 import { useEffect, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
 import { Check, Flame, HelpCircle, Timer } from 'lucide-react'
@@ -15,6 +16,7 @@ import {
   type KitchenDeadlineSource,
   type KitchenUrgency,
 } from '@/constants/kitchenPriority'
+import { orderNumberLabel, orderPartyLabel } from '@/lib/orderLabel'
 
 interface OrderItem {
   id: string
@@ -26,6 +28,10 @@ interface OrderItem {
 
 interface KitchenOrder {
   id: string
+  number: number | null
+  code: string | null
+  table: { number: number } | null
+  customer: { name: string | null } | null
   type: string
   channel: string
   status: 'received' | 'in_production'
@@ -81,9 +87,11 @@ type OrderCardProps = {
   now: number
   onAdvance: (orderId: string, status: string) => void
   onItemReady: (orderId: string, itemId: string) => void
+  /** Ids (pedido ou item) com uma ação em andamento: o botão trava até a resposta, sem clique duplo. */
+  busyIds: ReadonlySet<string>
 }
 
-function OrderCard({ order, now, onAdvance, onItemReady }: OrderCardProps) {
+function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardProps) {
   const nextStatus = order.status === 'received' ? 'in_production' : 'ready'
   const nextLabel = order.status === 'received' ? 'Iniciar' : 'Tudo pronto'
   const { priority } = order
@@ -99,6 +107,7 @@ function OrderCard({ order, now, onAdvance, onItemReady }: OrderCardProps) {
               {priority.position}º
             </span>
           )}
+          <span className="text-base font-extrabold normal-case tracking-normal text-gray-900">{orderNumberLabel(order)}</span>
           {ORDER_CHANNEL_LABELS[order.channel] ?? order.channel} ·{' '}
           {ORDER_TYPE_LABELS[order.type as keyof typeof ORDER_TYPE_LABELS] ?? order.type}
         </span>
@@ -110,6 +119,10 @@ function OrderCard({ order, now, onAdvance, onItemReady }: OrderCardProps) {
           {formatWaiting(order.waitingSince, now)} {KITCHEN_PRIORITY_MESSAGES.waiting}
         </span>
       </div>
+
+      {orderPartyLabel(order) && (
+        <p className="-mt-1 text-lg font-bold text-gray-900">{orderPartyLabel(order)}</p>
+      )}
 
       <div className="flex flex-wrap items-center gap-2 text-xs">
         {doNow && (
@@ -166,7 +179,8 @@ function OrderCard({ order, now, onAdvance, onItemReady }: OrderCardProps) {
               <button
                 type="button"
                 onClick={() => onItemReady(order.id, item.id)}
-                className="shrink-0 inline-flex items-center gap-1 rounded-md border border-green-600 px-2 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-50 active:scale-95"
+                disabled={busyIds.has(item.id)}
+                className="shrink-0 disabled:opacity-50 inline-flex items-center gap-1 rounded-md border border-green-600 px-2 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-50 active:scale-95"
               >
                 <Check aria-hidden="true" className="h-3.5 w-3.5" />
                 Pronto
@@ -180,11 +194,13 @@ function OrderCard({ order, now, onAdvance, onItemReady }: OrderCardProps) {
 
       <button
         onClick={() => onAdvance(order.id, nextStatus)}
-        className={`w-full py-2 md:py-2.5 px-3 text-white text-sm font-medium rounded-lg transition-colors active:scale-95 ${
-          nextStatus === 'in_production' ? 'bg-yellow-500 hover:bg-yellow-600' : 'bg-green-600 hover:bg-green-700'
+        disabled={busyIds.has(order.id)}
+        // Texto escuro no amarelo: branco no amarelo ficava ilegível de longe (contraste 1,9:1).
+        className={`w-full py-2.5 md:py-3 px-3 text-base font-semibold rounded-lg transition-colors active:scale-95 disabled:opacity-60 ${
+          nextStatus === 'in_production' ? 'bg-amber-400 text-gray-900 hover:bg-amber-500' : 'bg-green-700 text-white hover:bg-green-800'
         }`}
       >
-        {nextLabel}
+        {busyIds.has(order.id) ? 'Enviando…' : nextLabel}
       </button>
     </div>
   )
@@ -227,16 +243,34 @@ export function KitchenPage() {
     }
   })
 
-  async function handleAdvance(orderId: string, status: string) {
-    await api.patch(`/kitchen/orders/${orderId}/advance`, { status }, accessToken ?? undefined)
-    void queryClient.invalidateQueries({ queryKey: ['kitchen', 'queue'] })
+  const [busyIds, setBusyIds] = useState<ReadonlySet<string>>(new Set())
+
+  // Erro vira aviso na tela (ex.: "Iniciar" sem estoque antes só não fazia nada).
+  async function runAction(busyId: string, action: () => Promise<unknown>) {
+    if (busyIds.has(busyId)) return
+    setBusyIds((current) => new Set(current).add(busyId))
+    try {
+      await action()
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : 'Não deu certo. Tente de novo.')
+    } finally {
+      setBusyIds((current) => {
+        const next = new Set(current)
+        next.delete(busyId)
+        return next
+      })
+      void queryClient.invalidateQueries({ queryKey: ['kitchen', 'queue'] })
+    }
+  }
+
+  function handleAdvance(orderId: string, status: string) {
+    void runAction(orderId, () => api.patch(`/kitchen/orders/${orderId}/advance`, { status }, accessToken ?? undefined))
   }
 
   // Marcar item a item é o que dá ao relatório de tempo de preparo uma medição
   // por produto: sem isso a bebida herda a duração do prato que saiu junto.
-  async function handleItemReady(orderId: string, itemId: string) {
-    await api.patch(`/kitchen/orders/${orderId}/items/${itemId}/ready`, {}, accessToken ?? undefined)
-    void queryClient.invalidateQueries({ queryKey: ['kitchen', 'queue'] })
+  function handleItemReady(orderId: string, itemId: string) {
+    void runAction(itemId, () => api.patch(`/kitchen/orders/${orderId}/items/${itemId}/ready`, {}, accessToken ?? undefined))
   }
 
   if (isLoading) return <div className="p-4 md:p-8 text-gray-500">Carregando fila...</div>
@@ -262,7 +296,7 @@ export function KitchenPage() {
           </h2>
           <div className="space-y-3">
             {received.map((order) => (
-              <OrderCard key={order.id} order={order} now={now} onAdvance={handleAdvance} onItemReady={handleItemReady} />
+              <OrderCard key={order.id} order={order} now={now} onAdvance={handleAdvance} onItemReady={handleItemReady} busyIds={busyIds} />
             ))}
             {received.length === 0 && (
               <p className="text-gray-400 text-center py-8">Nenhum pedido aguardando</p>
@@ -276,7 +310,7 @@ export function KitchenPage() {
           </h2>
           <div className="space-y-3">
             {inProduction.map((order) => (
-              <OrderCard key={order.id} order={order} now={now} onAdvance={handleAdvance} onItemReady={handleItemReady} />
+              <OrderCard key={order.id} order={order} now={now} onAdvance={handleAdvance} onItemReady={handleItemReady} busyIds={busyIds} />
             ))}
             {inProduction.length === 0 && (
               <p className="text-gray-400 text-center py-8">Nenhum pedido em preparo</p>

@@ -3,11 +3,23 @@ import type { GeocodingProvider } from '@/shared/providers/GeocodingProvider'
 
 interface CalculateDeliveryFeeInput {
   address: string
+  /** Soma dos itens: libera o frete grátis da regra (`free_above`), como o bot já fazia. */
+  itemsTotal?: number | undefined
 }
 
 export interface CalculateDeliveryFeeResult {
   feeAmount: number
   distanceKm: number | null
+}
+
+export interface DeliveryFeeQuote extends CalculateDeliveryFeeResult {
+  /** Sem regra de taxa ativa: a taxa sai zero e o painel pede para digitar. */
+  ruleConfigured: boolean
+  freeShipping: boolean
+  /** Endereço além do raio máximo da regra (o bot recusa; o painel avisa). */
+  outOfRange: boolean
+  maxRadiusKm: number | null
+  freeAbove: number | null
 }
 
 const EARTH_RADIUS_KM = 6371
@@ -49,9 +61,33 @@ export class CalculateDeliveryFeeUseCase {
   ) {}
 
   async execute(input: CalculateDeliveryFeeInput): Promise<CalculateDeliveryFeeResult> {
-    const rule = await this.botConfigRepository.getActiveDeliveryFeeRule()
-    if (!rule) return { feeAmount: 0, distanceKm: null }
+    const quote = await this.quote(input)
+    return { feeAmount: quote.feeAmount, distanceKm: quote.distanceKm }
+  }
 
+  /** Taxa com as mesmas regras do bot: frete grátis acima do valor e raio máximo. */
+  async quote(input: CalculateDeliveryFeeInput): Promise<DeliveryFeeQuote> {
+    const rule = await this.botConfigRepository.getActiveDeliveryFeeRule()
+    if (!rule) {
+      return { feeAmount: 0, distanceKm: null, ruleConfigured: false, freeShipping: false, outOfRange: false, maxRadiusKm: null, freeAbove: null }
+    }
+    const base = await this.feeForRule(rule, input.address)
+    const freeAbove = rule.freeAbove > 0 ? rule.freeAbove : null
+    const maxRadiusKm = rule.maxRadiusKm > 0 ? rule.maxRadiusKm : null
+    const freeShipping = freeAbove !== null && (input.itemsTotal ?? 0) >= freeAbove
+    const outOfRange = maxRadiusKm !== null && base.distanceKm !== null && base.distanceKm > maxRadiusKm
+    return {
+      feeAmount: freeShipping ? 0 : Math.round(base.feeAmount * 100) / 100,
+      distanceKm: base.distanceKm === null ? null : Math.round(base.distanceKm * 10) / 10,
+      ruleConfigured: true,
+      freeShipping,
+      outOfRange,
+      maxRadiusKm,
+      freeAbove,
+    }
+  }
+
+  private async feeForRule(rule: DeliveryFeeRuleRow, address: string): Promise<CalculateDeliveryFeeResult> {
     // per_route_min/zones_min dependem de tempo de rota, que exige uma API de roteamento não
     // integrada ainda — cai para a taxa base até essa integração existir.
     if (rule.mode === 'per_route_min' || rule.mode === 'zones_min') {
@@ -63,7 +99,8 @@ export class CalculateDeliveryFeeUseCase {
     }
 
     const establishmentCoordinates = await this.botConfigRepository.getEstablishmentCoordinates()
-    const destination = await this.geocodingProvider.search(input.address)
+    // Mapa fora do ar não derruba o pedido: fica a taxa base.
+    const destination = await this.geocodingProvider.search(address).catch(() => null)
     if (!destination || (establishmentCoordinates.lat === 0 && establishmentCoordinates.lng === 0)) {
       return { feeAmount: rule.baseFee, distanceKm: null }
     }

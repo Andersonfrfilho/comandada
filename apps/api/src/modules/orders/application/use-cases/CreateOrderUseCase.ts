@@ -1,3 +1,4 @@
+import { nextOrderNumber } from '../../shared/orderNumber'
 import { and, eq, inArray } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
@@ -101,7 +102,7 @@ export class CreateOrderUseCase {
       ? input.delivery.feeAmount !== undefined
         ? { feeAmount: input.delivery.feeAmount, distanceKm: null }
         : this.calculateDeliveryFeeUseCase
-          ? await this.calculateDeliveryFeeUseCase.execute({ address: input.delivery.address })
+          ? await this.calculateDeliveryFeeUseCase.execute({ address: input.delivery.address, itemsTotal })
           : { feeAmount: 0, distanceKm: null }
       : null
     const deliveryFee = feeResult?.feeAmount ?? 0
@@ -109,6 +110,7 @@ export class CreateOrderUseCase {
 
     this.checkPayments(input.payments ?? [], totalAmount)
 
+    const number = await nextOrderNumber(this.db, input.establishmentId)
     const [order] = await this.db
       .insert(schema.orders)
       .values({
@@ -118,6 +120,7 @@ export class CreateOrderUseCase {
         channel: input.channel,
         type: input.type,
         status: 'received',
+        number,
         totalAmount: totalAmount.toFixed(2),
         deliveryFee: deliveryFee.toFixed(2),
         notes: input.notes ?? null,
@@ -194,6 +197,8 @@ export class CreateOrderUseCase {
     // Broadcast to all connected clients in this establishment
     await this.wsHub.publishBroadcast(input.establishmentId, WS_EVENTS.ORDER_CREATED, {
       orderId: order.id,
+      number: order.number,
+      paymentStatus: order.paymentStatus,
       type: order.type,
       channel: order.channel,
       status: order.status,

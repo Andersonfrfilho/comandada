@@ -9,6 +9,9 @@ import type { SelectOption } from '@/components/ui/Select'
 import { ScheduleStep } from './ScheduleStep'
 import { DeliveryStep, type SavedAddress } from './DeliveryStep'
 import { PaymentStep, type PaymentLeg } from './PaymentStep'
+import { DeliveryFeeBox, type DeliveryFeeQuote } from './DeliveryFeeBox'
+import { orderNumberLabel } from '@/lib/orderLabel'
+import { toast } from '@/stores/toastStore'
 
 interface Product {
   id: string
@@ -60,6 +63,7 @@ interface PaymentTypeRow {
 
 interface CreatedOrder {
   id: string
+  number?: number | null
 }
 
 interface OrderDeliveryDetail {
@@ -111,6 +115,10 @@ export function CreateOrderPage() {
   const [customerPhone, setCustomerPhone] = useState('')
   const [customerId, setCustomerId] = useState<string | null>(null)
   const [createdDelivery, setCreatedDelivery] = useState<OrderDeliveryDetail | null>(null)
+  // Taxa de entrega entra antes do pagamento: a atendente fala o total certo para o cliente.
+  const [deliveryFeeInput, setDeliveryFeeInput] = useState('')
+  const [feeQuote, setFeeQuote] = useState<DeliveryFeeQuote | null>(null)
+  const [quotingFee, setQuotingFee] = useState(false)
 
   const { data: menu } = useQuery({
     queryKey: ['menu'],
@@ -152,6 +160,7 @@ export function CreateOrderPage() {
     mutationFn: (body: unknown) => api.post<CreatedOrder>('/orders', body, accessToken ?? undefined),
     onSuccess: async (order) => {
       void queryClient.invalidateQueries({ queryKey: ['orders'] })
+      toast.success(`Pedido ${orderNumberLabel(order)} criado`)
       if (orderType === 'delivery') {
         const fullOrder = await api.get<OrderWithDelivery>(`/orders/${order.id}`, accessToken ?? undefined)
         const delivery = fullOrder.delivery?.[0]
@@ -194,7 +203,9 @@ export function CreateOrderPage() {
     setCart((prev) => prev.map((i) => i.productId === productId ? { ...i, notes } : i))
   }
 
-  const total = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const itemsTotal = cart.reduce((s, i) => s + i.unitPrice * i.quantity, 0)
+  const deliveryFee = orderType === 'delivery' ? Math.max(0, Number(deliveryFeeInput.replace(',', '.')) || 0) : 0
+  const total = Math.round((itemsTotal + deliveryFee) * 100) / 100
   const paymentsSum = payments.reduce((s, leg) => s + (Number(leg.amount) || 0), 0)
   const paymentsBalanced = Math.abs(paymentsSum - total) < 0.01
   const paymentsValid =
@@ -219,14 +230,50 @@ export function CreateOrderPage() {
     ? ['type', 'menu', 'schedule', 'delivery', 'payment', 'confirm']
     : ['type', 'menu', 'schedule', 'payment', 'confirm']
 
-  function goNext() {
+  async function quoteDeliveryFee(): Promise<number> {
+    setQuotingFee(true)
+    try {
+      const quote = await api.post<DeliveryFeeQuote>(
+        '/orders/delivery-fee/quote',
+        { address: [deliveryAddress, deliveryComplement].filter(Boolean).join(', '), itemsTotal },
+        accessToken ?? undefined
+      )
+      setFeeQuote(quote)
+      setDeliveryFeeInput(quote.feeAmount.toFixed(2))
+      return quote.feeAmount
+    } catch {
+      // Sem cotação, a atendente digita a taxa.
+      setFeeQuote(null)
+      return deliveryFee
+    } finally {
+      setQuotingFee(false)
+    }
+  }
+
+  async function goNext() {
     const idx = steps.indexOf(step)
     const next = steps[idx + 1]
     if (!next) return
-    if (next === 'payment' && payments.length === 0) {
-      setPayments([{ id: crypto.randomUUID(), paymentTypeName: '', amount: total.toFixed(2), changeFor: '', splitLabel: '' }])
+    let fee = deliveryFee
+    if (step === 'delivery') fee = await quoteDeliveryFee()
+    if (next === 'payment') {
+      const amount = (itemsTotal + (orderType === 'delivery' ? fee : 0)).toFixed(2)
+      // Uma parte só acompanha o total (com a taxa); dividido, a atendente ajusta.
+      if (payments.length === 0) {
+        setPayments([{ id: crypto.randomUUID(), paymentTypeName: '', amount, changeFor: '', splitLabel: '' }])
+      } else if (payments.length === 1) {
+        setPayments((current) => current.map((leg) => ({ ...leg, amount })))
+      }
     }
     setStep(next)
+  }
+
+  function changeDeliveryFee(value: string) {
+    setDeliveryFeeInput(value)
+    const fee = Math.max(0, Number(value.replace(',', '.')) || 0)
+    if (payments.length === 1) {
+      setPayments((current) => current.map((leg) => ({ ...leg, amount: (itemsTotal + fee).toFixed(2) })))
+    }
   }
 
   function goBack() {
@@ -262,7 +309,13 @@ export function CreateOrderPage() {
       ...(customerDocument ? { customerDocument } : {}),
       ...(customerId ? { customerId } : {}),
       ...(orderType === 'delivery'
-        ? { delivery: { address: deliveryAddress, ...(deliveryComplement ? { complement: deliveryComplement } : {}) } }
+        ? {
+            delivery: {
+              address: deliveryAddress,
+              ...(deliveryComplement ? { complement: deliveryComplement } : {}),
+              feeAmount: deliveryFee,
+            },
+          }
         : {}),
     }
     mutation.mutate(body)
@@ -447,7 +500,7 @@ export function CreateOrderPage() {
 
             <div className="mt-6 flex justify-end">
               <button
-                onClick={goNext}
+                onClick={() => void goNext()}
                 disabled={orderType === 'table' && (!selectedTable || !selectedTable.comanda)}
                 className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-95"
               >
@@ -621,10 +674,10 @@ export function CreateOrderPage() {
               <div className="px-4 py-3 border-t border-gray-100 flex-shrink-0">
                 <div className="flex items-center justify-between mb-3">
                   <span className="text-sm text-gray-600">Total</span>
-                  <span className="text-base font-bold text-gray-900">{formatBRL(total)}</span>
+                  <span className="text-base font-bold text-gray-900">{formatBRL(itemsTotal)}</span>
                 </div>
                 <button
-                  onClick={goNext}
+                  onClick={() => void goNext()}
                   disabled={cart.length === 0}
                   className="w-full py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-[0.98]"
                 >
@@ -646,7 +699,7 @@ export function CreateOrderPage() {
             />
             <div className="px-6 pb-6">
               <button
-                onClick={goNext}
+                onClick={() => void goNext()}
                 disabled={isScheduled && scheduledFor.length === 0}
                 className="w-full py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-[0.98]"
               >
@@ -668,8 +721,8 @@ export function CreateOrderPage() {
             />
             <div className="px-6 pb-6">
               <button
-                onClick={goNext}
-                disabled={deliveryAddress.trim().length === 0}
+                onClick={() => void goNext()}
+                disabled={deliveryAddress.trim().length === 0 || quotingFee}
                 className="w-full py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-[0.98]"
               >
                 Continuar →
@@ -681,6 +734,14 @@ export function CreateOrderPage() {
         {/* Step: pagamento */}
         {step === 'payment' && (
           <>
+            {orderType === 'delivery' && (
+              <DeliveryFeeBox
+                quote={feeQuote}
+                value={deliveryFeeInput}
+                itemsTotal={itemsTotal}
+                onChange={changeDeliveryFee}
+              />
+            )}
             <PaymentStep
               payments={payments}
               total={total}
@@ -689,7 +750,7 @@ export function CreateOrderPage() {
             />
             <div className="px-6 pb-6">
               <button
-                onClick={goNext}
+                onClick={() => void goNext()}
                 disabled={!paymentsValid}
                 className="w-full py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-[0.98]"
               >
@@ -722,6 +783,18 @@ export function CreateOrderPage() {
                   </div>
                 ))}
               </div>
+              {orderType === 'delivery' && (
+                <div className="mt-3 pt-3 border-t border-gray-200 space-y-1 text-sm text-gray-600">
+                  <div className="flex items-center justify-between">
+                    <span>Itens</span>
+                    <span>{formatBRL(itemsTotal)}</span>
+                  </div>
+                  <div className="flex items-center justify-between">
+                    <span>Taxa de entrega</span>
+                    <span>{deliveryFee === 0 ? 'Grátis' : formatBRL(deliveryFee)}</span>
+                  </div>
+                </div>
+              )}
               <div className="mt-3 pt-3 border-t border-gray-200 flex items-center justify-between">
                 <span className="font-semibold text-gray-900">Total</span>
                 <span className="text-lg font-bold text-brand-600">{formatBRL(total)}</span>

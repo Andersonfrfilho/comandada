@@ -1,3 +1,4 @@
+import type { CalculateDeliveryFeeUseCase } from '@/modules/delivery/application/use-cases/CalculateDeliveryFeeUseCase'
 import { z } from 'zod'
 import type { RouteHandler } from '@/infra/http/router'
 import type { CreateOrderUseCase } from '../../application/use-cases/CreateOrderUseCase'
@@ -31,6 +32,13 @@ const orderPaymentSchema = z.object({
 const orderDeliverySchema = z.object({
   address: z.string().min(1).max(500),
   complement: z.string().max(255).optional(),
+  // Taxa conferida ou digitada pela atendente no passo do pagamento; sem ela a API calcula pela regra.
+  feeAmount: z.number().min(0).max(1000).optional(),
+})
+
+const feeQuoteSchema = z.object({
+  address: z.string().min(1).max(500),
+  itemsTotal: z.number().min(0).optional(),
 })
 
 const createOrderSchema = z.object({
@@ -110,8 +118,21 @@ export class OrderController {
     private readonly listOrdersUseCase: ListOrdersUseCase,
     private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase,
     private readonly getOrderRouteUseCase?: GetOrderRouteUseCase,
-    private readonly listItemSubstitutesUseCase?: ListOrderItemSubstitutesUseCase
+    private readonly listItemSubstitutesUseCase?: ListOrderItemSubstitutesUseCase,
+    private readonly calculateDeliveryFeeUseCase?: Pick<CalculateDeliveryFeeUseCase, 'quote'>
   ) {}
+
+  /** Taxa de entrega antes de fechar o pagamento, com frete grátis e raio da regra (as do bot). */
+  deliveryFeeQuote: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const parsed = feeQuoteSchema.safeParse(request.body)
+    if (!parsed.success) throw new ValidationError('Informe o endereço', parsed.error.flatten().fieldErrors)
+    if (!this.calculateDeliveryFeeUseCase) {
+      response.json({ feeAmount: 0, distanceKm: null, ruleConfigured: false, freeShipping: false, outOfRange: false, maxRadiusKm: null, freeAbove: null })
+      return
+    }
+    response.json(await this.calculateDeliveryFeeUseCase.quote(parsed.data))
+  }
 
   /** Produtos do mesmo tipo para oferecer no lugar de cada item, caso falte. */
   substitutes: RouteHandler = async (request, response) => {

@@ -28,6 +28,8 @@ import { MobileNav } from '@/components/layout/MobileNav'
 import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGuard'
 import { AccessDeniedBanner } from '@/components/layout/AccessDeniedBanner'
 import { PWAInstallBanner } from '@/components/pwa/PWAInstallBanner'
+import { Toaster } from '@/components/ui/Toaster'
+import { useOperationAlerts } from '@/hooks/useOperationAlerts'
 import { useEffect } from 'react'
 import { AppFooter } from '@/components/brand/AppFooter'
 import { useAuthStore } from '@/stores/authStore'
@@ -40,6 +42,7 @@ import { useBrandingStore } from '@/stores/brandingStore'
 // empurra o rodapé para o fim da tela quando a página tem pouco conteúdo; com conteúdo longo, ele
 // fica depois do conteúdo, como antes.
 function AppLayout() {
+  useOperationAlerts()
   return (
     <div className="flex h-screen overflow-hidden">
       <MobileNav />
@@ -245,6 +248,7 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
       <PWAInstallBanner />
+      <Toaster />
     </BrowserRouter>
   )
 }

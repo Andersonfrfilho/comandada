@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { visibleSectionsFor } from '@/constants/navigation'
 import { BrandIdentity } from '@/components/brand/BrandIdentity'
 import { SyncStatusBadge } from '@/components/sync/SyncStatusBadge'
+import { AlertBadge, BrowserAlertsButton } from '@/components/layout/AlertBadge'
 
 const TRANSITION_MS = 200
 
@@ -39,7 +40,8 @@ export function MobileNav() {
   return (
     <>
       <header className="md:hidden fixed top-0 left-0 right-0 z-40 bg-gray-900 text-white flex items-center justify-between px-4 py-3">
-        <button onClick={() => setOpen(true)} className="p-1">
+        <button onClick={() => setOpen(true)} className="relative p-1" aria-label="Abrir menu">
+          <AlertBadge path="any" dot />
           <svg className="w-6 h-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M4 6h16M4 12h16M4 18h16" />
           </svg>
@@ -94,13 +96,15 @@ export function MobileNav() {
                       }
                     >
                       <item.icon className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
-                      <span>{item.label}</span>
+                      <span className="flex-1">{item.label}</span>
+                <AlertBadge path={item.to} />
                     </NavLink>
                   ))}
                 </div>
               ))}
             </nav>
             <div className="p-3 border-t border-gray-700 space-y-1">
+              <BrowserAlertsButton />
               <NavLink
                 to="/change-password"
                 onClick={() => setOpen(false)}

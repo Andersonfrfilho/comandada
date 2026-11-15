@@ -154,6 +154,7 @@ import { KitchenController } from '@/modules/kitchen/infra/http/KitchenControlle
 // Delivery
 import { GetDeliveryQueueUseCase } from '@/modules/delivery/application/use-cases/GetDeliveryQueueUseCase'
 import { UpdateDeliveryStatusUseCase } from '@/modules/delivery/application/use-cases/UpdateDeliveryStatusUseCase'
+import { AssignDelivererUseCase } from '@/modules/delivery/application/use-cases/AssignDelivererUseCase'
 import { DeliveryController } from '@/modules/delivery/infra/http/DeliveryController'
 
 // Cashier
@@ -420,7 +421,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     listOrdersUseCase,
     requestPartialOrderConfirmationUseCase,
     getOrderRouteUseCase,
-    new ListOrderItemSubstitutesUseCase(db)
+    new ListOrderItemSubstitutesUseCase(db),
+    calculateDeliveryFeeUseCase
   )
 
   // Kitchen
@@ -437,7 +439,9 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const updateDeliveryStatusUseCase = new UpdateDeliveryStatusUseCase(db, wsHub, updateOrderStatusUseCase)
   const deliveryController = new DeliveryController(
     getDeliveryQueueUseCase,
-    updateDeliveryStatusUseCase
+    updateDeliveryStatusUseCase,
+    new AssignDelivererUseCase(db, wsHub),
+    db
   )
 
   // Cashier
@@ -550,7 +554,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   })
   const botController = new BotController(
     getBotContextUseCase,
-    new SaveBotSessionUseCase(db),
+    new SaveBotSessionUseCase(db, wsHub),
     new CreateBotOrderUseCase(
       db,
       botCustomerService,

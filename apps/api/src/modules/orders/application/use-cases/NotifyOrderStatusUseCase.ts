@@ -1,3 +1,4 @@
+import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 
@@ -51,7 +52,7 @@ export class NotifyOrderStatusUseCase {
     })
     if (!order || order.channel !== 'whatsapp' || order.establishmentId !== params.establishmentId) return
     const whatsappNumber = order.customer?.whatsappNumber
-    const code = order.code ?? order.id.slice(0, 8).toUpperCase()
+    const code = orderDisplayCode(order)
     const body = buildOrderStatusMessage({ status: params.newStatus, type: order.type, code })
     const templateText = buildOrderStatusTemplateText({ status: params.newStatus, type: order.type })
     if (!whatsappNumber || !body) return

@@ -17,7 +17,10 @@ export class GetDeliveryQueueUseCase {
       with: { order: { with: { items: true, customer: true, payments: true } }, deliverer: true },
     })
 
-    return rows.map((delivery) => ({
+    // Pedido cancelado ou concluído não fica na fila (antes o entregador ainda conseguia "entregar").
+    return rows
+      .filter((delivery) => !['cancelled', 'completed'].includes(delivery.order.status))
+      .map((delivery) => ({
       ...delivery,
       order: {
         ...delivery.order,

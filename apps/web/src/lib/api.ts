@@ -50,6 +50,8 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   let response = await fetch(`${API_URL}${path}`, {
     ...fetchOptions,
     headers: buildHeaders(fetchOptions, token),
+  }).catch(() => {
+    throw new ApiError('Sem conexão com o servidor. Confira a internet e tente de novo.', 0, 'network_error')
   })
 
   // As próprias rotas de sessão não podem entrar no ciclo de renovação. Trocar senha entra: depois de
@@ -70,10 +72,16 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
     }
   }
 
-  const data = await response.json()
+  const data: unknown = await response.json().catch(() => null)
+  const body = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
 
   if (!response.ok) {
-    throw new ApiError(data.message ?? 'Request failed', response.status, data.error)
+    // Erro do servidor vem em inglês ("An internal error occurred"); a equipe precisa de uma frase que diga o que fazer.
+    const message =
+      response.status >= 500 || typeof body['message'] !== 'string'
+        ? 'Não deu certo agora. Tente de novo em instantes.'
+        : body['message']
+    throw new ApiError(message, response.status, typeof body['error'] === 'string' ? body['error'] : undefined)
   }
 
   return data as T

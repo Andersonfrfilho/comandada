@@ -38,7 +38,12 @@ export const MessagesConstants = {
     orderNotFound: 'Pedido não encontrado neste restaurante.',
   },
   delivery: {
-    notFound: 'Delivery not found',
+    notFound: 'Entrega não encontrada',
+    orderCancelled: 'Pedido cancelado',
+    failureReasonRequired: 'Diga o que aconteceu para marcar a entrega como não feita',
+    orderClosed: 'Este pedido já foi cancelado ou concluído',
+    invalidTransition: 'Esta entrega não pode mudar para esse status agora',
+    courierNotFound: 'Entregador não encontrado',
     alreadyAssigned: 'Order already has an active delivery',
   },
   product: {

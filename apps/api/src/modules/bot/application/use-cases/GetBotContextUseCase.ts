@@ -1,3 +1,4 @@
+import { orderBotCode } from '@/modules/orders/shared/orderNumber'
 import { and, asc, desc, eq, inArray, sql } from 'drizzle-orm'
 import { AUDIO_ORDERS_CONFIG_KEY } from '@/shared/constants/featureFlags.constant'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
@@ -263,7 +264,7 @@ export class GetBotContextUseCase {
     const suggestedTotal = substitutions.reduce((sum, substitution) => sum + substitution.suggested.price * substitution.quantity, 0)
     const roundCents = (value: number) => Math.round(value * 100) / 100
     return {
-      order_code: pending.order.code ?? pending.order.id.slice(0, 8).toUpperCase(),
+      order_code: orderBotCode(pending.order),
       unavailable: items.filter((item) => unavailableIds.includes(item.id)).map((item) => item.productName),
       // Com troca: total aceitando as sugestões. Sem troca: total sem os itens em falta.
       new_total: roundCents(remainingTotal + suggestedTotal + deliveryFee),
@@ -391,7 +392,7 @@ export class GetBotContextUseCase {
     return orders.map((order) => {
       const orderItems = items.filter((item) => item.orderId === order.id)
       return {
-        code: order.code ?? order.id.slice(0, 8).toUpperCase(),
+        code: orderBotCode(order),
         status: API_ORDER_STATUS_TO_BOT[order.status],
         order_type: API_ORDER_TYPE_TO_BOT[order.type],
         total: Number(order.totalAmount),

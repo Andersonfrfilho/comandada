@@ -53,6 +53,8 @@ export interface BotScheduleBooking {
 export interface CreateBotOrderResult {
   id: string
   code: string
+  /** Número curto (#123) que o painel e as próximas mensagens usam; o bot troca o código da confirmação por ele. */
+  number?: number | undefined
   // Absent when the estimate could not be computed; the order is saved either way.
   estimatedAt?: string | undefined
   estimatedMinutes?: number | undefined
@@ -95,6 +97,7 @@ export class CreateBotOrderUseCase {
       : undefined
 
     let orderId: string
+    let orderNumber: number | undefined
     try {
       const order = await this.createOrderUseCase.execute({
         establishmentId: params.establishmentId,
@@ -109,6 +112,7 @@ export class CreateBotOrderUseCase {
         scheduledFor: scheduledFor?.toISOString(),
       })
       orderId = order.id
+      orderNumber = order.number ?? undefined
     } catch (error) {
       if (booking) await this.releaseSlot({ establishmentId: params.establishmentId, bookingId: booking.bookingId })
       throw error
@@ -134,6 +138,7 @@ export class CreateBotOrderUseCase {
     return {
       id: orderId,
       code: params.code,
+      number: orderNumber,
       estimatedAt: estimate?.estimatedAt.toISOString(),
       estimatedMinutes: estimate?.minutes,
       payment,

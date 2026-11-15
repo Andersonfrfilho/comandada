@@ -21,7 +21,7 @@ export class ValidationError extends AppError {
 
 export class NotFoundError extends AppError {
   constructor(resource: string) {
-    super(`${resource} not found`, 'not_found', 404)
+    super(`Não encontrado: ${resource}`, 'not_found', 404)
     this.name = 'NotFoundError'
   }
 }

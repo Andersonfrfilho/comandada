@@ -1,9 +1,10 @@
 import React from 'react'
 import ReactDOM from 'react-dom/client'
-import { QueryClient, QueryClientProvider, QueryCache } from '@tanstack/react-query'
+import { QueryClient, QueryClientProvider, QueryCache, MutationCache } from '@tanstack/react-query'
 import App from './App'
 import { ApiError } from '@/lib/api'
 import { useAccessDeniedStore } from '@/stores/accessDeniedStore'
+import { toast } from '@/stores/toastStore'
 import './index.css'
 
 const FORBIDDEN = 403
@@ -20,6 +21,14 @@ const queryClient = new QueryClient({
       if (error instanceof ApiError && error.status === FORBIDDEN) {
         useAccessDeniedStore.getState().deny()
       }
+    },
+  }),
+  // Toda ação que falha avisa (antes cozinha, pedidos, entregas e caixa engoliam 400/500 e o botão
+  // "não fazia nada"). Tela que trata o erro do próprio jeito declara `onError` e fica de fora.
+  mutationCache: new MutationCache({
+    onError: (error, _variables, _context, mutation) => {
+      if (mutation.options.onError) return
+      toast.error(error instanceof Error && error.message ? error.message : 'Não deu certo. Tente de novo.')
     },
   }),
   defaultOptions: {

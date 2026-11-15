@@ -1,3 +1,4 @@
+import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { and, desc, eq, inArray } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
@@ -96,7 +97,7 @@ export class AnswerPartialConfirmationUseCase {
     if (!pending) throw new NotFoundError('PartialConfirmation')
 
     const { confirmation, order } = pending
-    const orderCode = order.code ?? order.id.slice(0, 8).toUpperCase()
+    const orderCode = orderDisplayCode(order)
     const now = new Date()
 
     const decline = async (): Promise<AnswerPartialConfirmationResult> => {
