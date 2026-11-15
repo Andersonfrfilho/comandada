@@ -974,6 +974,22 @@ function moreItemsButtons(body: string): ButtonMessage {
   return { type: 'buttons', body, buttons };
 }
 
+const COMPLEMENT_NONE_ID = 'sem complemento';
+const ADDRESS_FIX_ID = 'endereco:corrigir';
+
+// Pergunta do complemento com botões. body: o endereço anotado vai junto quando não precisa de prévia do link.
+function complementButtons(body?: string): ButtonMessage {
+  return {
+    type: 'buttons',
+    body: (body ? body + '\n\n' : '') + MessagesConstants.COMPLEMENTO_PERGUNTA,
+    buttons: [
+      { id: COMPLEMENT_NONE_ID, title: MessagesConstants.COMPLEMENTO_SEM },
+      { id: ADDRESS_FIX_ID, title: MessagesConstants.COMPLEMENTO_CORRIGIR },
+      { id: MENU_BACK_ID, title: MessagesConstants.COMPLEMENTO_VOLTAR },
+    ],
+  };
+}
+
 function locationMsg(lat: number, lng: number, name: string, address: string): LocationMessage {
   return { type: 'location', latitude: lat, longitude: lng, name: name || MessagesConstants.ENDERECO_ENTREGA_TITULO, address: address || '' };
 }

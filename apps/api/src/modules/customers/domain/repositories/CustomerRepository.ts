@@ -3,6 +3,7 @@ import type { Customer, Order } from '@/infra/database/schema'
 export interface CustomerWithStats extends Customer {
   orderCount: number
   totalSpent: string
+  averageTicket: string
   lastOrderAt: string | null
 }
 
@@ -36,8 +37,14 @@ export interface UpdateCustomerInput {
   rating?: number | null
 }
 
-export type CustomerSortField = 'name' | 'orderCount' | 'totalSpent' | 'createdAt'
+export const CUSTOMER_SORT_FIELDS = ['name', 'orderCount', 'totalSpent', 'averageTicket', 'lastOrderAt', 'createdAt'] as const
+export type CustomerSortField = (typeof CUSTOMER_SORT_FIELDS)[number]
 export type SortDirection = 'asc' | 'desc'
+
+// Recortes da lista de clientes. "inactive" = já comprou, mas não pede há CUSTOMER_INACTIVE_DAYS dias.
+export const CUSTOMER_SEGMENTS = ['with_orders', 'without_orders', 'inactive', 'birthday_month'] as const
+export type CustomerSegment = (typeof CUSTOMER_SEGMENTS)[number]
+export const CUSTOMER_INACTIVE_DAYS = 30
 
 export interface ListCustomersByEstablishmentParams {
   establishmentId: string
@@ -46,6 +53,8 @@ export interface ListCustomersByEstablishmentParams {
   search?: string
   sortBy?: CustomerSortField
   sortDirection?: SortDirection
+  segment?: CustomerSegment
+  minRating?: number
 }
 
 export interface CustomerRepository {

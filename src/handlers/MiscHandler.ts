@@ -48,7 +48,7 @@ class MiscHandler extends BaseHandler {
       if (texto === 'ok' || texto === 'nao' || texto === 'não' || texto === 'sem complemento') {
         newCart.complement = '';
       } else {
-        newCart.complement = texto.trim();
+        newCart.complement = rawText.trim();
       }
       newState = BotState.AWAITING_PAYMENT;
       respostas.push(paymentList(newCart.split_count));

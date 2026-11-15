@@ -4,12 +4,14 @@ import type { CreateOrderUseCase } from '../../application/use-cases/CreateOrder
 import type { UpdateOrderStatusUseCase } from '../../application/use-cases/UpdateOrderStatusUseCase'
 import type { UpdateOrderNotesUseCase } from '../../application/use-cases/UpdateOrderNotesUseCase'
 import type { GetOrderUseCase } from '../../application/use-cases/GetOrderUseCase'
-import type { ListOrdersUseCase } from '../../application/use-cases/ListOrdersUseCase'
+import { ORDER_SORT_FIELDS, type ListOrdersUseCase } from '../../application/use-cases/ListOrdersUseCase'
 import type { RequestPartialOrderConfirmationUseCase } from '../../application/use-cases/RequestPartialOrderConfirmationUseCase'
 import type { GetOrderRouteUseCase } from '../../application/use-cases/GetOrderRouteUseCase'
 import type { ListOrderItemSubstitutesUseCase } from '../../application/use-cases/ListOrderItemSubstitutesUseCase'
 import { ValidationError, UnauthorizedError } from '@/shared/errors/AppError'
 import { IfoodProvider } from '@/shared/providers/IfoodProvider'
+import { orderChannelEnum, orderStatusEnum, orderTypeEnum } from '@/infra/database/schema'
+import { parseAllowedList, parseDateParam, parsePageRequest, parseSortDirection, pickAllowed } from '@/shared/utils/listQuery'
 
 const orderItemSchema = z.object({
   productId: z.string().uuid().optional(),
@@ -125,17 +127,23 @@ export class OrderController {
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
-    const { status, type, channel, search, dateFrom, dateTo, page, pageSize } = request.query
+    const { status, type, channel, search, dateFrom, dateTo, sortBy, sortDirection } = request.query
+    const statuses = parseAllowedList(status, orderStatusEnum.enumValues)
+    const types = parseAllowedList(type, orderTypeEnum.enumValues)
+    const channels = parseAllowedList(channel, orderChannelEnum.enumValues)
+    const { page, pageSize } = parsePageRequest(request.query)
     const result = await this.listOrdersUseCase.execute({
       establishmentId: request.user.establishmentId,
-      statuses: status ? (status.split(',') as never) : undefined,
-      types: type ? (type.split(',') as never) : undefined,
-      channels: channel ? (channel.split(',') as never) : undefined,
-      search: search || undefined,
-      dateFrom: dateFrom ? new Date(dateFrom) : undefined,
-      dateTo: dateTo ? new Date(dateTo) : undefined,
-      page: page ? parseInt(page) : undefined,
-      pageSize: pageSize ? parseInt(pageSize) : undefined,
+      statuses: statuses.length ? statuses : undefined,
+      types: types.length ? types : undefined,
+      channels: channels.length ? channels : undefined,
+      search: search?.trim() || undefined,
+      dateFrom: parseDateParam(dateFrom),
+      dateTo: parseDateParam(dateTo, true),
+      page,
+      pageSize,
+      sortBy: pickAllowed(sortBy, ORDER_SORT_FIELDS),
+      sortDirection: parseSortDirection(sortDirection),
     })
     response.json(result)
   }

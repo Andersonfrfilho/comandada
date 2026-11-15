@@ -2,7 +2,7 @@ import { z } from 'zod'
 import type { RouteHandler } from '@/infra/http/router'
 import type { EmitFiscalDocumentUseCase } from '../../application/use-cases/EmitFiscalDocumentUseCase'
 import type { CancelFiscalDocumentUseCase } from '../../application/use-cases/CancelFiscalDocumentUseCase'
-import type { GetFiscalDocumentUseCase } from '../../application/use-cases/GetFiscalDocumentUseCase'
+import { FISCAL_DOCUMENT_SORT_FIELDS, type GetFiscalDocumentUseCase } from '../../application/use-cases/GetFiscalDocumentUseCase'
 import type { UpsertFiscalConfigUseCase } from '../../application/use-cases/UpsertFiscalConfigUseCase'
 import type { TestFiscalConnectionUseCase } from '../../application/use-cases/TestFiscalConnectionUseCase'
 import type { RetryFiscalDocumentUseCase } from '../../application/use-cases/RetryFiscalDocumentUseCase'
@@ -11,6 +11,8 @@ import type { GenerateFiscalPdfUseCase } from '../../application/use-cases/Gener
 import { buildFiscalConfigFromDb } from '../../application/use-cases/TestFiscalConnectionUseCase'
 import { verifyFiscalPublicToken } from '../../application/FiscalPublicToken'
 import { ValidationError, UnauthorizedError, UnprocessableError, NotFoundError } from '@/shared/errors/AppError'
+import { fiscalDocumentStatusEnum, fiscalModelEnum } from '@/infra/database/schema'
+import { parseAllowedList, parseDateParam, parsePageRequest, parseSortDirection, pickAllowed } from '@/shared/utils/listQuery'
 
 const upsertFiscalConfigSchema = z.object({
   model: z.enum(['sat', 'nfce', 'nfe', 'none']),
@@ -159,8 +161,19 @@ export class FiscalController {
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
-    const docs = await this.getUseCase.listByEstablishment(request.user.establishmentId)
-    response.json(docs)
+    const { status, model, search, dateFrom, dateTo, sortBy, sortDirection } = request.query
+    const result = await this.getUseCase.listByEstablishment({
+      establishmentId: request.user.establishmentId,
+      ...parsePageRequest(request.query),
+      statuses: parseAllowedList(status, fiscalDocumentStatusEnum.enumValues),
+      models: parseAllowedList(model, fiscalModelEnum.enumValues),
+      search: search?.trim() || undefined,
+      dateFrom: parseDateParam(dateFrom),
+      dateTo: parseDateParam(dateTo, true),
+      sortBy: pickAllowed(sortBy, FISCAL_DOCUMENT_SORT_FIELDS),
+      sortDirection: parseSortDirection(sortDirection),
+    })
+    response.json(result)
   }
 
   downloadPdf: RouteHandler = async (request, response) => {

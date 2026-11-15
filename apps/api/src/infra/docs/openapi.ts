@@ -221,14 +221,30 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
               schema: { $ref: '#/components/schemas/OrderChannel' },
             },
             {
-              name: 'from',
+              name: 'search',
+              in: 'query',
+              description: 'Nº do pedido, nome ou WhatsApp do cliente',
+              schema: { type: 'string' },
+            },
+            {
+              name: 'dateFrom',
               in: 'query',
               schema: { type: 'string', format: 'date' },
             },
             {
-              name: 'to',
+              name: 'dateTo',
               in: 'query',
               schema: { type: 'string', format: 'date' },
+            },
+            {
+              name: 'sortBy',
+              in: 'query',
+              schema: { type: 'string', enum: ['receivedAt', 'totalAmount'], default: 'receivedAt' },
+            },
+            {
+              name: 'sortDirection',
+              in: 'query',
+              schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' },
             },
           ],
           responses: {

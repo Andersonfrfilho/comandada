@@ -6,10 +6,10 @@ import type { CreateCustomerUseCase } from '../../application/use-cases/CreateCu
 import type { UpdateCustomerUseCase } from '../../application/use-cases/UpdateCustomerUseCase'
 import type { DeleteCustomerUseCase } from '../../application/use-cases/DeleteCustomerUseCase'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
+import { CUSTOMER_SEGMENTS, CUSTOMER_SORT_FIELDS } from '../../domain/repositories/CustomerRepository'
+import { parsePageRequest, parseSortDirection, pickAllowed } from '@/shared/utils/listQuery'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
-const CUSTOMER_SORT_FIELDS = ['name', 'orderCount', 'totalSpent', 'createdAt'] as const
-const SORT_DIRECTIONS = ['asc', 'desc'] as const
 
 const createSchema = z.object({
   name: z.string().min(2).max(255),
@@ -40,16 +40,21 @@ export class CustomerController {
 
   list: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
-    const { page, pageSize, search, sortBy, sortDirection } = request.query
-    const validSortBy = CUSTOMER_SORT_FIELDS.find((field) => field === sortBy)
-    const validSortDirection = SORT_DIRECTIONS.find((direction) => direction === sortDirection)
+    const { search, sortBy, sortDirection, segment, minRating } = request.query
+    const { page, pageSize } = parsePageRequest(request.query)
+    const validSortBy = pickAllowed(sortBy, CUSTOMER_SORT_FIELDS)
+    const validSortDirection = parseSortDirection(sortDirection)
+    const validSegment = pickAllowed(segment, CUSTOMER_SEGMENTS)
+    const parsedMinRating = minRating ? Number.parseInt(minRating, 10) : Number.NaN
     const result = await this.listCustomersUseCase.execute({
       establishmentId: request.user.establishmentId,
-      page: page ? parseInt(page) : 1,
-      pageSize: pageSize ? parseInt(pageSize) : 20,
-      ...(search ? { search } : {}),
+      page,
+      pageSize,
+      ...(search?.trim() ? { search: search.trim() } : {}),
       ...(validSortBy ? { sortBy: validSortBy } : {}),
       ...(validSortDirection ? { sortDirection: validSortDirection } : {}),
+      ...(validSegment ? { segment: validSegment } : {}),
+      ...(parsedMinRating >= 1 && parsedMinRating <= 5 ? { minRating: parsedMinRating } : {}),
     })
     response.json(result)
   }

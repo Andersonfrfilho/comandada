@@ -1,12 +1,15 @@
-import { and, desc, eq } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
 import * as schema from '@/infra/database/schema'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
+import { buildPageResult, parseAllowedList, parsePageRequest } from '@/shared/utils/listQuery'
 import type { CreateStockMovementUseCase } from '@/modules/products/application/use-cases/CreateStockMovementUseCase'
 
 type Database = NodePgDatabase<typeof schema>
+
+const STOCK_MOVEMENT_TYPES = ['in', 'out', 'adjustment', 'loss'] as const
 
 const createStockMovementSchema = z.object({
   ingredientId: z.string().uuid(),
@@ -50,30 +53,37 @@ export class StockMovementController {
     if (!request.user) throw new UnauthorizedError()
     const { establishmentId } = request.user
 
-    const ingredientId = (request as { query?: Record<string, string> }).query?.['ingredientId']
+    const ingredientId = request.query['ingredientId']
     if (!ingredientId) throw new ValidationError('Parâmetro ingredientId é obrigatório')
 
-    const movements = await this.db
-      .select({
-        id: schema.stockMovements.id,
-        movementType: schema.stockMovements.movementType,
-        quantity: schema.stockMovements.quantity,
-        reason: schema.stockMovements.reason,
-        userName: schema.users.name,
-        orderId: schema.stockMovements.orderId,
-        createdAt: schema.stockMovements.createdAt,
-      })
-      .from(schema.stockMovements)
-      .leftJoin(schema.users, eq(schema.stockMovements.userId, schema.users.id))
-      .where(
-        and(
-          eq(schema.stockMovements.establishmentId, establishmentId),
-          eq(schema.stockMovements.ingredientId, ingredientId)
-        )
-      )
-      .orderBy(desc(schema.stockMovements.createdAt))
-      .limit(50)
+    const pageRequest = parsePageRequest(request.query)
+    const movementTypes = parseAllowedList(request.query['movementType'], STOCK_MOVEMENT_TYPES)
+    const where = and(
+      eq(schema.stockMovements.establishmentId, establishmentId),
+      eq(schema.stockMovements.ingredientId, ingredientId),
+      movementTypes.length ? inArray(schema.stockMovements.movementType, movementTypes) : undefined
+    )
 
-    response.json(movements)
+    const [movements, [totalRow]] = await Promise.all([
+      this.db
+        .select({
+          id: schema.stockMovements.id,
+          movementType: schema.stockMovements.movementType,
+          quantity: schema.stockMovements.quantity,
+          reason: schema.stockMovements.reason,
+          userName: schema.users.name,
+          orderId: schema.stockMovements.orderId,
+          createdAt: schema.stockMovements.createdAt,
+        })
+        .from(schema.stockMovements)
+        .leftJoin(schema.users, eq(schema.stockMovements.userId, schema.users.id))
+        .where(where)
+        .orderBy(desc(schema.stockMovements.createdAt), asc(schema.stockMovements.id))
+        .limit(pageRequest.pageSize)
+        .offset(pageRequest.offset),
+      this.db.select({ total: count() }).from(schema.stockMovements).where(where),
+    ])
+
+    response.json(buildPageResult(movements, totalRow?.total ?? 0, pageRequest))
   }
 }
