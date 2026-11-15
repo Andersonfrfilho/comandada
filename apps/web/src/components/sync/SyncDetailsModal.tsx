@@ -1,9 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/Modal'
-import { ROLES } from '@/constants/navigation'
 import { SYNC_LABELS, SYNC_TABLE_LABELS } from '@/constants/syncLabels'
 import { api } from '@/lib/api'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore, useCan } from '@/stores/authStore'
 import type { SyncStatus } from './useSyncStatus'
 
 interface SyncConflict {
@@ -32,8 +31,7 @@ function formatDateTime(value: string | null | undefined): string {
 
 export function SyncDetailsModal({ open, onClose, status }: SyncDetailsModalProps) {
   const accessToken = useAuthStore((state) => state.accessToken) ?? undefined
-  const role = useAuthStore((state) => state.user?.role)
-  const canResolve = role === ROLES.ADMIN || role === ROLES.MANAGER
+  const canResolve = useCan({ resource: 'settings', action: 'write' })
   const queryClient = useQueryClient()
 
   const { data: conflicts } = useQuery({

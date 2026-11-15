@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { fileURLToPath } from 'node:url'
+import { sql } from 'drizzle-orm'
 import { db } from '../connection'
 import * as schema from '../schema'
 
@@ -53,6 +56,10 @@ const ROLE_PERMISSIONS = [
   { roleId: ROLE_IDS.gerente, resource: 'users', action: 'write' },
 ]
 
+const DERIVED_PERMISSIONS_SQL_PATH = fileURLToPath(
+  new URL('../../../../drizzle/migrations/0048_customers_fiscal_permissions.sql', import.meta.url)
+)
+
 // Permissions have no unique constraint besides `id`. Assign deterministic ids
 // (derived from array position) so onConflictDoNothing() actually dedupes on re-run —
 // with a random default id, every `make hub-seed` re-run would duplicate every row.
@@ -76,4 +83,7 @@ export async function seedRolesAndPermissions(establishmentId: string): Promise<
     ...permission,
   }))
   await db.insert(schema.permissions).values(permissions).onConflictDoNothing()
+
+  // Clientes e notas fiscais: mesmo SQL da migration 0048 (idempotente), derivado das permissões acima.
+  await db.execute(sql.raw(readFileSync(DERIVED_PERMISSIONS_SQL_PATH, 'utf8')))
 }

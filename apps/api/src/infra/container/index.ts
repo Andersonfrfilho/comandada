@@ -59,6 +59,7 @@ import { TableController } from '@/modules/tables/infra/http/TableController'
 // Staff
 import { DrizzleStaffRepository } from '@/modules/users/infra/repositories/DrizzleStaffRepository'
 import { ListStaffUseCase } from '@/modules/users/application/use-cases/ListStaffUseCase'
+import { StaffAccessPolicy } from '@/modules/users/application/StaffAccessPolicy'
 import { CreateStaffUseCase } from '@/modules/users/application/use-cases/CreateStaffUseCase'
 import { UpdateStaffUseCase } from '@/modules/users/application/use-cases/UpdateStaffUseCase'
 import { DeleteStaffUseCase } from '@/modules/users/application/use-cases/DeleteStaffUseCase'
@@ -674,10 +675,11 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   // Staff
   const staffRepository = new DrizzleStaffRepository(db)
   const listStaffUseCase = new ListStaffUseCase(staffRepository)
-  const createStaffUseCase = new CreateStaffUseCase(staffRepository)
-  const updateStaffUseCase = new UpdateStaffUseCase(staffRepository)
-  const deleteStaffUseCase = new DeleteStaffUseCase(staffRepository)
-  const toggleStaffActiveUseCase = new ToggleStaffActiveUseCase(staffRepository)
+  const staffAccessPolicy = new StaffAccessPolicy(staffRepository)
+  const createStaffUseCase = new CreateStaffUseCase(staffRepository, staffAccessPolicy)
+  const updateStaffUseCase = new UpdateStaffUseCase(staffRepository, staffAccessPolicy)
+  const deleteStaffUseCase = new DeleteStaffUseCase(staffRepository, staffAccessPolicy)
+  const toggleStaffActiveUseCase = new ToggleStaffActiveUseCase(staffRepository, staffAccessPolicy)
   const resetStaffPasswordUseCase = new ResetStaffPasswordUseCase(staffRepository)
   const listRolesUseCase = new ListRolesUseCase(staffRepository)
   const staffController = new StaffController(

@@ -31,6 +31,8 @@ interface LoginOutput {
     role: string
     establishmentId: string
     passwordMustChange: boolean
+    /** As mesmas do token: o painel monta menu e telas a partir delas, não do nome do cargo. */
+    permissions: Array<{ resource: string; action: string }>
   }
 }
 
@@ -123,6 +125,7 @@ export class LoginUseCase {
         role: userWithRole.role.name,
         establishmentId: user.establishmentId,
         passwordMustChange: user.passwordMustChange,
+        permissions: permissions.map(({ resource, action }) => ({ resource, action })),
       },
     }
   }

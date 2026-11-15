@@ -14,7 +14,7 @@ export function MobileNav() {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
 
-  const sections = visibleSectionsFor(user?.role)
+  const sections = visibleSectionsFor(user?.permissions)
 
   useEffect(() => {
     if (open) {
@@ -100,7 +100,14 @@ export function MobileNav() {
                 </div>
               ))}
             </nav>
-            <div className="p-3 border-t border-gray-700">
+            <div className="p-3 border-t border-gray-700 space-y-1">
+              <NavLink
+                to="/change-password"
+                onClick={() => setOpen(false)}
+                className="block w-full px-3 py-2 text-left text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+              >
+                Trocar senha
+              </NavLink>
               <button
                 onClick={() => {
                   void logout()

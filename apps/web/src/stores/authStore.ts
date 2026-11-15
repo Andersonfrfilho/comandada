@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { api, configureAuthBridge } from '@/lib/api'
+import { hasPermission, permissionsFromAccessToken, type Permission, type RequiredPermission } from '@/lib/permissions'
 
 interface AuthUser {
   id: string
@@ -9,6 +10,7 @@ interface AuthUser {
   role: string
   establishmentId: string
   passwordMustChange: boolean
+  permissions: Permission[]
 }
 
 interface AuthState {
@@ -46,7 +48,7 @@ export const useAuthStore = create<AuthState>()(
       async login(email, password, remember = false) {
         const data = await api.post<LoginResponse>('/auth/login', { email, password })
         set({
-          user: data.user,
+          user: { ...data.user, permissions: data.user.permissions ?? permissionsFromAccessToken(data.accessToken) ?? [] },
           accessToken: data.accessToken,
           refreshToken: data.refreshToken,
           isAuthenticated: true,
@@ -88,7 +90,12 @@ export const useAuthStore = create<AuthState>()(
           if (!refreshToken) return false
           try {
             const data = await api.post<RefreshResponse>('/auth/refresh', { refreshToken })
-            set({ accessToken: data.accessToken, refreshToken: data.refreshToken })
+            const permissions = permissionsFromAccessToken(data.accessToken)
+            set((state) => ({
+              accessToken: data.accessToken,
+              refreshToken: data.refreshToken,
+              user: state.user && permissions ? { ...state.user, permissions } : state.user,
+            }))
             return true
           } catch {
             set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
@@ -107,6 +114,11 @@ export const useAuthStore = create<AuthState>()(
     }
   )
 )
+
+/** Se quem entrou pode fazer a ação; o menu, as rotas e os botões usam a mesma regra da API. */
+export function useCan(required: RequiredPermission): boolean {
+  return useAuthStore((state) => hasPermission(state.user?.permissions, required))
+}
 
 // Permite ao cliente HTTP renovar o token em qualquer 401 e, se a renovação
 // falhar, encerrar a sessão — sem isso a tela ficava vazia em silêncio, como se

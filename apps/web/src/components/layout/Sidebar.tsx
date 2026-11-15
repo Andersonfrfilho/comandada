@@ -8,7 +8,7 @@ export function Sidebar() {
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
 
-  const sections = visibleSectionsFor(user?.role)
+  const sections = visibleSectionsFor(user?.permissions)
 
   return (
     // `flex-shrink-0` para a coluna manter os 14rem quando o conteúdo ao lado é largo; sem ele o
@@ -47,7 +47,13 @@ export function Sidebar() {
         ))}
       </nav>
 
-      <div className="p-3 border-t border-gray-700">
+      <div className="p-3 border-t border-gray-700 space-y-1">
+        <NavLink
+          to="/change-password"
+          className="block w-full px-3 py-2 text-left text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"
+        >
+          Trocar senha
+        </NavLink>
         <button
           onClick={() => void logout()}
           className="w-full px-3 py-2 text-left text-sm text-gray-400 hover:text-white hover:bg-gray-800 rounded-lg transition-colors"

@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Copy, Check } from 'lucide-react'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore, useCan } from '@/stores/authStore'
 import { api } from '@/lib/api'
 
 interface PaymentAccount {
@@ -101,6 +101,9 @@ export function OnlinePaymentSettings() {
     setCopied(true)
     setTimeout(() => setCopied(false), 2000)
   }
+
+  // A conta que recebe o dinheiro fica com quem tem `settings:manage` (a API confere o mesmo).
+  const canManagePayments = useCan({ resource: 'settings', action: 'manage' })
 
   if (isLoading) return <p className="text-sm text-gray-500">Carregando…</p>
 
@@ -216,6 +219,11 @@ export function OnlinePaymentSettings() {
       </div>
 
       {error && <p className="text-sm text-red-600">{error}</p>}
+      {!canManagePayments ? (
+        <p className="rounded-lg bg-gray-50 px-3 py-2 text-sm text-gray-600">
+          Só quem administra o restaurante liga ou troca a conta do Mercado Pago, porque ela recebe o dinheiro.
+        </p>
+      ) : (
       <button
         type="button"
         onClick={() => {
@@ -227,6 +235,7 @@ export function OnlinePaymentSettings() {
       >
         {saveMutation.isPending ? 'Salvando…' : saved ? 'Salvo ✓' : 'Salvar'}
       </button>
+      )}
     </div>
   )
 }

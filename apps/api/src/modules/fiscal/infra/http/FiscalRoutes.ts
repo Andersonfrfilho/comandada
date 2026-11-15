@@ -11,7 +11,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.post(
     '/orders/:orderId/fiscal-document',
     authenticate,
-    authorize('orders', 'write'),
+    authorize('fiscal', 'write'),
     controller.emit
   )
 
@@ -19,7 +19,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.get(
     '/orders/:orderId/fiscal-document',
     authenticate,
-    authorize('orders', 'read'),
+    authorize('fiscal', 'read'),
     controller.getByOrder
   )
 
@@ -27,7 +27,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.get(
     '/fiscal-documents',
     authenticate,
-    authorize('orders', 'read'),
+    authorize('fiscal', 'read'),
     controller.list
   )
 
@@ -35,7 +35,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.post(
     '/orders/:orderId/fiscal-document/print',
     authenticate,
-    authorize('orders', 'write'),
+    authorize('fiscal', 'write'),
     controller.printCupom
   )
 
@@ -43,7 +43,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.post(
     '/fiscal-documents/:id/cancel',
     authenticate,
-    authorize('orders', 'write'),
+    authorize('fiscal', 'write'),
     controller.cancel
   )
 
@@ -51,7 +51,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.get(
     '/fiscal-documents/:id/xml',
     authenticate,
-    authorize('orders', 'read'),
+    authorize('fiscal', 'read'),
     controller.downloadXml
   )
 
@@ -59,7 +59,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.get(
     '/fiscal-documents/:id/pdf',
     authenticate,
-    authorize('orders', 'read'),
+    authorize('fiscal', 'read'),
     controller.downloadPdf
   )
 
@@ -91,7 +91,7 @@ export function registerFiscalRoutes(router: Router, controller: FiscalControlle
   router.post(
     '/fiscal-documents/:id/retry',
     authenticate,
-    authorize('orders', 'write'),
+    authorize('fiscal', 'write'),
     controller.retry
   )
 

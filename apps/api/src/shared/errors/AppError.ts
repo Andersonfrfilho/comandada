@@ -26,16 +26,23 @@ export class NotFoundError extends AppError {
   }
 }
 
+// Mensagens em português: o painel mostra `message` direto na tela.
+const UNAUTHORIZED_MESSAGES: Record<string, string> = {
+  invalid_credentials: 'E-mail ou senha incorretos',
+  missing_token: 'Entre no sistema para continuar',
+  invalid_token: 'Sua sessão expirou. Entre novamente.',
+}
+
 export class UnauthorizedError extends AppError {
   constructor(code = 'unauthorized') {
-    super('Authentication required', code, 401)
+    super(UNAUTHORIZED_MESSAGES[code] ?? 'Entre no sistema para continuar', code, 401)
     this.name = 'UnauthorizedError'
   }
 }
 
 export class ForbiddenError extends AppError {
-  constructor() {
-    super('Access denied', 'forbidden', 403)
+  constructor(message = 'Seu cargo não tem acesso a esta ação') {
+    super(message, 'forbidden', 403)
     this.name = 'ForbiddenError'
   }
 }

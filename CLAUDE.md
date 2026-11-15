@@ -294,6 +294,17 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - **Pedido do painel** (`POST /orders`): preço e nome vêm do cardápio (`priceFromCatalog`), pagamento não passa do total,
   "troco para" ≥ valor da parte e agendamento não fica no passado. iFood mantém o preço dele.
 
+## Permissões (painel = API)
+
+- O painel decide menu, rotas e botões pelas **permissões** do usuário (recurso + ação, as mesmas do `authorize` da
+  API), nunca pelo nome do cargo: `constants/navigation.ts` (cada item tem `permission`), `PermissionGate`,
+  `useCan`. As permissões vêm no login e são relidas do access token a cada renovação. Tela inicial: Dashboard para
+  quem tem `reports:read`; senão a primeira tela do menu do cargo (`homePathFor`).
+- `customers` e `fiscal` são recursos próprios (migration `0048`): clientes para quem lança pedido, notas para quem
+  lança pedido ou mexe no caixa. Cozinha e entregador não leem dados de cliente nem notas.
+- Equipe (`StaffAccessPolicy`): ninguém dá cargo com permissão que não tem, nem mexe em quem tem mais acesso.
+  Conta do Mercado Pago exige `settings:manage` (administrador); o resto das Configurações, `settings:write`.
+
 ## Agenda (encomendas e reservas)
 
 `@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.

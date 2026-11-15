@@ -25,10 +25,9 @@ import { ComandaConfirmPage } from '@/pages/comanda/ComandaConfirmPage'
 import { CustomerInvoicePage } from '@/pages/public/CustomerInvoicePage'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
-import { AuthGuard, RoleGuard } from '@/components/layout/RoleGuard'
+import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGuard'
 import { AccessDeniedBanner } from '@/components/layout/AccessDeniedBanner'
 import { PWAInstallBanner } from '@/components/pwa/PWAInstallBanner'
-import { ROLES } from '@/constants/navigation'
 import { useEffect } from 'react'
 import { AppFooter } from '@/components/brand/AppFooter'
 import { useAuthStore } from '@/stores/authStore'
@@ -84,157 +83,157 @@ export default function App() {
             </AuthGuard>
           }
         >
-          <Route path="/" element={<DashboardPage />} />
+          <Route path="/" element={<HomeRoute dashboard={<DashboardPage />} />} />
           <Route
             path="/kitchen"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.KITCHEN]}>
+              <PermissionGate>
                 <KitchenPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/delivery"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.DELIVERY]}>
+              <PermissionGate>
                 <DeliveryPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/cashier"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER]}>
+              <PermissionGate>
                 <CashierPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/orders"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <OrdersPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/agenda"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <AgendaPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/orders/new"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <CreateOrderPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/orders/:id"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <OrderDetailPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/conversations"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <ConversationsPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/documents"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <DocumentsPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/messages"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <MessagesPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/fiscal"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.CASHIER]}>
+              <PermissionGate>
                 <FiscalDocumentsPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/tables"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER, ROLES.ATTENDANT]}>
+              <PermissionGate>
                 <TablesPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/customers"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <CustomersPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/staff"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <StaffPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/roles"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <RolesPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/catalog"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <CatalogPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/reports"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <ReportsPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/settings"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <SettingsPage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
           <Route
             path="/finance"
             element={
-              <RoleGuard allowedRoles={[ROLES.ADMIN, ROLES.MANAGER]}>
+              <PermissionGate>
                 <FinancePage />
-              </RoleGuard>
+              </PermissionGate>
             }
           />
         </Route>
