@@ -54,43 +54,53 @@ export function OrderProgressBar({ type, status, statusLogs, variant = 'full' }:
     )
   }
 
+  // `isolate` cria o contexto de empilhamento: sem ele a linha (-z-10) ia para trás do fundo branco do card
+  // e o stepper aparecia só como números soltos.
   return (
-    <div className="flex items-start">
+    <ol className="flex items-start isolate" aria-label="Andamento do pedido">
       {steps.map((step, index) => {
         const isCompleted = index < currentIndex
         const isCurrent = index === currentIndex
         const time = findStepTime(statusLogs, step)
         return (
-          <div key={step} className="flex-1 flex flex-col items-center relative">
+          <li
+            key={step}
+            className="flex-1 flex flex-col items-center relative min-w-0"
+            aria-current={isCurrent ? 'step' : undefined}
+          >
             {index > 0 && (
               <div
-                className={`absolute top-3 left-[-50%] w-full h-0.5 -z-10 transition-colors duration-700 ${
+                className={`absolute top-4 left-[-50%] w-full h-1 -z-10 rounded-full transition-colors duration-700 ${
                   isCompleted || isCurrent ? 'bg-brand-500' : 'bg-gray-200'
                 }`}
               />
             )}
             <div
-              className={`flex items-center justify-center w-6 h-6 rounded-full text-[10px] font-bold flex-shrink-0 transition-colors duration-500 ${
+              className={`flex items-center justify-center w-8 h-8 rounded-full text-xs font-bold flex-shrink-0 transition-colors duration-500 ${
                 isCompleted
                   ? 'bg-brand-500 text-white'
                   : isCurrent
-                    ? 'bg-brand-500 text-white animate-pulse ring-4 ring-brand-100'
-                    : 'bg-gray-100 text-gray-400 border border-gray-300'
+                    ? 'bg-brand-600 text-white ring-4 ring-brand-100 shadow-sm'
+                    : 'bg-white text-gray-400 border-2 border-gray-200'
               }`}
             >
-              {isCompleted ? <Check className="h-3.5 w-3.5" /> : index + 1}
+              {isCompleted ? <Check className="h-4 w-4" strokeWidth={3} /> : index + 1}
             </div>
             <span
-              className={`mt-1.5 text-[11px] text-center leading-tight px-1 ${
-                isCurrent ? 'text-gray-900 font-semibold' : isCompleted ? 'text-gray-600' : 'text-gray-400'
+              className={`mt-2 text-[11px] sm:text-xs text-center leading-tight px-0.5 ${
+                isCurrent ? 'text-brand-700 font-semibold' : isCompleted ? 'text-gray-700 font-medium' : 'text-gray-400'
               }`}
             >
               {ORDER_STATUS_LABELS[step]}
             </span>
-            {time && <span className="text-[10px] text-gray-400">{time}</span>}
-          </div>
+            {time ? (
+              <span className={`text-[10px] sm:text-[11px] ${isCurrent ? 'text-brand-600' : 'text-gray-400'}`}>{time}</span>
+            ) : (
+              isCurrent && <span className="text-[10px] sm:text-[11px] text-brand-600">agora</span>
+            )}
+          </li>
         )
       })}
-    </div>
+    </ol>
   )
 }

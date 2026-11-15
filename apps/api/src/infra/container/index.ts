@@ -79,6 +79,8 @@ import { UpdateOrderStatusUseCase } from '@/modules/orders/application/use-cases
 import { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/use-cases/TriggerFiscalEmissionUseCase'
 import { UpdateOrderNotesUseCase } from '@/modules/orders/application/use-cases/UpdateOrderNotesUseCase'
 import { GetOrderUseCase } from '@/modules/orders/application/use-cases/GetOrderUseCase'
+import { GetOrderRouteUseCase } from '@/modules/orders/application/use-cases/GetOrderRouteUseCase'
+import { OsrmRoutingProviderImplementation } from '@/infra/geocoding/OsrmRoutingProviderImplementation'
 import { ListOrdersUseCase } from '@/modules/orders/application/use-cases/ListOrdersUseCase'
 import { OrderController } from '@/modules/orders/infra/http/OrderController'
 import { RequestPartialOrderConfirmationUseCase } from '@/modules/orders/application/use-cases/RequestPartialOrderConfirmationUseCase'
@@ -372,6 +374,12 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const createOrderUseCase = new CreateOrderUseCase(db, wsHub, calculateDeliveryFeeUseCase)
   const updateOrderNotesUseCase = new UpdateOrderNotesUseCase(db)
   const getOrderUseCase = new GetOrderUseCase(db)
+  const getOrderRouteUseCase = new GetOrderRouteUseCase(
+    db,
+    new EstablishmentLocationService(db, new NominatimProvider()),
+    new NominatimProvider(),
+    new OsrmRoutingProviderImplementation()
+  )
   const listOrdersUseCase = new ListOrdersUseCase(db)
   const listPaymentTypesUseCase = new ListPaymentTypesUseCase(botConfigRepository)
   const listOrderTypesUseCase = new ListOrderTypesUseCase(botConfigRepository)
@@ -391,7 +399,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     updateOrderNotesUseCase,
     getOrderUseCase,
     listOrdersUseCase,
-    requestPartialOrderConfirmationUseCase
+    requestPartialOrderConfirmationUseCase,
+    getOrderRouteUseCase
   )
 
   // Kitchen

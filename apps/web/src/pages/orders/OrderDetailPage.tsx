@@ -10,12 +10,14 @@ import {
   type OrderStatus,
 } from '@/constants/orderLabels'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { ArrowLeft, MessageCircle } from 'lucide-react'
+import { ArrowLeft, MessageCircle, Phone, StickyNote } from 'lucide-react'
 import { buildConversationLink } from '@/constants/conversationLinks'
 import { CONVERSATION_LINK_LABEL } from '@/constants/partialConfirmation'
 import { OrderProgressBar } from './OrderProgressBar'
 import { OrderPartialConfirmation } from './OrderPartialConfirmation'
 import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import { OrderDeliveryCard } from './OrderDeliveryCard'
+import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
 
 /** Pedido encerrado não negocia mais itens com o cliente — a API recusa, a tela nem oferece. */
 const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['completed', 'cancelled']
@@ -67,6 +69,7 @@ interface OrderDetail {
   type: string
   status: OrderStatus
   totalAmount: string
+  deliveryFee?: string | null
   notes: string | null
   receivedAt: string
   scheduledFor: string | null
@@ -99,6 +102,9 @@ export function OrderDetailPage() {
     queryFn: () => api.get<OrderDetail>(`/orders/${id}`, accessToken ?? undefined),
     enabled: Boolean(id),
   })
+
+  // O link do mapa antigo ("Localização: https://maps…") vira o mapa da entrega, não observação.
+  const visibleNotes = splitLocationNote(order?.notes).notes
 
   return (
     <div className="p-4 md:p-6 max-w-3xl mx-auto">
@@ -136,7 +142,7 @@ export function OrderDetailPage() {
                 </span>
               </div>
               <span className="text-lg font-bold text-gray-900">
-                R$ {parseFloat(order.totalAmount).toFixed(2)}
+                {formatBrl(order.totalAmount)}
               </span>
             </div>
               {order.scheduledFor && (
@@ -165,9 +171,18 @@ export function OrderDetailPage() {
             </p>
             {order.customer && (
               <div className="mt-2 flex flex-wrap items-center justify-between gap-2">
-                <p className="text-sm text-gray-600">
-                  {order.customer.name} · {order.customer.whatsappNumber}
-                </p>
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-gray-900">{order.customer.name}</p>
+                  {order.customer.whatsappNumber && (
+                    <a
+                      href={`tel:+${order.customer.whatsappNumber.replace(/\D/g, '')}`}
+                      className="inline-flex items-center gap-1 text-xs text-gray-500 hover:text-gray-700"
+                    >
+                      <Phone className="h-3 w-3" />
+                      {formatPhoneBr(order.customer.whatsappNumber)}
+                    </a>
+                  )}
+                </div>
                 {order.customer.whatsappNumber && (
                   <Link
                     to={buildConversationLink(order.customer.whatsappNumber)}
@@ -179,9 +194,10 @@ export function OrderDetailPage() {
                 )}
               </div>
             )}
-            {order.notes && (
-              <p className="text-xs text-amber-700 bg-amber-50 rounded px-2 py-1 mt-2 italic">
-                📝 {order.notes}
+            {visibleNotes && (
+              <p className="mt-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
+                <StickyNote className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                <span className="whitespace-pre-line">{visibleNotes}</span>
               </p>
             )}
           </div>
@@ -197,6 +213,16 @@ export function OrderDetailPage() {
             </section>
           )}
 
+          {order.type === 'delivery' && order.delivery?.[0] && (
+            <OrderDeliveryCard
+              orderId={order.id}
+              address={order.delivery[0].addressSnapshot.address}
+              complement={order.delivery[0].addressSnapshot.complement}
+              feeAmount={order.delivery[0].feeAmount}
+              savedDistanceKm={order.delivery[0].distanceKm}
+            />
+          )}
+
           <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
             <h2 className="text-sm font-semibold text-gray-900 mb-3">Itens</h2>
             <div className="space-y-2">
@@ -204,14 +230,35 @@ export function OrderDetailPage() {
                 <div key={item.id} className="flex items-start justify-between text-sm">
                   <div>
                     <p className="text-gray-800">
-                      {item.quantity}× {item.productName}
+                      <span className="font-semibold">{item.quantity}×</span> {item.productName}
                     </p>
+                    {item.quantity > 1 && (
+                      <p className="text-xs text-gray-400">{formatBrl(item.unitPrice)} cada</p>
+                    )}
                     {item.notes && <p className="text-xs text-gray-400 italic">{item.notes}</p>}
                   </div>
-                  <span className="text-gray-600">R$ {parseFloat(item.totalPrice).toFixed(2)}</span>
+                  <span className="text-gray-600 whitespace-nowrap">{formatBrl(item.totalPrice)}</span>
                 </div>
               ))}
             </div>
+            <dl className="mt-3 space-y-1 border-t border-gray-100 pt-3 text-sm">
+              {parseFloat(order.deliveryFee ?? '0') > 0 && (
+                <>
+                  <div className="flex justify-between text-gray-500">
+                    <dt>Subtotal</dt>
+                    <dd>{formatBrl(parseFloat(order.totalAmount) - parseFloat(order.deliveryFee ?? '0'))}</dd>
+                  </div>
+                  <div className="flex justify-between text-gray-500">
+                    <dt>Taxa de entrega</dt>
+                    <dd>{formatBrl(order.deliveryFee)}</dd>
+                  </div>
+                </>
+              )}
+              <div className="flex justify-between font-semibold text-gray-900">
+                <dt>Total</dt>
+                <dd>{formatBrl(order.totalAmount)}</dd>
+              </div>
+            </dl>
           </section>
 
           {order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status) && (
@@ -232,7 +279,7 @@ export function OrderDetailPage() {
                       {paymentMethodLabel(payment.paymentTypeName)}
                       {payment.splitLabel ? ` · ${payment.splitLabel}` : ''}
                     </span>
-                    <span className="text-gray-600">R$ {parseFloat(payment.amount).toFixed(2)}</span>
+                    <span className="text-gray-600 whitespace-nowrap">{formatBrl(payment.amount)}</span>
                   </div>
                   {paymentChangeText(payment) && (
                     <p className="text-xs font-medium text-amber-700">{paymentChangeText(payment)}</p>
@@ -241,20 +288,6 @@ export function OrderDetailPage() {
               ))}
             </div>
           </section>
-
-          {order.type === 'delivery' && order.delivery?.[0] && (
-            <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
-              <h2 className="text-sm font-semibold text-gray-900 mb-3">Entrega</h2>
-              <p className="text-sm text-gray-800">{order.delivery[0].addressSnapshot.address}</p>
-              {order.delivery[0].addressSnapshot.complement && (
-                <p className="text-xs text-gray-500">{order.delivery[0].addressSnapshot.complement}</p>
-              )}
-              <p className="text-xs text-gray-400 mt-1">
-                Taxa: R$ {parseFloat(order.delivery[0].feeAmount).toFixed(2)}
-                {order.delivery[0].distanceKm ? ` · ${parseFloat(order.delivery[0].distanceKm).toFixed(1)} km` : ''}
-              </p>
-            </section>
-          )}
 
           {order.fiscalDocument && (
             <section className="bg-white rounded-xl shadow-sm p-4 mb-4">

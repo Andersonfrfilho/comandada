@@ -6,6 +6,7 @@ import type { UpdateOrderNotesUseCase } from '../../application/use-cases/Update
 import type { GetOrderUseCase } from '../../application/use-cases/GetOrderUseCase'
 import type { ListOrdersUseCase } from '../../application/use-cases/ListOrdersUseCase'
 import type { RequestPartialOrderConfirmationUseCase } from '../../application/use-cases/RequestPartialOrderConfirmationUseCase'
+import type { GetOrderRouteUseCase } from '../../application/use-cases/GetOrderRouteUseCase'
 import { ValidationError, UnauthorizedError } from '@/shared/errors/AppError'
 import { IfoodProvider } from '@/shared/providers/IfoodProvider'
 
@@ -100,7 +101,8 @@ export class OrderController {
     private readonly updateNotesUseCase: UpdateOrderNotesUseCase,
     private readonly getOrderUseCase: GetOrderUseCase,
     private readonly listOrdersUseCase: ListOrdersUseCase,
-    private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase
+    private readonly requestPartialConfirmationUseCase: RequestPartialOrderConfirmationUseCase,
+    private readonly getOrderRouteUseCase?: GetOrderRouteUseCase
   ) {}
 
   list: RouteHandler = async (request, response) => {
@@ -127,6 +129,17 @@ export class OrderController {
       request.user.establishmentId
     )
     response.json(order)
+  }
+
+  /** Distância, tempo e coordenadas do restaurante até o endereço de entrega (mapa do detalhe do pedido). */
+  route: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    if (!this.getOrderRouteUseCase) {
+      response.json({ origin: null, destination: null, distanceKm: null, durationMin: null, source: null })
+      return
+    }
+    const route = await this.getOrderRouteUseCase.execute(request.params['id']!, request.user.establishmentId)
+    response.json(route)
   }
 
   create: RouteHandler = async (request, response) => {

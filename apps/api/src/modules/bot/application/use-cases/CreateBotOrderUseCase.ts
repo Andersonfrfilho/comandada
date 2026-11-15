@@ -103,7 +103,8 @@ export class CreateBotOrderUseCase {
         type,
         items,
         payments: buildPayments({ params, items, deliveryFee }),
-        notes: params.mapsLink ? `Localização: ${params.mapsLink}` : undefined,
+        // O link do mapa é só o endereço em busca do Google Maps: o painel já monta o mapa a partir de
+        // `delivery.address`, então ele não vai mais para a observação do pedido.
         delivery: type === 'delivery' && params.address ? { address: params.address, feeAmount: deliveryFee } : undefined,
         scheduledFor: scheduledFor?.toISOString(),
       })
