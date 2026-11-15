@@ -44,6 +44,7 @@ const feeQuoteSchema = z.object({
 const createOrderSchema = z.object({
   customerId: z.string().uuid().optional(),
   tableId: z.string().uuid().optional(),
+  comandaId: z.string().uuid().optional(),
   channel: z.enum(['whatsapp', 'ifood', 'manual']),
   type: z.enum(['delivery', 'pickup', 'table']),
   items: z.array(orderItemSchema).min(1),

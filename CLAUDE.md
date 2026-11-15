@@ -315,6 +315,16 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
   "não entregue" exige motivo; entregador é escolhido em Entregas (`PATCH /delivery/:id/assign`).
 - **Taxa no pedido do painel:** `POST /orders/delivery-fee/quote` mostra a taxa antes do pagamento; atendente pode ajustar (`feeAmount`).
 
+## Conta da mesa
+
+- Pedido de mesa entra na comanda aberta (`orders.comanda_id`; painel escolhe a comanda, sem comanda recusa com
+  `table_comanda_required`; bot sem comanda segue sem). Pedido de mesa no painel não passa por pagamento: paga na conta.
+- `GET /comandas/:id/bill` (consumo, pago, a receber), `POST /comandas/:id/settle` (`cashier:write`): partes do pagamento
+  repartidas pelos pedidos (`allocateComandaPayments`), cada parte vira lançamento no caixa ligado ao pedido, pedidos
+  abertos viram concluídos, comanda paga, mesa livre. Precisa de caixa aberto.
+- `PATCH /comandas/:id/close` só encerra sem nada a receber; comanda encerrada não reabre. `PATCH /comandas/:id/transfer`
+  troca de mesa (comanda + pedidos). Card da mesa mostra consumo e tempo; Mesas aparece para o caixa (`notHome`).
+
 ## Agenda (encomendas e reservas)
 
 `@adatechnology/scheduling-module` (schema `scheduling`, exige `btree_gist`), código em `apps/api/src/modules/agenda/`.

@@ -1,6 +1,6 @@
-import { eq, and, desc } from 'drizzle-orm'
+import { eq, and, desc, ne, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import type { ComandaRepository, ComandaWithTable } from '../../domain/repositories/ComandaRepository'
+import type { ComandaConsumption, ComandaRepository, ComandaWithTable } from '../../domain/repositories/ComandaRepository'
 import * as schema from '@/infra/database/schema'
 import type { Comanda } from '@/infra/database/schema'
 
@@ -17,6 +17,30 @@ export class DrizzleComandaRepository implements ComandaRepository {
       tableNumber: table?.number ?? 0,
       tableCapacity: table?.capacity ?? 0,
     }
+  }
+
+  async consumptionOfOpen(establishmentId: string): Promise<Map<string, ComandaConsumption>> {
+    const rows = await this.db
+      .select({
+        comandaId: schema.orders.comandaId,
+        totalAmount: sql<string>`coalesce(sum(${schema.orders.totalAmount}), 0)`,
+        ordersCount: sql<number>`count(*)::int`,
+      })
+      .from(schema.orders)
+      .innerJoin(schema.comandas, eq(schema.comandas.id, schema.orders.comandaId))
+      .where(
+        and(
+          eq(schema.orders.establishmentId, establishmentId),
+          eq(schema.comandas.status, 'open'),
+          ne(schema.orders.status, 'cancelled')
+        )
+      )
+      .groupBy(schema.orders.comandaId)
+    const consumption = new Map<string, ComandaConsumption>()
+    for (const row of rows) {
+      if (row.comandaId) consumption.set(row.comandaId, { totalAmount: Number(row.totalAmount), ordersCount: row.ordersCount })
+    }
+    return consumption
   }
 
   async findById(id: string, establishmentId: string): Promise<ComandaWithTable | null> {

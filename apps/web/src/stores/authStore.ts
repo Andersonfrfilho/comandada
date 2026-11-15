@@ -1,7 +1,7 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { api, configureAuthBridge } from '@/lib/api'
-import { hasPermission, permissionsFromAccessToken, type Permission, type RequiredPermission } from '@/lib/permissions'
+import { hasPermission, permissionsFromAccessToken, type Permission, type PermissionRule } from '@/lib/permissions'
 
 interface AuthUser {
   id: string
@@ -116,7 +116,7 @@ export const useAuthStore = create<AuthState>()(
 )
 
 /** Se quem entrou pode fazer a ação; o menu, as rotas e os botões usam a mesma regra da API. */
-export function useCan(required: RequiredPermission): boolean {
+export function useCan(required: PermissionRule): boolean {
   return useAuthStore((state) => hasPermission(state.user?.permissions, required))
 }
 

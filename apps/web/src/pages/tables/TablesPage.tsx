@@ -1,6 +1,11 @@
 import { useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { useAuthStore } from '@/stores/authStore'
+import { useAuthStore, useCan } from '@/stores/authStore'
+import { toast } from '@/stores/toastStore'
+import { formatBRL } from '@/lib/listing'
+import { ComandaBillModal } from './ComandaBillModal'
+import { elapsedLabel } from './elapsed'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
@@ -34,8 +39,10 @@ export function TablesPage() {
   const [formError, setFormError] = useState<string | null>(null)
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null)
   const [comandaModal, setComandaModal] = useState<{ tableId: string; tableNumber: number } | null>(null)
-  const [closeModal, setCloseModal] = useState<{ comanda: Comanda; tableNumber: number } | null>(null)
-  const [closeStatus, setCloseStatus] = useState<'closed' | 'paid'>('paid')
+  const [billComandaId, setBillComandaId] = useState<string | null>(null)
+  const navigate = useNavigate()
+  // Caixa vê as mesas para receber a conta; montar o salão e lançar pedido é de quem lança pedido.
+  const canLaunch = useCan({ resource: 'orders', action: 'write' })
   const [actionLoading, setActionLoading] = useState(false)
 
   const { data: rawTables = [], isLoading } = useQuery({
@@ -165,25 +172,21 @@ export function TablesPage() {
       void queryClient.invalidateQueries({ queryKey: ['table-comandas'] })
       setComandaModal(null)
     } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao abrir comanda')
+      toast.error(err instanceof Error ? err.message : 'Não foi possível abrir a comanda')
     } finally {
       setActionLoading(false)
     }
   }
 
-  async function handleCloseComanda() {
-    if (!closeModal) return
-    setActionLoading(true)
-    try {
-      await api.patch(`/comandas/${closeModal.comanda.id}/close`, { status: closeStatus }, accessToken ?? undefined)
-      void queryClient.invalidateQueries({ queryKey: ['tables'] })
-      void queryClient.invalidateQueries({ queryKey: ['table-comandas'] })
-      setCloseModal(null)
-    } catch (err: unknown) {
-      alert(err instanceof Error ? err.message : 'Erro ao encerrar comanda')
-    } finally {
-      setActionLoading(false)
-    }
+  // Uma comanda: abre a conta direto; várias: a lista para escolher de quem é a conta.
+  function openBill(table: TableWithComanda) {
+    if (table.comandas.length === 1 && table.comandas[0]) setBillComandaId(table.comandas[0].id)
+    else setComandasTable({ id: table.id, number: table.number })
+  }
+
+  function selectOnMap(table: TableWithComanda) {
+    if (table.comandas.length > 0) openBill(table)
+    else if (canLaunch) openEdit(table)
   }
 
   const available = tables.filter((t) => t.status === 'available').length
@@ -215,7 +218,7 @@ export function TablesPage() {
               <Map className="h-4 w-4" />
             </button>
           </div>
-          {viewMode === 'map' && (
+          {viewMode === 'map' && canLaunch && (
             <button
               onClick={() => (selectionMode ? exitSelectionMode() : setSelectionMode(true))}
               className={`flex items-center gap-2 px-4 py-2 text-sm font-medium rounded-lg border transition-colors active:scale-95 ${
@@ -228,13 +231,13 @@ export function TablesPage() {
               {selectionMode ? 'Cancelar' : 'Juntar mesas'}
             </button>
           )}
-          <button
+          {canLaunch && <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
           >
             <Plus className="h-4 w-4" />
             Nova mesa
-          </button>
+          </button>}
         </div>
       </div>
 
@@ -279,7 +282,7 @@ export function TablesPage() {
           statusLabels={STATUS_LABELS}
           statusColors={STATUS_COLORS}
           statusCard={STATUS_CARD}
-          onSelectTable={openEdit}
+          onSelectTable={selectOnMap}
           onPositionChange={(tableId, positionX, positionY) => void handlePositionChange(tableId, positionX, positionY)}
           selectionMode={selectionMode}
           selectedIds={selectedIds}
@@ -304,59 +307,75 @@ export function TablesPage() {
               </div>
 
               {table.comanda ? (
-                <div className="mb-3">
-                  <div className="flex items-center gap-1.5 mb-1">
-                    <span className="text-xs font-mono font-bold text-gray-800 bg-white/80 px-2 py-0.5 rounded border">
-                      {table.comanda.code}
-                    </span>
-                    {table.comandas.length > 1 && (
-                      <span className="text-xs font-medium text-gray-600 bg-white/80 px-1.5 py-0.5 rounded border">
-                        +{table.comandas.length - 1}
-                      </span>
-                    )}
-                  </div>
-                  {table.comanda.customerName ? (
-                    <p className="text-xs text-gray-600 truncate">{table.comanda.customerName}</p>
-                  ) : (
-                    <p className="text-xs text-gray-400 italic">Aguardando confirmação</p>
-                  )}
-                  <p className="text-xs text-gray-400 mt-0.5">
-                    {new Date(table.comanda.openedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
+                <button
+                  onClick={() => openBill(table)}
+                  className="mb-3 w-full text-left rounded-lg bg-white/70 border border-white px-2 py-1.5 hover:bg-white transition-colors"
+                >
+                  <p className="text-lg font-bold text-gray-900 tabular-nums">
+                    {formatBRL(table.comandas.reduce((sum, comanda) => sum + (comanda.totalAmount ?? 0), 0))}
                   </p>
-                </div>
+                  <p className="text-xs text-gray-600">
+                    Ocupada {elapsedLabel(table.comandas.reduce((oldest, comanda) => (comanda.openedAt < oldest ? comanda.openedAt : oldest), table.comanda.openedAt))}
+                  </p>
+                  <p className="text-xs text-gray-500 truncate">
+                    <span className="font-mono">{table.comanda.code}</span>
+                    {table.comandas.length > 1 ? ` +${table.comandas.length - 1}` : ''}
+                    {table.comanda.customerName ? ` · ${table.comanda.customerName}` : ''}
+                  </p>
+                </button>
               ) : (
-                <div className="mb-3 h-[52px]" />
+                <div className="mb-3 h-[68px] flex items-center text-xs text-gray-500">Livre</div>
               )}
 
               <div className="space-y-1.5">
-                <button
-                  onClick={() => setComandaModal({ tableId: table.id, tableNumber: table.number })}
-                  className="w-full px-2 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
-                >
-                  {table.comandas.length > 0 ? 'Nova comanda' : 'Abrir comanda'}
-                </button>
-                <button
-                  onClick={() => setComandasTable({ id: table.id, number: table.number })}
-                  className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 border border-gray-300 text-gray-700 text-xs font-medium rounded-lg hover:bg-white/60 transition-colors active:scale-95"
-                >
-                  <ReceiptText className="h-3.5 w-3.5" />
-                  Comandas{table.comandas.length > 0 ? ` (${table.comandas.length})` : ''}
-                </button>
-                <div className="flex gap-1">
+                {table.comandas.length > 0 && (
                   <button
-                    onClick={() => openEdit(table)}
-                    className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-white/60 transition-colors"
+                    onClick={() => openBill(table)}
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-gray-900 text-white text-xs font-medium rounded-lg hover:bg-gray-800 transition-colors active:scale-95"
                   >
-                    Editar
+                    <ReceiptText className="h-3.5 w-3.5" />
+                    {table.comandas.length > 1 ? `Contas (${table.comandas.length})` : 'Ver conta'}
                   </button>
+                )}
+                {canLaunch && table.comanda && (
                   <button
-                    onClick={() => setDeleteConfirmId(table.id)}
-                    disabled={table.status === 'occupied'}
-                    className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-30"
+                    onClick={() => navigate(`/orders/new?tableId=${table.id}${table.comandas.length === 1 ? `&comandaId=${table.comanda?.id}` : ''}`)}
+                    className="w-full flex items-center justify-center gap-1.5 px-2 py-1.5 bg-brand-600 text-white text-xs font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
                   >
-                    ×
+                    <Plus className="h-3.5 w-3.5" />
+                    Lançar pedido
                   </button>
-                </div>
+                )}
+                {canLaunch && (
+                  <button
+                    onClick={() => setComandaModal({ tableId: table.id, tableNumber: table.number })}
+                    className={`w-full px-2 py-1.5 text-xs font-medium rounded-lg transition-colors active:scale-95 ${
+                      table.comandas.length > 0
+                        ? 'border border-gray-300 text-gray-700 hover:bg-white/60'
+                        : 'bg-brand-600 text-white hover:bg-brand-700'
+                    }`}
+                  >
+                    {table.comandas.length > 0 ? 'Nova comanda' : 'Abrir comanda'}
+                  </button>
+                )}
+                {canLaunch && (
+                  <div className="flex gap-1">
+                    <button
+                      onClick={() => openEdit(table)}
+                      className="flex-1 px-2 py-1 text-xs border border-gray-300 rounded-lg hover:bg-white/60 transition-colors"
+                    >
+                      Editar
+                    </button>
+                    <button
+                      onClick={() => setDeleteConfirmId(table.id)}
+                      disabled={table.status === 'occupied'}
+                      aria-label={`Excluir mesa ${table.number}`}
+                      className="px-2 py-1 text-xs border border-red-200 text-red-600 rounded-lg hover:bg-red-50 transition-colors disabled:opacity-30"
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           ))}
@@ -410,7 +429,7 @@ export function TablesPage() {
         <div className="p-6">
           <div className="flex items-start justify-between gap-3 mb-4">
             <h2 className="font-semibold text-gray-900">Comandas — Mesa {comandasTable?.number}</h2>
-            <button
+            {canLaunch && <button
               onClick={() => {
                 if (!comandasTable) return
                 setComandaModal({ tableId: comandasTable.id, tableNumber: comandasTable.number })
@@ -420,7 +439,7 @@ export function TablesPage() {
             >
               <Plus className="h-3.5 w-3.5" />
               Nova comanda
-            </button>
+            </button>}
           </div>
 
           {comandasLoading ? (
@@ -453,17 +472,15 @@ export function TablesPage() {
                       {new Date(comanda.openedAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })}
                     </p>
                   </div>
-                  {comanda.status === 'open' && comandasTable && (
-                    <button
-                      onClick={() => {
-                        setCloseModal({ comanda, tableNumber: comandasTable.number })
-                        setComandasTable(null)
-                      }}
-                      className="px-3 py-1.5 bg-gray-800 text-white text-xs font-medium rounded-lg hover:bg-gray-900 transition-colors active:scale-95 shrink-0"
-                    >
-                      Encerrar
-                    </button>
-                  )}
+                  <button
+                    onClick={() => {
+                      setBillComandaId(comanda.id)
+                      setComandasTable(null)
+                    }}
+                    className="px-3 py-1.5 bg-gray-800 text-white text-xs font-medium rounded-lg hover:bg-gray-900 transition-colors active:scale-95 shrink-0"
+                  >
+                    {comanda.status === 'open' ? 'Conta' : 'Ver'}
+                  </button>
                 </li>
               ))}
             </ul>
@@ -493,45 +510,11 @@ export function TablesPage() {
         </div>
       </Modal>
 
-      {/* Modal encerrar comanda */}
-      <Modal open={closeModal !== null} onClose={() => setCloseModal(null)} size="sm">
-        <div className="p-6">
-          <h2 className="font-semibold text-gray-900 mb-1">Encerrar comanda — Mesa {closeModal?.tableNumber}</h2>
-          <p className="text-xs font-mono text-gray-400 mb-4">Código: {closeModal?.comanda.code}</p>
-          {closeModal?.comanda.customerName && (
-            <p className="text-sm text-gray-600 mb-4">Cliente: {closeModal.comanda.customerName}</p>
-          )}
-          <div className="space-y-2 mb-5">
-            {(['paid', 'closed'] as const).map((s) => (
-              <label key={s} className="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50">
-                <input
-                  type="radio"
-                  value={s}
-                  checked={closeStatus === s}
-                  onChange={() => setCloseStatus(s)}
-                  className="text-brand-600"
-                />
-                <div>
-                  <p className="text-sm font-medium text-gray-900">{s === 'paid' ? 'Pago e encerrado' : 'Encerrado sem pagamento'}</p>
-                  <p className="text-xs text-gray-400">{s === 'paid' ? 'Cliente realizou o pagamento' : 'Cancelado ou encerrado manualmente'}</p>
-                </div>
-              </label>
-            ))}
-          </div>
-          <div className="flex justify-end gap-3">
-            <button onClick={() => setCloseModal(null)} className="px-4 py-2 text-sm border border-gray-300 rounded-lg hover:bg-gray-50">
-              Cancelar
-            </button>
-            <button
-              onClick={() => void handleCloseComanda()}
-              disabled={actionLoading}
-              className="px-4 py-2 bg-gray-900 text-white text-sm font-medium rounded-lg hover:bg-gray-800 disabled:opacity-50 active:scale-95"
-            >
-              {actionLoading ? 'Encerrando...' : 'Encerrar comanda'}
-            </button>
-          </div>
-        </div>
-      </Modal>
+      <ComandaBillModal
+        comandaId={billComandaId}
+        tables={tables.map((table) => ({ id: table.id, number: table.number }))}
+        onClose={() => setBillComandaId(null)}
+      />
 
       {/* Modal confirmar exclusão */}
       <Modal open={deleteConfirmId !== null} onClose={() => setDeleteConfirmId(null)} size="sm">

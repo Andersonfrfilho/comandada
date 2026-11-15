@@ -5,7 +5,14 @@ export interface ComandaWithTable extends Comanda {
   tableCapacity: number
 }
 
+export interface ComandaConsumption {
+  totalAmount: number
+  ordersCount: number
+}
+
 export interface ComandaRepository {
+  /** Quanto cada comanda aberta já consumiu (pedidos não cancelados), para o card da mesa. */
+  consumptionOfOpen(establishmentId: string): Promise<Map<string, ComandaConsumption>>
   findById(id: string, establishmentId: string): Promise<ComandaWithTable | null>
   findOpenByTable(tableId: string, establishmentId: string): Promise<Comanda | null>
   findByCode(code: string, establishmentId: string): Promise<ComandaWithTable | null>

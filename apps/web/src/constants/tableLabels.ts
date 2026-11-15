@@ -10,6 +10,9 @@ export interface Comanda {
   customerPhone: string | null
   openedAt: string
   closedAt: string | null
+  /** Consumo da comanda aberta (pedidos não cancelados), vindo da lista de mesas. */
+  totalAmount?: number
+  ordersCount?: number
 }
 
 export interface TableWithComanda {

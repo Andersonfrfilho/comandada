@@ -4,7 +4,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import { WS_EVENTS } from '@/infra/websocket/WebSocketEvents'
-import { ConflictError, UnprocessableError } from '@/shared/errors/AppError'
+import { AppError, ConflictError, UnprocessableError } from '@/shared/errors/AppError'
 import { MessagesConstants } from '@/shared/constants/MessagesConstants'
 import type { OrderType, OrderChannel } from '@/shared/types'
 import type { CalculateDeliveryFeeUseCase } from '@/modules/delivery/application/use-cases/CalculateDeliveryFeeUseCase'
@@ -37,6 +37,8 @@ interface CreateOrderInput {
   establishmentId: string
   customerId?: string | undefined
   tableId?: string | undefined
+  /** Comanda escolhida no painel; sem ela, pedido de mesa entra na comanda aberta mais antiga da mesa. */
+  comandaId?: string | undefined
   channel: OrderChannel
   type: OrderType
   items: CreateOrderItemInput[]
@@ -110,6 +112,8 @@ export class CreateOrderUseCase {
 
     this.checkPayments(input.payments ?? [], totalAmount)
 
+    const comandaId = await this.resolveComanda(input)
+
     const number = await nextOrderNumber(this.db, input.establishmentId)
     const [order] = await this.db
       .insert(schema.orders)
@@ -117,6 +121,7 @@ export class CreateOrderUseCase {
         establishmentId: input.establishmentId,
         customerId: input.customerId ?? null,
         tableId: input.tableId ?? null,
+        comandaId,
         channel: input.channel,
         type: input.type,
         status: 'received',
@@ -240,4 +245,35 @@ export class CreateOrderUseCase {
       throw new UnprocessableError(MessagesConstants.order.paymentsAboveTotal(totalAmount))
     }
   }
+
+  /**
+   * Pedido de mesa entra na conta da mesa: sem comanda ligada, "Encerrar comanda" liberava a mesa
+   * com os pedidos em aberto e nada ia para o caixa. Pedido do painel exige comanda aberta; pedido
+   * de outro canal (bot) segue sem comanda quando a mesa não tem nenhuma aberta.
+   */
+  private async resolveComanda(input: CreateOrderInput): Promise<string | null> {
+    if (input.type !== 'table' || !input.tableId) return null
+    const openComandas = await this.db.query.comandas.findMany({
+      where: and(
+        eq(schema.comandas.establishmentId, input.establishmentId),
+        eq(schema.comandas.tableId, input.tableId),
+        eq(schema.comandas.status, 'open')
+      ),
+      orderBy: (comanda, { asc }) => [asc(comanda.openedAt)],
+      columns: { id: true },
+    })
+    if (input.comandaId) {
+      if (!openComandas.some((comanda) => comanda.id === input.comandaId)) {
+        throw new UnprocessableError(MessagesConstants.comanda.notOpenOnTable)
+      }
+      return input.comandaId
+    }
+    const first = openComandas[0]
+    if (first) return first.id
+    if (input.priceFromCatalog) {
+      throw new AppError(MessagesConstants.comanda.requiredForTableOrder, 'table_comanda_required', 422)
+    }
+    return null
+  }
+
 }

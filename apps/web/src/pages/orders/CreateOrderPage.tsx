@@ -1,5 +1,5 @@
-import { useState } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { useAuthStore } from '@/stores/authStore'
@@ -44,6 +44,7 @@ interface TableWithComanda {
   capacity: number
   status: 'available' | 'occupied' | 'reserved'
   comanda: TableComanda | null
+  comandas?: TableComanda[]
 }
 
 interface CartItem {
@@ -99,6 +100,9 @@ export function CreateOrderPage() {
   const [step, setStep] = useState<Step>('type')
   const [orderType, setOrderType] = useState<OrderType>('table')
   const [selectedTable, setSelectedTable] = useState<TableWithComanda | null>(null)
+  // Mesa com mais de uma comanda (um cliente por comanda): o pedido entra na escolhida.
+  const [comandaId, setComandaId] = useState<string | null>(null)
+  const [searchParams] = useSearchParams()
   const [cart, setCart] = useState<CartItem[]>([])
   const [globalNotes, setGlobalNotes] = useState('')
   const [requiresFiscal, setRequiresFiscal] = useState(false)
@@ -131,6 +135,23 @@ export function CreateOrderPage() {
     enabled: orderType === 'table',
   })
 
+  // Vindo de Mesas ("Lançar pedido"): mesa e comanda já escolhidas, direto para o cardápio.
+  const presetTableId = searchParams.get('tableId')
+  const presetComandaId = searchParams.get('comandaId')
+  useEffect(() => {
+    if (!presetTableId || selectedTable) return
+    const table = tables.find((candidate) => candidate.id === presetTableId)
+    if (!table) return
+    setOrderType('table')
+    setSelectedTable(table)
+    const comanda = table.comandas?.find((candidate) => candidate.id === presetComandaId) ?? table.comanda
+    setComandaId(comanda?.id ?? null)
+    if (comanda) setStep('menu')
+  }, [presetTableId, presetComandaId, tables, selectedTable])
+
+  const tableComandas = selectedTable?.comandas ?? (selectedTable?.comanda ? [selectedTable.comanda] : [])
+  const activeComanda = tableComandas.find((comanda) => comanda.id === comandaId) ?? selectedTable?.comanda ?? null
+
   const { data: paymentTypes = [] } = useQuery({
     queryKey: ['payment-types'],
     queryFn: () => api.get<PaymentTypeRow[]>('/payment-types', accessToken ?? undefined),
@@ -152,7 +173,8 @@ export function CreateOrderPage() {
       api.post<TableComanda>(`/tables/${tableId}/comanda`, {}, accessToken ?? undefined),
     onSuccess: (comanda) => {
       void queryClient.invalidateQueries({ queryKey: ['tables'] })
-      setSelectedTable((prev) => (prev ? { ...prev, comanda } : prev))
+      setSelectedTable((prev) => (prev ? { ...prev, comanda, comandas: [...(prev.comandas ?? []), comanda] } : prev))
+      setComandaId(comanda.id)
     },
   })
 
@@ -169,7 +191,7 @@ export function CreateOrderPage() {
           return
         }
       }
-      navigate('/orders')
+      navigate(orderType === 'table' ? '/tables' : '/orders')
     },
   })
 
@@ -226,8 +248,11 @@ export function CreateOrderPage() {
     ? allCatalogs.filter((c) => c.id === activeCat)
     : allCatalogs
 
+  // Mesa paga na conta da mesa, no fim: o pedido só entra na comanda, sem agendar nem pagar agora.
   const steps: Step[] = orderType === 'delivery'
     ? ['type', 'menu', 'schedule', 'delivery', 'payment', 'confirm']
+    : orderType === 'table'
+    ? ['type', 'menu', 'confirm']
     : ['type', 'menu', 'schedule', 'payment', 'confirm']
 
   async function quoteDeliveryFee(): Promise<number> {
@@ -289,6 +314,7 @@ export function CreateOrderPage() {
       channel: 'manual' as const,
       type: orderType,
       tableId: selectedTable?.id,
+      ...(orderType === 'table' && activeComanda ? { comandaId: activeComanda.id } : {}),
       items: cart.map((i) => ({
         productId: i.productId,
         productName: i.productName,
@@ -296,7 +322,7 @@ export function CreateOrderPage() {
         quantity: i.quantity,
         ...(i.notes ? { notes: i.notes } : {}),
       })),
-      payments: payments.map((leg) => ({
+      payments: orderType === 'table' ? [] : payments.map((leg) => ({
         paymentTypeName: leg.paymentTypeName,
         amount: Number(leg.amount),
         ...(leg.changeFor ? { changeFor: Number(leg.changeFor) } : {}),
@@ -409,7 +435,10 @@ export function CreateOrderPage() {
                     {tables.map((t) => (
                       <button
                         key={t.id}
-                        onClick={() => setSelectedTable(t === selectedTable ? null : t)}
+                        onClick={() => {
+                          setSelectedTable(t.id === selectedTable?.id ? null : t)
+                          setComandaId(t.id === selectedTable?.id ? null : t.comanda?.id ?? null)
+                        }}
                         className={`p-3 rounded-xl border-2 text-center transition-all ${
                           selectedTable?.id === t.id
                             ? 'border-brand-500 bg-brand-50'
@@ -428,6 +457,25 @@ export function CreateOrderPage() {
                   </div>
                 )}
 
+                {tableComandas.length > 1 && (
+                  <div className="mt-3">
+                    <label htmlFor="order-comanda" className="block text-sm font-medium text-gray-700 mb-1">
+                      Lançar na comanda
+                    </label>
+                    <select
+                      id="order-comanda"
+                      value={activeComanda?.id ?? ''}
+                      onChange={(event) => setComandaId(event.target.value)}
+                      className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
+                    >
+                      {tableComandas.map((comanda) => (
+                        <option key={comanda.id} value={comanda.id}>
+                          {comanda.code}{comanda.customerName ? ` · ${comanda.customerName}` : ''}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
                 {selectedTable && !selectedTable.comanda && (
                   <div className="mt-3 flex items-center justify-between gap-3 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3">
                     <p className="text-sm text-amber-800">
@@ -449,16 +497,16 @@ export function CreateOrderPage() {
                       : 'Erro ao abrir comanda'}
                   </p>
                 )}
-                {selectedTable?.comanda && (
+                {activeComanda && (
                   <div className="mt-3 flex items-center gap-3 rounded-xl border border-green-200 bg-green-50 px-4 py-3">
                     <QRCodeSVG
-                      value={`${window.location.origin}/comanda/${selectedTable.comanda.code}`}
+                      value={`${window.location.origin}/comanda/${activeComanda.code}`}
                       size={64}
                       level="M"
                     />
                     <div>
                       <p className="text-sm text-green-800">
-                        Comanda <span className="font-mono font-bold">{selectedTable.comanda.code}</span> aberta.
+                        Comanda <span className="font-mono font-bold">{activeComanda.code}</span> aberta.
                       </p>
                       <p className="text-xs text-green-700">Peça para o cliente escanear o QR para confirmar os dados.</p>
                     </div>
@@ -501,7 +549,7 @@ export function CreateOrderPage() {
             <div className="mt-6 flex justify-end">
               <button
                 onClick={() => void goNext()}
-                disabled={orderType === 'table' && (!selectedTable || !selectedTable.comanda)}
+                disabled={orderType === 'table' && (!selectedTable || !activeComanda)}
                 className="px-6 py-2.5 bg-brand-600 text-white font-medium rounded-xl disabled:opacity-40 hover:bg-brand-700 transition-colors active:scale-95"
               >
                 Montar pedido →
@@ -633,8 +681,8 @@ export function CreateOrderPage() {
               <div className="px-4 py-3 border-b border-gray-100 flex-shrink-0">
                 <p className="text-sm font-semibold text-gray-700">
                   {orderType === 'table' && selectedTable ? `Mesa ${selectedTable.number}` : ORDER_TYPE_LABELS[orderType]}
-                  {selectedTable?.comanda && (
-                    <span className="ml-1.5 text-xs font-mono text-brand-500">{selectedTable.comanda.code}</span>
+                  {activeComanda && (
+                    <span className="ml-1.5 text-xs font-mono text-brand-500">{activeComanda.code}</span>
                   )}
                 </p>
               </div>
@@ -769,7 +817,7 @@ export function CreateOrderPage() {
                 <span className="text-xs px-2 py-1 bg-brand-100 text-brand-700 rounded-full font-medium">
                   {ORDER_TYPE_LABELS[orderType]}
                   {selectedTable && ` · Mesa ${selectedTable.number}`}
-                  {selectedTable?.comanda && ` · ${selectedTable.comanda.code}`}
+                  {activeComanda && ` · ${activeComanda.code}`}
                 </span>
               </div>
               <div className="space-y-2">

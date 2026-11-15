@@ -64,6 +64,19 @@ export const MessagesConstants = {
     cannotChangeSelf: 'Você não pode desativar nem excluir o próprio acesso',
     invalidFields: (fields: string[]) => `Confira: ${fields.join(', ')}`,
   },
+  comanda: {
+    notOpenOnTable: 'Esta comanda não está aberta nesta mesa',
+    requiredForTableOrder: 'Abra uma comanda na mesa antes de lançar o pedido',
+    alreadyClosed: 'Esta comanda já foi encerrada',
+    hasOpenBalance: (amount: string) =>
+      `A comanda tem ${amount} em aberto. Receba a conta ou cancele os pedidos antes de encerrar.`,
+    nothingToPay: 'Não há nada a receber nesta comanda',
+    cashRegisterClosed: 'Abra o caixa antes de receber a conta',
+    paymentsMismatch: (paid: string, due: string) => `Os pagamentos somam ${paid}, mas a conta é ${due}`,
+    changeBelowAmount: 'O "troco para" precisa ser maior ou igual ao valor pago em dinheiro',
+    sameTable: 'A comanda já está nesta mesa',
+    settledNote: 'Conta da mesa paga',
+  },
   generic: {
     notFound: (resource: string) => `${resource} not found`,
     forbidden: 'Seu cargo não tem acesso a esta ação',
