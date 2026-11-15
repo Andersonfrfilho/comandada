@@ -8,26 +8,53 @@ import type { ConversationContextEntry } from '@adatechnology/conversations-ui'
 
 const CURRENT_STATE_KEY = 'currentState'
 const CART_KEY = 'cart'
+const LAST_ORDER_KEY = 'lastOrder'
 
+// Estados de `src/shared/constants/StateConstants.ts` (BotState), que o bot grava em `bot_sessions`.
 const STATE_LABELS: Record<string, string> = {
   start: 'Início',
   awaiting_name: 'Aguardando nome',
-  browsing_cat: 'Vendo cardápio',
+  ordering: 'Vendo cardápio',
+  ordering_cat: 'Vendo cardápio',
+  browsing_categories: 'Vendo cardápio',
   ordering_items: 'Montando pedido',
+  browsing_items: 'Montando pedido',
+  awaiting_size: 'Escolhendo tamanho',
   awaiting_qty: 'Aguardando quantidade',
-  more: 'Perguntando se quer mais',
+  awaiting_item_note: 'Anotando observação do item',
+  awaiting_more: 'Perguntando se quer mais',
+  awaiting_cart_edit: 'Editando carrinho',
+  awaiting_cart_edit_item: 'Editando carrinho',
+  awaiting_cart_edit_qty: 'Editando carrinho',
+  awaiting_text_order_choice: 'Conferindo pedido escrito',
+  awaiting_text_order_confirm: 'Conferindo pedido escrito',
+  confirming: 'Revisando pedido',
+  awaiting_when: 'Escolhendo quando',
+  awaiting_schedule_day: 'Agendando (dia)',
+  awaiting_schedule_time: 'Agendando (horário)',
   awaiting_type: 'Escolhendo entrega/retirada',
   awaiting_address: 'Aguardando endereço',
+  awaiting_address_number: 'Aguardando número do endereço',
   awaiting_complement: 'Aguardando complemento',
   offer_pickup: 'Oferecendo retirada',
   awaiting_payment: 'Aguardando forma de pagamento',
   awaiting_change: 'Aguardando troco',
-  awaiting_split: 'Dividindo conta',
-  awaiting_mixed: 'Pagamento misto',
+  awaiting_split_count: 'Dividindo conta',
+  awaiting_split_payment: 'Dividindo conta',
+  awaiting_split_change: 'Dividindo conta',
+  awaiting_mixed_method: 'Pagamento misto',
+  awaiting_mixed_amount: 'Pagamento misto',
+  awaiting_mixed_change: 'Pagamento misto',
+  repeat_order: 'Repetindo último pedido',
   reserving: 'Fazendo reserva',
   confirming_reservation: 'Confirmando reserva',
   human_handoff: 'Transferido para atendente',
-  order_detail: 'Vendo detalhes do pedido',
+  awaiting_order_detail: 'Vendo detalhes do pedido',
+  notifications_menu: 'Notificações',
+  awaiting_marketing_opt_in: 'Preferência de novidades',
+  awaiting_help_option: 'Pedindo ajuda',
+  awaiting_issue_followup: 'Relatando problema',
+  awaiting_issue_detail: 'Relatando problema',
 }
 
 const KNOWN_FIELDS: ReadonlyArray<{ key: string; label: string; icon: string }> = [
@@ -71,7 +98,7 @@ function cartSummary(value: unknown): string | undefined {
 
 export function toContextEntries(context: Record<string, unknown> | undefined): ConversationContextEntry[] {
   const source = context ?? {}
-  const handled = new Set([CURRENT_STATE_KEY, CART_KEY, ...KNOWN_FIELDS.map((field) => field.key)])
+  const handled = new Set([CURRENT_STATE_KEY, CART_KEY, LAST_ORDER_KEY, ...KNOWN_FIELDS.map((field) => field.key)])
 
   const known = KNOWN_FIELDS.map((field) => ({
     key: field.key,
@@ -82,9 +109,13 @@ export function toContextEntries(context: Record<string, unknown> | undefined): 
 
   const cart = { key: CART_KEY, label: 'Pedido em andamento', icon: '🧾', value: cartSummary(source[CART_KEY]) }
 
+  // Só aparece quando existe: depois de confirmar, o bot zera o carrinho e é aqui que o pedido fica.
+  const lastOrderValue = asDisplayValue(source[LAST_ORDER_KEY])
+  const lastOrder = lastOrderValue ? [{ key: LAST_ORDER_KEY, label: 'Último pedido', icon: '🔖', value: lastOrderValue }] : []
+
   const extra = Object.keys(source)
     .filter((key) => !handled.has(key))
     .map((key) => ({ key, label: key, icon: '•', value: asDisplayValue(source[key]) }))
 
-  return [...known, cart, ...extra]
+  return [...known, cart, ...lastOrder, ...extra]
 }
