@@ -5,9 +5,28 @@ import App from './App'
 import { ApiError } from '@/lib/api'
 import { useAccessDeniedStore } from '@/stores/accessDeniedStore'
 import { toast } from '@/stores/toastStore'
+import { registerSW } from 'virtual:pwa-register'
 import './index.css'
 
 const FORBIDDEN = 403
+const UPDATE_CHECK_INTERVAL_MS = 60_000
+
+// Sem isso o service worker do PWA servia o bundle antigo do cache: deploy novo só aparecia depois
+// de fechar todas as abas (e nunca no app instalado). Agora o app procura versão nova a cada minuto
+// e ao voltar para a aba; achou, o service worker novo assume e a página recarrega sozinha.
+registerSW({
+  immediate: true,
+  onRegisteredSW(_scriptUrl, registration) {
+    if (!registration) return
+    const checkForUpdate = () => {
+      if (navigator.onLine) void registration.update()
+    }
+    setInterval(checkForUpdate, UPDATE_CHECK_INTERVAL_MS)
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') checkForUpdate()
+    })
+  },
+})
 
 function isClientError(error: unknown): boolean {
   return error instanceof ApiError && error.status >= 400 && error.status < 500
