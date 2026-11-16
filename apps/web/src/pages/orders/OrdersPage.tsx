@@ -288,7 +288,7 @@ export function OrdersPage() {
               statusFilter === 'all' ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 border border-gray-300'
             }`}
           >
-            Todos
+            Todos (histórico)
           </button>
         </div>
       </div>
@@ -573,9 +573,20 @@ export function OrdersPage() {
         })}
 
         {!isLoading && orders.length === 0 && (
-          <p className="text-gray-400 text-center py-12">
-            {statusFilter === 'active' ? 'Nenhum pedido ativo' : 'Nenhum pedido encontrado'}
-          </p>
+          <div className="text-center py-12">
+            <p className="text-gray-400">
+              {statusFilter === 'active' ? 'Nenhum pedido ativo' : 'Nenhum pedido encontrado'}
+            </p>
+            {/* Concluídos e cancelados só aparecem em "Todos": sem isso a lista vazia parece que perdeu o histórico. */}
+            {statusFilter === 'active' && (
+              <button
+                onClick={() => updateFilters({ status: 'all' })}
+                className="mt-3 text-sm font-medium text-brand-600 hover:text-brand-700 underline underline-offset-2"
+              >
+                Ver histórico (concluídos e cancelados)
+              </button>
+            )}
+          </div>
         )}
       </div>
 
