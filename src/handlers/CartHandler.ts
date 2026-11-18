@@ -8,9 +8,14 @@ class CartHandler extends BaseHandler {
           return product ? { id: product.id, name: product.name, qty: orderItem.qty, price: Number(product.price), menuIdx: products.indexOf(product) + 1 } : null;
         }).filter(Boolean) as CartItem[];
         newCart.items = items;
-        newState = BotState.ORDERING;
+        // Mesmos botões de depois de adicionar um item: Adicionar mais / Editar carrinho / Finalizar.
+        newState = BotState.AWAITING_MORE;
         const { lines, total } = cartSummary(items);
-        respostas.push(MessagesConstants.PEDIDO_REPETIDO + lines.join('\n') + '\n\n*Total: R$ ' + fmtBRL(total) + '*' + MessagesConstants.PEDIDO_REPETIDO_SUFFIX);
+        respostas.push(moreItemsButtons(
+          MessagesConstants.PEDIDO_REPETIDO + lines.join('\n')
+            + MessagesConstants.TOTAL_PARCIAL(fmtBRL(total))
+            + MessagesConstants.ADICIONAR_MAIS_OU_FINALIZAR
+        ));
       } else {
         newState = BotState.START;
         respostas.push(MessagesConstants.PEDIDO_REPETIDO_NAO_ENCONTRADO);
@@ -39,7 +44,12 @@ class CartHandler extends BaseHandler {
         respostas.push(MessagesConstants.CARRINHO_VAZIO);
       } else {
         const { lines, total } = cartSummary(newCart.items);
-        respostas.push(MessagesConstants.CARRINHO_RESUMO_PREFIX + lines.join('\n') + '\n\n*Total: R$ ' + fmtBRL(total) + '*' + MessagesConstants.CARRINHO_RESUMO_SUFFIX);
+        newState = BotState.AWAITING_MORE;
+        respostas.push(moreItemsButtons(
+          MessagesConstants.CARRINHO_RESUMO_PREFIX + lines.join('\n')
+            + MessagesConstants.TOTAL_PARCIAL(fmtBRL(total))
+            + MessagesConstants.ADICIONAR_MAIS_OU_FINALIZAR
+        ));
       }
       return true;
     }
