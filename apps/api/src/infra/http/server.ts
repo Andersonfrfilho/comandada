@@ -17,6 +17,7 @@ import { registerReportsRoutes } from '@/modules/reports/infra/http/ReportsRoute
 import { registerSettingsRoutes } from '@/modules/settings/infra/http/SettingsRoutes'
 import { registerBrandingRoutes } from '@/modules/settings/infra/http/BrandingRoutes'
 import { registerMenuPdfRoutes } from '@/modules/menu/infra/http/MenuPdfRoutes'
+import { registerStorefrontRoutes } from '@/modules/storefront/infra/http/StorefrontRoutes'
 import { registerDeliveryFeeRoutes } from '@/modules/settings/infra/http/DeliveryFeeRoutes'
 import { registerWebhookRoutes } from '@/modules/webhook/infra/http/WebhookRoutes'
 import { registerPreviewInboundRoutes } from '@/modules/webhook/infra/http/PreviewInboundRoutes'
@@ -123,6 +124,7 @@ export async function createServer() {
   registerSettingsRoutes(router, container.settingsController)
   registerBrandingRoutes(router, container.brandingController)
   registerMenuPdfRoutes(router, container.menuPdfController)
+  registerStorefrontRoutes(router, container.storefrontController, container.storefrontRateLimitCache)
   registerDeliveryFeeRoutes(router, container.deliveryFeeController)
   registerWebhookRoutes(router, container.webhookController, container.whatsAppInboundController)
   // Antes de `registerConversationRoutes`: "preview" casaria com `/conversations/:whatsapp`.

@@ -1,3 +1,4 @@
+import { notifiesCustomerByWhatsApp } from '@/modules/orders/shared/orders.constant'
 import { orderDisplayCode } from '@/modules/orders/shared/orderNumber'
 import { and, desc, eq, inArray, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
@@ -221,7 +222,7 @@ export class OrderRefundLedger {
 
   private async notify(order: RefundableOrder, body: string, templateText: string): Promise<void> {
     const whatsappNumber = order.customer?.whatsappNumber
-    if (order.channel !== 'whatsapp' || !whatsappNumber) return
+    if (!notifiesCustomerByWhatsApp(order.channel) || !whatsappNumber) return
     await this.deps.botMessages
       .sendText({
         establishmentId: order.establishmentId,

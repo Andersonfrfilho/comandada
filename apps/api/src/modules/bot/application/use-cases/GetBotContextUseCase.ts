@@ -174,6 +174,11 @@ export class GetBotContextUseCase {
     return { establishmentId: establishment.id, productNames: products.map((product) => product.name) }
   }
 
+  /** Cardápio, configurações e formas de pagamento do restaurante (mesmo cache do bot): o cardápio online lê daqui. */
+  async sharedContext(instance?: string): Promise<BotSharedContext> {
+    return this.loadSharedContext(instance)
+  }
+
   private async loadSharedContext(instance?: string): Promise<BotSharedContext> {
     const ttlSeconds = this.sharedContextCache?.ttlSeconds ?? 0
     const cache = ttlSeconds > 0 ? this.sharedContextCache?.cache : undefined

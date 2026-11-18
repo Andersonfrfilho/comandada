@@ -23,6 +23,8 @@ import { FinancePage } from '@/pages/finance/FinancePage'
 import { ChangePasswordPage } from '@/pages/auth/ChangePasswordPage'
 import { ComandaConfirmPage } from '@/pages/comanda/ComandaConfirmPage'
 import { CustomerInvoicePage } from '@/pages/public/CustomerInvoicePage'
+import { StorefrontPage } from '@/pages/storefront/StorefrontPage'
+import { StorefrontOrderPage } from '@/pages/storefront/StorefrontOrderPage'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGuard'
@@ -61,12 +63,18 @@ function AppLayout() {
   )
 }
 
+function isStorefrontPath(pathname: string): boolean {
+  return pathname === '/cardapio' || pathname.startsWith('/cardapio/')
+}
+
 // Marca do domínio antes do login; marca do restaurante de quem entrou depois.
 function useBranding(): void {
   const accessToken = useAuthStore((state) => state.accessToken)
   const loadForHost = useBrandingStore((state) => state.loadForHost)
   const loadForEstablishment = useBrandingStore((state) => state.loadForEstablishment)
   useEffect(() => {
+    // O cardápio online pinta a marca do restaurante dele; a do painel chegaria depois e sobrescreveria.
+    if (isStorefrontPath(window.location.pathname)) return
     if (accessToken) void loadForEstablishment(accessToken)
     else void loadForHost()
   }, [accessToken, loadForHost, loadForEstablishment])
@@ -245,10 +253,14 @@ export default function App() {
         {/* Rota pública — sem autenticação */}
         <Route path="/comanda/:code" element={<ComandaConfirmPage />} />
         <Route path="/nota/:token" element={<CustomerInvoicePage />} />
+        {/* Cardápio online: o cliente vê o cardápio e faz o pedido sem login. */}
+        <Route path="/cardapio" element={<StorefrontPage />} />
+        <Route path="/cardapio/pedido/:orderId" element={<StorefrontOrderPage />} />
+        <Route path="/cardapio/:establishmentId" element={<StorefrontPage />} />
 
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
-      <PWAInstallBanner />
+      {!isStorefrontPath(window.location.pathname) && <PWAInstallBanner />}
       <Toaster />
       <ConfirmHost />
     </BrowserRouter>

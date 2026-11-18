@@ -3,6 +3,7 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import type { CreateOrderUseCase } from '@/modules/orders/application/use-cases/CreateOrderUseCase'
 import { ValidationError } from '@/shared/errors/AppError'
+import type { OrderChannel } from '@/shared/types'
 import type { BookScheduledOrderUseCase } from '@/modules/agenda/application/use-cases/BookScheduledOrderUseCase'
 import type { CancelScheduleBookingUseCase } from '@/modules/agenda/application/use-cases/CancelScheduleBookingUseCase'
 import { SCHEDULING_ACTOR_BOT } from '@/modules/agenda/shared/agenda.constant'
@@ -45,6 +46,10 @@ export interface CreateBotOrderParams {
   notes?: string | undefined
   // Encomenda: ISO instant the customer picked; absent means "para agora".
   scheduledFor?: string | undefined
+  /** Complemento separado do endereço (cardápio online); o bot manda junto no `address`. */
+  complement?: string | undefined
+  /** Canal do pedido: o bot é `whatsapp`; o cardápio online usa o mesmo caminho com `web`. */
+  channel?: OrderChannel | undefined
 }
 
 export interface BotScheduleBooking {
@@ -104,13 +109,13 @@ export class CreateBotOrderUseCase {
       const order = await this.createOrderUseCase.execute({
         establishmentId: params.establishmentId,
         customerId: customer.id,
-        channel: 'whatsapp',
+        channel: params.channel ?? 'whatsapp',
         type,
         items,
         payments: buildPayments({ params, items, deliveryFee }),
         // O link do mapa é só o endereço em busca do Google Maps: o painel já monta o mapa a partir de
         // `delivery.address`, então ele não vai mais para a observação do pedido.
-        delivery: type === 'delivery' && params.address ? { address: params.address, feeAmount: deliveryFee } : undefined,
+        delivery: type === 'delivery' && params.address ? { address: params.address, complement: params.complement?.trim() || undefined, feeAmount: deliveryFee } : undefined,
         scheduledFor: scheduledFor?.toISOString(),
         notes: params.notes?.trim() || undefined,
       })

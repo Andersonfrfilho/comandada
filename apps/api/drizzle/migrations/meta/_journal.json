@@ -358,6 +358,13 @@
       "when": 1785347400000,
       "tag": "0051_order_customer_name",
       "breakpoints": true
+    },
+    {
+      "idx": 51,
+      "version": "7",
+      "when": 1785433800000,
+      "tag": "0052_order_channel_web",
+      "breakpoints": true
     }
   ]
 }

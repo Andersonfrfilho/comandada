@@ -22,7 +22,7 @@ import { orderNumberLabel } from '@/lib/orderLabel'
 import { CancelOrderDialog } from '@/components/orders/CancelOrderDialog'
 
 type OrderTypeValue = 'table' | 'delivery' | 'pickup'
-type OrderChannelValue = 'whatsapp' | 'ifood' | 'manual'
+type OrderChannelValue = 'whatsapp' | 'ifood' | 'manual' | 'web'
 
 const TYPE_OPTIONS: SelectOption<OrderTypeValue>[] = [
   { value: 'table', label: ORDER_TYPE_LABELS.table },
@@ -34,6 +34,7 @@ const CHANNEL_OPTIONS: SelectOption<OrderChannelValue>[] = [
   { value: 'whatsapp', label: ORDER_CHANNEL_LABELS.whatsapp ?? 'WhatsApp' },
   { value: 'ifood', label: ORDER_CHANNEL_LABELS.ifood ?? 'iFood' },
   { value: 'manual', label: ORDER_CHANNEL_LABELS.manual ?? 'Manual' },
+  { value: 'web', label: ORDER_CHANNEL_LABELS.web ?? 'Cardápio online' },
 ]
 
 function parseCsvParam<TValue extends string>(value: string | null): TValue[] {
