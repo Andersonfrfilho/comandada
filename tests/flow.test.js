@@ -604,9 +604,30 @@ async function runTests() {
       state: 'repeat_order',
       lastOrder: { items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], total: 47.80 },
     });
-    assertState(r, 'ordering');
+    assertState(r, 'awaiting_more');
+    assertResponseType(r, 'buttons');
     const cart = r?.[0]?.json?.cart;
     assert(cart?.items?.length === 1, 'Carrinho deve ter 1 item do pedido anterior');
+    const message = r?.[0]?.json?.respostas?.[0];
+    const ids = (message?.buttons || []).map((button) => button.id);
+    assert(['__add_more__', 'cart:edit', 'finalizar'].every((id) => ids.includes(id)), 'botões adicionar/editar/finalizar: ' + JSON.stringify(ids));
+    assert(!message.body.includes('É só digitar'), 'sem comandos digitados: ' + message.body);
+  });
+
+  await test('carrinho → resumo com botões adicionar/editar/finalizar', async () => {
+    const r = await exec({
+      texto: 'carrinho',
+      state: 'ordering_items',
+      cart: {
+        items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], order_type: '', address: '', complement: '',
+        delivery_fee: 0, payment_method: '', change_for: null, split_count: 0, split_current: 0, split_payments: [],
+        mixed_method: '', mixed_label: '', mixed_amount: 0, address_street_temp: null, browse_category: '',
+        browse_page: 0, browse_cat_page: 0, pending_item_id: null, pending_item_name: '',
+      },
+    });
+    assertState(r, 'awaiting_more');
+    assertResponseType(r, 'buttons');
+    assertResponseContains(r, 'Seu carrinho até agora');
     assertNoObjectObject(r);
   });
 

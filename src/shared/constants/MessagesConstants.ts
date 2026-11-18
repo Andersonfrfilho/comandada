@@ -64,9 +64,7 @@ const MessagesConstants = {
   // Carrinho
   CARRINHO_VAZIO:               '🛒 Seu carrinho ainda está vazio.\n\nDigite *2* e escolha o que vai querer! 😋',
   CARRINHO_RESUMO_PREFIX:       '🛒 *Seu carrinho até agora:*\n\n',
-  CARRINHO_RESUMO_SUFFIX:       '\n\n➕ Quer mais alguma coisa? É só digitar.\n✅ *finalizar* para fechar o pedido\n↩️ *0* para voltar ao menu',
   PEDIDO_REPETIDO:              '✅ *Pronto, repeti seu pedido!*\n\n',
-  PEDIDO_REPETIDO_SUFFIX:       '\n\n➕ Quer mais alguma coisa? É só digitar.\n🛒 *carrinho* para ver o resumo\n✅ *finalizar* para fechar o pedido\n↩️ *0* para voltar',
   PEDIDO_REPETIDO_NAO_ENCONTRADO: 'Poxa, não encontrei seu último pedido 😕\n\nDigite *2* que a gente monta um novo juntos! 🛒',
   REPEAT_ORDER_PROMPT:          '🔄 Quer repetir seu último pedido?',
   REPEAT_ORDER_RECUSA:          'Sem problemas! 😊 Como posso te ajudar?',
