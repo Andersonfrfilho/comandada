@@ -13,6 +13,7 @@ const paymentTypes: PaymentType[]        = inputData.payment_types || [];
 const orderTypes: OrderType[]            = inputData.order_types || [];
 const conversation: ConversationInfo     = inputData.conversation || { mode: 'bot', human_requested: false };
 const partialConfirmation: PartialConfirmation | null = inputData.partial_confirmation || null;
+const lastDeliveryAddress: string = (inputData.last_delivery_address || '').trim();
 
 // ── TTL de sessão ────────────────────────────────────────────────────────────
 const sessionTtlMin = establishment.session_ttl_min ?? parseInt(config['session_ttl_min'] || '60', 10);
@@ -945,8 +946,7 @@ function startCheckout(): void {
     respostas.push(orderTypeBtn());
   } else if (featureDelivery) {
     newCart.order_type = 'delivery';
-    newState = BotState.AWAITING_ADDRESS;
-    respostas.push(MessagesConstants.SOLICITAR_ENDERECO);
+    askDeliveryAddress();
   } else {
     newCart.order_type = orderTypes[0] ? orderTypes[0].name : 'retirada';
     newCart.delivery_fee = 0;
@@ -972,6 +972,28 @@ function moreItemsButtons(body: string): ButtonMessage {
     { id: 'finalizar', title: '✅ Finalizar' },
   ];
   return { type: 'buttons', body, buttons };
+}
+
+const SAVED_ADDRESS_USE_ID = 'endereco:usar';
+const SAVED_ADDRESS_OTHER_ID = 'endereco:outro';
+
+// Entregar: com endereço de entrega anterior, oferece usar o mesmo; senão pede o endereço.
+function askDeliveryAddress(): void {
+  if (lastDeliveryAddress) {
+    newState = BotState.AWAITING_SAVED_ADDRESS;
+    respostas.push({
+      type: 'buttons',
+      body: MessagesConstants.ENDERECO_SALVO_PERGUNTA(lastDeliveryAddress),
+      buttons: [
+        { id: SAVED_ADDRESS_USE_ID, title: MessagesConstants.ENDERECO_SALVO_USAR },
+        { id: SAVED_ADDRESS_OTHER_ID, title: MessagesConstants.ENDERECO_SALVO_OUTRO },
+        { id: MENU_BACK_ID, title: MessagesConstants.COMPLEMENTO_VOLTAR },
+      ],
+    });
+    return;
+  }
+  newState = BotState.AWAITING_ADDRESS;
+  respostas.push(MessagesConstants.SOLICITAR_ENDERECO);
 }
 
 const COMPLEMENT_NONE_ID = 'sem complemento';

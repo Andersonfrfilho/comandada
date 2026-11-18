@@ -174,6 +174,7 @@ interface N8nInputData {
   schedule_slots?: ScheduleDay[];
   conversation?: ConversationInfo;
   partial_confirmation?: PartialConfirmation | null;
+  last_delivery_address?: string | null;
 }
 
 // A equipe avisou que itens acabaram e espera o SIM (segue sem eles) ou NÃO (cancela) do cliente.

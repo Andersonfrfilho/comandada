@@ -227,6 +227,7 @@ async function runTests() {
         marketing_opt_in: args.marketing_opt_in !== undefined ? args.marketing_opt_in : null,
         conversation: args.conversation,
         partial_confirmation: args.partial_confirmation || null,
+        last_delivery_address: args.last_delivery_address || null,
         ...(args.establishment ? { establishment: args.establishment } : {}),
       };
 
@@ -1052,6 +1053,50 @@ async function runTests() {
     assertResponseContains(fix, 'Pra onde a gente leva');
     const back = await exec({ texto: '0', state: 'awaiting_complement', cart });
     assertState(back, 'awaiting_type');
+  });
+
+  // ── Endereço da última entrega ─────────────────────────────────────
+  const SAVED = 'Av Presidente Vargas, 1343, Cidade Nova, Franca, SP, apto 12';
+
+  await test('entregar com endereço anterior: oferece usar o mesmo (Usar este / Outro / Voltar)', async () => {
+    const r = await exec({ texto: 'delivery', state: 'awaiting_type', cart: { ...filledCart, order_type: '' }, last_delivery_address: SAVED });
+    assertState(r, 'awaiting_saved_address');
+    const message = r[0].json.respostas.find((m) => m && m.type === 'buttons');
+    assert(message && message.body.includes(SAVED), JSON.stringify(r[0].json.respostas));
+    assert(JSON.stringify(buttonIds(message)) === JSON.stringify(['endereco:usar', 'endereco:outro', '0']), JSON.stringify(message.buttons));
+  });
+
+  await test('entregar sem endereço anterior: pede o endereço como antes', async () => {
+    const r = await exec({ texto: 'delivery', state: 'awaiting_type', cart: { ...filledCart, order_type: '' } });
+    assertState(r, 'awaiting_address');
+    assertResponseContains(r, 'Pra onde a gente leva');
+  });
+
+  await test('usar este endereço: taxa calculada e vai direto ao pagamento', async () => {
+    const cart = { ...filledCart, order_type: 'delivery' };
+    const r = await exec({ texto: 'endereco:usar', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED });
+    assertState(r, 'awaiting_payment');
+    assert(r[0].json.cart.address === SAVED, r[0].json.cart.address);
+    assertResponseContains(r, 'Entrega em');
+    assertResponseType(r, 'list');
+  });
+
+  await test('usar este endereço sem achar no mapa: segue com a taxa base', async () => {
+    const cart = { ...filledCart, order_type: 'delivery' };
+    const r = await exec({ texto: 'endereco:usar', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED, geocodeMiss: () => true });
+    assertState(r, 'awaiting_payment');
+    assert(r[0].json.cart.address === SAVED, r[0].json.cart.address);
+  });
+
+  await test('outro endereço → pede o endereço; voltar → forma de receber; texto → endereço novo', async () => {
+    const cart = { ...filledCart, order_type: 'delivery' };
+    const other = await exec({ texto: 'endereco:outro', state: 'awaiting_saved_address', cart, last_delivery_address: SAVED });
+    assertState(other, 'awaiting_address');
+    assertResponseContains(other, 'Pra onde a gente leva');
+    const back = await exec({ texto: '0', state: 'awaiting_saved_address', cart, last_delivery_address: SAVED });
+    assertState(back, 'awaiting_type');
+    const typed = await exec({ texto: 'Rua Voluntários da Franca, 200', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED });
+    assertState(typed, 'awaiting_complement');
   });
 
   await test('agendar mostra os dias e depois os horários livres', async () => {
