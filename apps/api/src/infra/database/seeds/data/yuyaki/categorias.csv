@@ -3,3 +3,8 @@ id,nome,emoji,descricao,ordem,ativa
 2,Pratos,🍽️,Entradas e pratos à parte,2,true
 3,Sashimis,🐟,Fatias de peixe fresco (10 unidades),3,true
 4,Temakis,🌯,Cones de alga nos tamanhos médio e grande,4,true
+5,Refrigerantes,🥤,Refrigerantes em lata e H2O,5,true
+6,Sucos Naturais,🧃,Sucos naturais no copo ou na jarra,6,true
+7,Águas,💧,Águas e tônicas,7,true
+8,Cervejas,🍺,Garrafa 600 ml e long neck 330 ml,8,true
+9,Drinks,🍹,Caipirinhas e Cozumel,9,true
