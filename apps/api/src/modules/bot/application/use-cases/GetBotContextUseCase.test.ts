@@ -11,7 +11,7 @@ const SHARED: BotSharedContext = {
   establishment: { id: ESTABLISHMENT_ID, name: 'Yuyaki', whatsappNumber: '5511999999999', settings: {} },
   config: { opening_time: '18:00' },
   products: [
-    { id: 'p1', name: 'Temaki', price: 37, description: null, category: 'Temakis', variant_group: null, variant_label: null },
+    { id: 'p1', name: 'Temaki', price: 37, description: null, category: 'Temakis', variant_group: null, variant_label: null, image_version: null },
   ],
   paymentTypes: [],
   orderTypes: [],

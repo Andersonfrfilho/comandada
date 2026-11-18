@@ -357,6 +357,12 @@ Voltar (id `0`) nos dias, horários, forma de receber (→ resumo), pagamento (�
 Painel: página **Agenda** (`GET /agenda?date=`). Cardápio com tamanhos: `products.variant_group`/`variant_label`.
 Seed do Yuyaki: `bun run --cwd apps/api db:seed:yuyaki`.
 
+**Foto do produto:** Catálogo → Editar produto → Foto no cardápio (`PUT/DELETE /catalog/products/:id/image`, data URL).
+A API reduz para 800 px em WebP (`productImage.ts`) e grava os bytes em `product_images` (o disco do Railway some no deploy);
+`products.image_version` é o hash e vai no `?v=` de `GET /public/products/:id/foto.webp` (cache imutável). O cardápio
+online mostra a foto no card e na folha do item (tamanhos do mesmo grupo usam a primeira foto). Fotos do Yuyaki:
+`seeds/data/yuyaki/fotos.csv` (arquivo local ou URL) com `db:seed:yuyaki -- --fotos` (só quem está sem foto; `--fotos-forcar` regrava).
+
 ## Lógica do bot (src/)
 
 O nó `Rotear e Responder` do workflow é gerado a partir de módulos em `src/`:

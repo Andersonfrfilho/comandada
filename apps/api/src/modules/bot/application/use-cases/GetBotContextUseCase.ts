@@ -51,6 +51,8 @@ interface BotProduct {
   category: string
   variant_group: string | null
   variant_label: string | null
+  /** Versão da foto (`products.image_version`); null sem foto. */
+  image_version: string | null
 }
 
 interface BotTable {
@@ -339,6 +341,7 @@ export class GetBotContextUseCase {
         category: schema.catalogs.name,
         variant_group: schema.products.variantGroup,
         variant_label: schema.products.variantLabel,
+        image_version: schema.products.imageVersion,
       })
       .from(schema.products)
       .innerJoin(schema.catalogs, eq(schema.catalogs.id, schema.products.catalogId))

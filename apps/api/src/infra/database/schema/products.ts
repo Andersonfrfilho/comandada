@@ -27,6 +27,8 @@ export const products = pgTable('products', {
   // Mesmo grupo = mesmo item em tamanhos diferentes (ex.: temaki médio e grande).
   variantGroup: varchar('variant_group', { length: 80 }),
   variantLabel: varchar('variant_label', { length: 40 }),
+  /** Hash curto da foto em `product_images`; muda a cada troca e vai no `?v=` da URL pública. */
+  imageVersion: varchar('image_version', { length: 16 }),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 })

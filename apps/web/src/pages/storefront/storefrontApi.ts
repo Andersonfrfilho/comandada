@@ -15,6 +15,8 @@ export interface StorefrontItem {
   key: string
   name: string
   description: string | null
+  /** Caminho da foto na API (`/public/products/:id/foto.webp?v=`); null sem foto. */
+  image: string | null
   options: StorefrontOption[]
 }
 

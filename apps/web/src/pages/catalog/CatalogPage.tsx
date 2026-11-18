@@ -15,6 +15,8 @@ import { SectionManager } from './components/SectionManager'
 import { IngredientManager } from './components/IngredientManager'
 import { RecipeManager, RecipeCostBadge } from './components/RecipeManager'
 import { BarcodeScanner } from './components/BarcodeScanner'
+import { ProductPhotoManager } from './components/ProductPhotoManager'
+import { productImagePath, productImageUrl } from '@/lib/productImage'
 import { ExpiringBatchBadge } from './components/StockBatchList'
 import {
   ProductForm,
@@ -90,6 +92,7 @@ interface Product {
   preparationInstructions: string | null
   active: boolean
   sortOrder: number
+  imageVersion: string | null
 }
 
 type CatalogFormData = {
@@ -605,11 +608,20 @@ function CatalogPageContent() {
               {visibleProducts.map((prod) => {
                 const cat = catalogs.find((c) => c.id === prod.catalogId)
                 const sec = sections.find((s) => s.id === prod.sectionId)
+                const imageUrl = productImageUrl(productImagePath(prod.id, prod.imageVersion))
                 return (
                   <div
                     key={prod.id}
                     className={`bg-white rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${!prod.active ? 'opacity-60' : ''}`}
                   >
+                    {imageUrl && (
+                      <img
+                        src={imageUrl}
+                        alt=""
+                        loading="lazy"
+                        className="h-14 w-14 shrink-0 rounded-lg object-cover border border-gray-100"
+                      />
+                    )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
                         <span className="font-semibold text-gray-900 break-words">{prod.name}</span>
@@ -800,6 +812,14 @@ function CatalogPageContent() {
                     onScanBarcode={requestBarcodeScan}
                     onSearchSuggestions={searchSuggestions}
                   />
+                  {prodModal === 'edit' && selectedProd && (
+                    <ProductPhotoManager
+                      productId={selectedProd.id}
+                      productName={selectedProd.name}
+                      imageVersion={allProducts.find((product) => product.id === selectedProd.id)?.imageVersion ?? null}
+                      onChanged={invalidate}
+                    />
+                  )}
                   {prodModal === 'edit' && selectedProd && (
                     <RecipeManager productId={selectedProd.id} />
                   )}
