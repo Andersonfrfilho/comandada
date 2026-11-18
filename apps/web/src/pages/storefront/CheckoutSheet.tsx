@@ -207,6 +207,7 @@ export function CheckoutSheet({
         number: result.number,
         createdAt: new Date().toISOString(),
       })
+      storefrontStorage.saveLastOrderItems(establishmentId, lines)
       onChangeLines([])
       navigate(`/cardapio/pedido/${result.orderId}?t=${encodeURIComponent(result.trackingToken)}`, {
         state: { justPlaced: true, payment: result.payment },

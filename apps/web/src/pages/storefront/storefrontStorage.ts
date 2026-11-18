@@ -22,6 +22,13 @@ export interface RecentOrder {
 const cartKey = (establishmentId: string) => `storefront-cart:${establishmentId}`
 const profileKey = (establishmentId: string) => `storefront-profile:${establishmentId}`
 const recentKey = (establishmentId: string) => `storefront-recent:${establishmentId}`
+const lastOrderKey = (establishmentId: string) => `storefront-last-order:${establishmentId}`
+
+/** Itens do último pedido feito neste aparelho, para o "Peça de novo" no topo do cardápio. */
+export interface LastOrderItems {
+  lines: CartLine[]
+  createdAt: string
+}
 
 function read<T>(key: string): T | null {
   try {
@@ -52,4 +59,10 @@ export const storefrontStorage = {
   /** Último pedido feito neste aparelho, para "Acompanhar meu pedido" no topo do cardápio. */
   loadRecentOrder: (establishmentId: string): RecentOrder | null => read<RecentOrder>(recentKey(establishmentId)),
   saveRecentOrder: (establishmentId: string, order: RecentOrder) => write(recentKey(establishmentId), order),
+  loadLastOrderItems: (establishmentId: string): LastOrderItems | null => {
+    const saved = read<LastOrderItems>(lastOrderKey(establishmentId))
+    return saved && Array.isArray(saved.lines) && saved.lines.length > 0 ? saved : null
+  },
+  saveLastOrderItems: (establishmentId: string, lines: CartLine[]) =>
+    write(lastOrderKey(establishmentId), lines.length ? { lines, createdAt: new Date().toISOString() } : null),
 }
