@@ -331,6 +331,11 @@ export class StorefrontService {
     }
   }
 
+  /** Contexto do restaurante (o mesmo do bot), para o cadastro do cardápio online. */
+  async establishmentContext(establishmentId: string): Promise<BotSharedContext> {
+    return (await this.loadContext({ establishmentId })).context
+  }
+
   private async loadContext(params: { establishmentId?: string | undefined; host?: string | undefined }): Promise<{ context: BotSharedContext }> {
     const establishment = await this.repository.findEstablishment(params)
     if (!establishment) throw new NotFoundError('Cardápio')

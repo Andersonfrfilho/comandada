@@ -8,6 +8,7 @@ import {
   storefrontApi,
   type CustomerLookup,
   type DeliveryQuote,
+  type StorefrontAccount,
   type StorefrontMenu,
   type StorefrontOrderType,
   type StorefrontPaymentMethod,
@@ -31,7 +32,8 @@ const ORDER_NOTE_MAX_LENGTH = 500
 const LOOKUP_DELAY_MS = 450
 const QUOTE_DELAY_MS = 700
 
-type AddressMode = 'saved' | 'new'
+/** `saved`: última entrega pelo telefone digitado (sem mostrar); `account:N`: endereço N de quem entrou. */
+type AddressMode = 'saved' | 'new' | `account:${number}`
 
 type QuoteState =
   | { status: 'idle' }
@@ -66,26 +68,29 @@ export function CheckoutSheet({
   lines,
   onChangeLines,
   onClose,
+  account = null,
 }: {
   menu: StorefrontMenu
   lines: CartLine[]
   onChangeLines: (lines: CartLine[]) => void
   onClose: () => void
+  /** Cliente que entrou com o WhatsApp: telefone confirmado, endereços e pagamento já vêm prontos. */
+  account?: StorefrontAccount | null
 }) {
   const navigate = useNavigate()
   const establishmentId = menu.establishment.id
   const profile = useMemo(() => storefrontStorage.loadProfile(establishmentId), [establishmentId])
 
-  const [phone, setPhone] = useState(profile?.phone ?? '')
-  const [name, setName] = useState(profile?.name ?? '')
+  const [phone, setPhone] = useState(account ? maskPhone(account.phone) : (profile?.phone ?? ''))
+  const [name, setName] = useState(account?.name ?? profile?.name ?? '')
   const [orderType, setOrderType] = useState<StorefrontOrderType>(() => {
     const preferred = profile?.orderType
     return preferred && menu.orderTypes.includes(preferred) ? preferred : (menu.orderTypes[0] ?? 'retirada')
   })
   const [address, setAddress] = useState<AddressFields>(profile?.address ?? EMPTY_ADDRESS)
-  const [addressMode, setAddressMode] = useState<AddressMode>('new')
+  const [addressMode, setAddressMode] = useState<AddressMode>(account && account.addresses.length > 0 ? 'account:0' : 'new')
   const [paymentMethod, setPaymentMethod] = useState<string>(() => {
-    const preferred = profile?.paymentMethod
+    const preferred = account?.lastPaymentMethod ?? profile?.paymentMethod
     return preferred && menu.paymentMethods.some((method) => method.name === preferred) ? preferred : ''
   })
   const [changeFor, setChangeFor] = useState('')
@@ -100,7 +105,7 @@ export function CheckoutSheet({
 
   // Cliente que já pediu (pelo WhatsApp ou aqui): oferece o endereço da última entrega e a forma de pagamento.
   useEffect(() => {
-    if (!isCompletePhone(phone)) {
+    if (account || !isCompletePhone(phone)) {
       setLookup(null)
       return
     }
@@ -115,10 +120,12 @@ export function CheckoutSheet({
         .catch(() => setLookup(null))
     }, LOOKUP_DELAY_MS)
     return () => clearTimeout(timer)
-  }, [establishmentId, phone, hasSavedAddressOnDevice])
+  }, [establishmentId, phone, hasSavedAddressOnDevice, account])
 
   const useSavedAddress = orderType === 'delivery' && addressMode === 'saved' && Boolean(lookup?.hasSavedAddress)
-  const fullAddress = isAddressComplete(address) ? composeAddress(address, menu.establishment.city) : ''
+  const accountAddress = addressMode.startsWith('account:') ? (account?.addresses[Number(addressMode.slice('account:'.length))] ?? null) : null
+  const typedAddress = isAddressComplete(address) ? composeAddress(address, menu.establishment.city) : ''
+  const fullAddress = accountAddress ?? typedAddress
 
   // Taxa calculada pela API (mesma regra do bot) assim que o endereço fica completo.
   useEffect(() => {
@@ -172,7 +179,7 @@ export function CheckoutSheet({
   if (minimum > 0 && itemsTotal < minimum) errors.push(`O pedido mínimo é ${formatBRL(minimum)} (faltam ${formatBRL(minimum - itemsTotal)}).`)
   if (!isCompletePhone(phone)) errors.push('Informe seu WhatsApp com DDD.')
   if (name.trim().length < 2) errors.push('Informe seu nome.')
-  if (orderType === 'delivery' && !useSavedAddress && !isAddressComplete(address)) errors.push('Complete o endereço (rua, número e bairro).')
+  if (orderType === 'delivery' && !useSavedAddress && !accountAddress && !isAddressComplete(address)) errors.push('Complete o endereço (rua, número e bairro).')
   if (orderType === 'delivery' && quote.status === 'ready' && quote.quote.outOfRange) errors.push('Esse endereço fica fora da área de entrega.')
   if (!selectedPayment) errors.push('Escolha a forma de pagamento.')
   if (changeAmount !== null && changeAmount < total) errors.push('O troco precisa ser para um valor maior que o total.')
@@ -187,7 +194,9 @@ export function CheckoutSheet({
         ...(orderType === 'delivery'
           ? useSavedAddress
             ? { useSavedAddress: true }
-            : { address: fullAddress, complement: address.complement.trim() || undefined }
+            : accountAddress
+              ? { address: accountAddress }
+              : { address: fullAddress, complement: address.complement.trim() || undefined }
           : {}),
         paymentMethod,
         changeFor: changeAmount ?? undefined,
@@ -198,7 +207,7 @@ export function CheckoutSheet({
         phone,
         name: name.trim(),
         orderType,
-        address: orderType === 'delivery' && !useSavedAddress ? address : (profile?.address ?? null),
+        address: orderType === 'delivery' && !useSavedAddress && !accountAddress ? address : (profile?.address ?? null),
         paymentMethod,
       })
       storefrontStorage.saveRecentOrder(establishmentId, {
@@ -271,6 +280,19 @@ export function CheckoutSheet({
         </Section>
 
         <Section title="Seus dados">
+          {account ? (
+            <div className="grid gap-3">
+              <p className="flex items-center gap-2 text-sm text-gray-700">
+                <Check className="h-4 w-4 text-emerald-600" aria-hidden="true" />
+                Avisos no WhatsApp <span className="font-semibold text-gray-900">{account.phoneLabel}</span>
+              </p>
+              {!account.name && (
+                <Field label="Nome">
+                  <input value={name} onChange={(event) => setName(event.target.value.slice(0, 120))} autoComplete="name" placeholder="Como podemos te chamar?" className={inputClass} />
+                </Field>
+              )}
+            </div>
+          ) : (
           <div className="grid gap-3">
             <Field label="WhatsApp" hint="Avisamos o andamento do pedido por lá.">
               <input
@@ -286,6 +308,7 @@ export function CheckoutSheet({
               <input value={name} onChange={(event) => setName(event.target.value.slice(0, 120))} autoComplete="name" placeholder="Como podemos te chamar?" className={inputClass} />
             </Field>
           </div>
+          )}
         </Section>
 
         {menu.orderTypes.length > 0 && (
@@ -310,7 +333,21 @@ export function CheckoutSheet({
 
             {orderType === 'delivery' && (
               <div className="mt-4 space-y-3">
-                {lookup?.hasSavedAddress && (
+                {account && account.addresses.length > 0 && (
+                  <div className="grid gap-2">
+                    {account.addresses.map((saved, index) => (
+                      <RadioRow
+                        key={saved}
+                        selected={addressMode === `account:${index}`}
+                        onSelect={() => setAddressMode(`account:${index}`)}
+                        title={saved}
+                        badge={index === 0 ? 'Último' : undefined}
+                      />
+                    ))}
+                    <RadioRow selected={addressMode === 'new'} onSelect={() => setAddressMode('new')} title="Outro endereço" />
+                  </div>
+                )}
+                {!account && lookup?.hasSavedAddress && (
                   <div className="grid gap-2">
                     <RadioRow
                       selected={addressMode === 'saved'}
@@ -321,7 +358,7 @@ export function CheckoutSheet({
                     <RadioRow selected={addressMode === 'new'} onSelect={() => setAddressMode('new')} title="Outro endereço" />
                   </div>
                 )}
-                {!useSavedAddress && (
+                {!useSavedAddress && !accountAddress && (
                   <div className="grid grid-cols-6 gap-3">
                     <Field label="CEP" className="col-span-3" hint={cepLoading ? 'Buscando…' : undefined}>
                       <input
@@ -366,7 +403,7 @@ export function CheckoutSheet({
                 onSelect={() => setPaymentMethod(method.name)}
                 title={method.label}
                 description={paymentHint(method, orderType)}
-                badge={lookup?.lastPaymentMethod === method.name ? 'Último pedido' : undefined}
+                badge={(account?.lastPaymentMethod ?? lookup?.lastPaymentMethod) === method.name ? 'Último pedido' : undefined}
               />
             ))}
           </div>

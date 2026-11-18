@@ -1,8 +1,10 @@
 import { z } from 'zod'
 import type { Middleware, RouteHandler } from '@/infra/http/router'
-import { NotFoundError, RateLimitError, ValidationError } from '@/shared/errors/AppError'
+import { AppError, NotFoundError, RateLimitError, ValidationError } from '@/shared/errors/AppError'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import type { StorefrontService } from '../../application/StorefrontService'
+import type { StorefrontAccountService } from '../../application/StorefrontAccountService'
+import { SESSION_EXPIRED_ERROR_CODE, SESSION_EXPIRED_STATUS, STOREFRONT_LOGIN_MESSAGES } from '../../shared/storefrontSession'
 import { STOREFRONT_ORDER_TYPES } from '../../shared/storefront.constant'
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
@@ -25,6 +27,11 @@ const quoteSchema = z
   })
 
 const customerSchema = z.object({ phone: z.string().trim().min(8).max(25) })
+
+const loginVerifySchema = z.object({
+  phone: z.string().trim().min(8).max(25),
+  code: z.string().trim().min(4).max(12),
+})
 
 const orderSchema = z.object({
   phone: z.string().trim().min(8).max(25),
@@ -91,9 +98,41 @@ export function storefrontRateLimit(
   }
 }
 
-/** Cardápio online: rotas públicas, sem login. */
+function bearerToken(headers: Record<string, string>): string {
+  const header = headers['authorization'] ?? ''
+  const token = header.startsWith('Bearer ') ? header.slice('Bearer '.length).trim() : ''
+  if (!token) throw new AppError(STOREFRONT_LOGIN_MESSAGES.sessionExpired, SESSION_EXPIRED_ERROR_CODE, SESSION_EXPIRED_STATUS)
+  return token
+}
+
+/** Cardápio online: rotas públicas; o cadastro é opcional (código no WhatsApp, sem senha). */
 export class StorefrontController {
-  constructor(private readonly service: Pick<StorefrontService, 'menu' | 'quoteDelivery' | 'lookupCustomer' | 'placeOrder' | 'orderStatus'>) {}
+  constructor(
+    private readonly service: Pick<StorefrontService, 'menu' | 'quoteDelivery' | 'lookupCustomer' | 'placeOrder' | 'orderStatus'>,
+    private readonly accounts?: Pick<StorefrontAccountService, 'requestCode' | 'verifyCode' | 'account'>
+  ) {}
+
+  requestLoginCode: RouteHandler = async (request, response) => {
+    const establishmentId = establishmentIdFrom(request.params)
+    const body = parseOrThrow(customerSchema, request.body)
+    response.json(await this.accountService().requestCode({ establishmentId, phone: body.phone }))
+  }
+
+  verifyLoginCode: RouteHandler = async (request, response) => {
+    const establishmentId = establishmentIdFrom(request.params)
+    const body = parseOrThrow(loginVerifySchema, request.body)
+    response.json(await this.accountService().verifyCode({ establishmentId, phone: body.phone, code: body.code }))
+  }
+
+  account: RouteHandler = async (request, response) => {
+    const establishmentId = establishmentIdFrom(request.params)
+    response.json(await this.accountService().account({ establishmentId, token: bearerToken(request.headers) }))
+  }
+
+  private accountService(): Pick<StorefrontAccountService, 'requestCode' | 'verifyCode' | 'account'> {
+    if (!this.accounts) throw new NotFoundError('Cadastro')
+    return this.accounts
+  }
 
   menu: RouteHandler = async (request, response) => {
     const query = parseOrThrow(menuQuerySchema, request.query)

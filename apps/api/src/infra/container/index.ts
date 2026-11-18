@@ -4,6 +4,7 @@ import { RedisProvider } from '@/infra/redis/RedisProvider'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import { StorefrontController } from '@/modules/storefront/infra/http/StorefrontController'
 import { StorefrontService } from '@/modules/storefront/application/StorefrontService'
+import { StorefrontAccountService } from '@/modules/storefront/application/StorefrontAccountService'
 import { DrizzleStorefrontRepository } from '@/modules/storefront/infra/database/DrizzleStorefrontRepository'
 import { storefrontTrackingSecret } from '@/modules/storefront/shared/storefrontSecret'
 
@@ -582,14 +583,18 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     transcribeBotAudioUseCase
   )
   // Cardápio online: mesmo cardápio e mesmo gravador de pedido do bot, com canal `web`.
+  const storefrontRepository = new DrizzleStorefrontRepository(db)
+  const storefrontService = new StorefrontService(
+    storefrontRepository,
+    getBotContextUseCase,
+    calculateDeliveryFeeUseCase,
+    createBotOrderUseCase,
+    storefrontTrackingSecret()
+  )
+  // Cadastro opcional: o código de entrada sai pelo WhatsApp do restaurante, como mensagem do bot.
   const storefrontController = new StorefrontController(
-    new StorefrontService(
-      new DrizzleStorefrontRepository(db),
-      getBotContextUseCase,
-      calculateDeliveryFeeUseCase,
-      createBotOrderUseCase,
-      storefrontTrackingSecret()
-    )
+    storefrontService,
+    new StorefrontAccountService(storefrontRepository, storefrontService, botMessages, cache, storefrontTrackingSecret())
   )
   // Lembretes dos crons do n8n (04: "faz X dias que você pediu", 05: reserva de mesa).
   const reminderRepository = new DrizzleReminderRepository(db)

@@ -10,4 +10,7 @@ export function registerStorefrontRoutes(router: Router, controller: StorefrontC
   router.post('/public/storefront/:establishmentId/delivery-quote', limit(STOREFRONT_RATE_LIMITS.quote), controller.quoteDelivery)
   router.post('/public/storefront/:establishmentId/customer', limit(STOREFRONT_RATE_LIMITS.customer), controller.lookupCustomer)
   router.post('/public/storefront/:establishmentId/orders', limit(STOREFRONT_RATE_LIMITS.order), controller.placeOrder)
+  router.post('/public/storefront/:establishmentId/login/code', limit(STOREFRONT_RATE_LIMITS.loginCode), controller.requestLoginCode)
+  router.post('/public/storefront/:establishmentId/login/verify', limit(STOREFRONT_RATE_LIMITS.loginVerify), controller.verifyLoginCode)
+  router.get('/public/storefront/:establishmentId/me', limit(STOREFRONT_RATE_LIMITS.account), controller.account)
 }

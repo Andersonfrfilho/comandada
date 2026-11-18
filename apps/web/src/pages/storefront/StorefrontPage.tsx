@@ -1,13 +1,14 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, X } from 'lucide-react'
+import { ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
 import { productImageUrl } from '@/lib/productImage'
-import { storefrontApi, type StorefrontItem, type StorefrontMenu } from './storefrontApi'
+import { storefrontApi, type StorefrontAccount, type StorefrontAccountOrder, type StorefrontItem, type StorefrontMenu } from './storefrontApi'
 import { addToCart, cartCount, cartTotal, changeQuantity, hoursLabel, normalizeSearch, type CartLine } from './storefrontFormat'
-import { storefrontStorage, type LastOrderItems } from './storefrontStorage'
+import { storefrontStorage } from './storefrontStorage'
+import { AccountAvatar, AccountSheet, LoginSheet, firstName, useStorefrontAccount } from './StorefrontAccount'
 import { CheckoutSheet } from './CheckoutSheet'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
@@ -57,7 +58,10 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
   const [checkoutOpen, setCheckoutOpen] = useState(false)
   const [search, setSearch] = useState('')
   const recentOrder = useMemo(() => storefrontStorage.loadRecentOrder(establishmentId), [establishmentId])
-  const lastOrder = useMemo(() => storefrontStorage.loadLastOrderItems(establishmentId), [establishmentId])
+  const localLastOrder = useMemo(() => storefrontStorage.loadLastOrderItems(establishmentId), [establishmentId])
+  const { account, signIn, signOut } = useStorefrontAccount(establishmentId)
+  const [loginOpen, setLoginOpen] = useState(false)
+  const [accountOpen, setAccountOpen] = useState(false)
 
   // Item que saiu do cardápio não pode seguir no carrinho guardado no aparelho.
   const priceById = useMemo(() => {
@@ -107,7 +111,13 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
     return withPhoto.length >= FEATURED_MINIMUM ? withPhoto.slice(0, FEATURED_LIMIT) : []
   }, [menu.categories])
 
-  // Peça de novo: só os itens que ainda estão no cardápio, com o preço de hoje.
+  // Peça de novo: o último pedido da conta (WhatsApp ou site) ou, sem entrar, o último feito neste
+  // aparelho. Só os itens que ainda estão no cardápio, com o preço de hoje.
+  const lastOrder = useMemo(() => {
+    const fromAccount = account?.recentOrders.find((order) => order.items.length > 0)
+    if (fromAccount) return { createdAt: fromAccount.createdAt, lines: accountOrderLines(fromAccount) }
+    return localLastOrder
+  }, [account, localLastOrder])
   const reorderLines = useMemo(() => {
     if (!lastOrder) return []
     return lastOrder.lines
@@ -131,8 +141,14 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
     if (line) setLines((current) => changeQuantity(current, line.lineId, line.quantity - 1))
   }
 
-  function repeatLastOrder() {
-    setLines((current) => reorderLines.reduce((cart, line) => addToCart(cart, line), current))
+  function repeat(orderLines: CartLine[]) {
+    const available = orderLines
+      .filter((line) => priceById.has(line.productId))
+      .map((line) => ({ ...line, unitPrice: priceById.get(line.productId) ?? line.unitPrice }))
+    if (available.length === 0) return
+    // Repetir troca o carrinho pelo pedido escolhido: é isso que o cliente espera ver no fechamento.
+    setLines(available.reduce<CartLine[]>((cart, line) => addToCart(cart, line), []))
+    setAccountOpen(false)
     setCheckoutOpen(true)
   }
 
@@ -142,7 +158,11 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
 
   return (
     <div className={`min-h-screen pb-28 text-[#1c120d] lg:pb-12 ${STOREFRONT_CREAM}`}>
-      <MenuHeader menu={menu} />
+      <MenuHeader
+        menu={menu}
+        account={account}
+        onOpenAccount={() => (account ? setAccountOpen(true) : setLoginOpen(true))}
+      />
       <BrandStripes />
 
       <CategoryNav
@@ -169,7 +189,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
           )}
 
           {!searching && reorderLines.length > 0 && lastOrder && (
-            <ReorderCard lastOrder={lastOrder} lines={reorderLines} image={imageFor(reorderLines, imageByProduct)} onRepeat={repeatLastOrder} />
+            <ReorderCard createdAt={lastOrder.createdAt} lines={reorderLines} image={imageFor(reorderLines, imageByProduct)} onRepeat={() => repeat(reorderLines)} />
           )}
 
           {!searching && featured.length > 0 && (
@@ -238,10 +258,36 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
 
       {checkoutOpen && (
         <CheckoutSheet
+          key={account ? 'account' : 'guest'}
           menu={menu}
           lines={lines}
           onChangeLines={setLines}
           onClose={() => setCheckoutOpen(false)}
+          account={account}
+        />
+      )}
+
+      {loginOpen && (
+        <LoginSheet
+          menu={menu}
+          onClose={() => setLoginOpen(false)}
+          onSignedIn={(token, signedIn) => {
+            signIn(token, signedIn)
+            setLoginOpen(false)
+          }}
+        />
+      )}
+
+      {accountOpen && account && (
+        <AccountSheet
+          menu={menu}
+          account={account}
+          onClose={() => setAccountOpen(false)}
+          onRepeat={(order) => repeat(accountOrderLines(order))}
+          onSignOut={() => {
+            signOut()
+            setAccountOpen(false)
+          }}
         />
       )}
     </div>
@@ -252,6 +298,17 @@ function sectionId(categoryName: string): string {
   return `cat-${normalizeSearch(categoryName).replace(/[^a-z0-9]+/g, '-')}`
 }
 
+function accountOrderLines(order: StorefrontAccountOrder): CartLine[] {
+  return order.items.map((item) => ({
+    lineId: `${item.productId}:${item.notes ?? ''}`,
+    productId: item.productId,
+    name: item.name,
+    unitPrice: 0,
+    quantity: item.quantity,
+    notes: item.notes ?? '',
+  }))
+}
+
 function imageFor(lines: CartLine[], imageByProduct: Map<string, string>): string | null {
   for (const line of lines) {
     const image = imageByProduct.get(line.productId)
@@ -260,7 +317,7 @@ function imageFor(lines: CartLine[], imageByProduct: Map<string, string>): strin
   return null
 }
 
-function MenuHeader({ menu }: { menu: StorefrontMenu }) {
+function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; account: StorefrontAccount | null; onOpenAccount: () => void }) {
   const { establishment, delivery } = menu
   const initials = establishment.name
     .split(/\s+/)
@@ -276,7 +333,28 @@ function MenuHeader({ menu }: { menu: StorefrontMenu }) {
 
   return (
     <header className={`text-[#fbebd3] ${STOREFRONT_INK}`}>
-      <div className="mx-auto max-w-6xl px-4 pb-6 pt-7 sm:pt-9">
+      <div className="mx-auto max-w-6xl px-4 pb-6 pt-4 sm:pt-5">
+        <div className="mb-3 flex justify-end">
+          <button
+            type="button"
+            onClick={onOpenAccount}
+            className="flex h-11 items-center gap-2 rounded-full bg-white/10 pl-1.5 pr-4 text-sm font-semibold transition hover:bg-white/15"
+          >
+            {account ? (
+              <>
+                <AccountAvatar account={account} className="h-8 w-8 text-xs" />
+                {firstName(account) ? `Olá, ${firstName(account)}` : 'Minha conta'}
+              </>
+            ) : (
+              <>
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                  <UserRound className="h-4 w-4" aria-hidden="true" />
+                </span>
+                Entrar
+              </>
+            )}
+          </button>
+        </div>
         <div className="flex items-center gap-4 sm:gap-6">
           {establishment.logo ? (
             <img src={establishment.logo} alt="" className="h-20 w-24 shrink-0 object-contain sm:h-24 sm:w-32" />
@@ -411,10 +489,10 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
   )
 }
 
-function ReorderCard({ lastOrder, lines, image, onRepeat }: { lastOrder: LastOrderItems; lines: CartLine[]; image: string | null; onRepeat: () => void }) {
+function ReorderCard({ createdAt, lines, image, onRepeat }: { createdAt: string; lines: CartLine[]; image: string | null; onRepeat: () => void }) {
   const names = lines.map((line) => (line.quantity > 1 ? `${line.quantity} ${line.name}` : line.name))
   const summary = names.length > 2 ? `${names.slice(0, 2).join(' + ')} +${names.length - 2}` : names.join(' + ')
-  const when = new Date(lastOrder.createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', timeZone: 'America/Sao_Paulo' })
+  const when = new Date(createdAt).toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', timeZone: 'America/Sao_Paulo' })
   return (
     <section aria-label="Peça de novo" className={`mt-5 flex items-center gap-3 p-3.5 sm:gap-4 sm:p-4 ${CARD}`}>
       {image ? (

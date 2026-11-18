@@ -119,6 +119,29 @@ export interface StorefrontOrderStatus {
   establishment: { id: string; name: string; whatsappNumber: string | null }
 }
 
+export interface StorefrontAccountOrder {
+  id: string
+  number: number | null
+  createdAt: string
+  total: number
+  type: string
+  items: Array<{ productId: string; name: string; quantity: number; notes: string | null }>
+}
+
+/** Cliente que entrou com o WhatsApp (código de 6 números, sem senha). */
+export interface StorefrontAccount {
+  phone: string
+  phoneLabel: string
+  name: string | null
+  addresses: string[]
+  lastPaymentMethod: string | null
+  recentOrders: StorefrontAccountOrder[]
+}
+
+/** A página oferece "mande um oi" quando o WhatsApp não deixa o restaurante mandar o código. */
+export const WINDOW_CLOSED_ERROR_CODE = 'whatsapp_window_closed'
+export const SESSION_EXPIRED_ERROR_CODE = 'storefront_session_expired'
+
 const TOO_MANY_REQUESTS = 429
 
 /** 429 do limite por IP chega em inglês; o cliente precisa de uma frase que diga o que fazer. */
@@ -147,6 +170,17 @@ export const storefrontApi = {
   },
   placeOrder(establishmentId: string, body: PlaceOrderBody): Promise<PlaceOrderResult> {
     return api.post<PlaceOrderResult>(`/public/storefront/${establishmentId}/orders`, body).catch(friendly)
+  },
+  requestLoginCode(establishmentId: string, phone: string): Promise<{ sentTo: string; expiresInSeconds: number }> {
+    return api.post<{ sentTo: string; expiresInSeconds: number }>(`/public/storefront/${establishmentId}/login/code`, { phone }).catch(friendly)
+  },
+  verifyLoginCode(establishmentId: string, phone: string, code: string): Promise<{ token: string; account: StorefrontAccount }> {
+    return api
+      .post<{ token: string; account: StorefrontAccount }>(`/public/storefront/${establishmentId}/login/verify`, { phone, code })
+      .catch(friendly)
+  },
+  account(establishmentId: string, sessionToken: string): Promise<StorefrontAccount> {
+    return api.get<StorefrontAccount>(`/public/storefront/${establishmentId}/me`, sessionToken).catch(friendly)
   },
   orderStatus(orderId: string, token: string): Promise<StorefrontOrderStatus> {
     return api.get<StorefrontOrderStatus>(`/public/storefront/orders/${orderId}?token=${encodeURIComponent(token)}`).catch(friendly)
