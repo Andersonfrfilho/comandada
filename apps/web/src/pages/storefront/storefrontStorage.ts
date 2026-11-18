@@ -22,6 +22,7 @@ export interface RecentOrder {
 const cartKey = (establishmentId: string) => `storefront-cart:${establishmentId}`
 const profileKey = (establishmentId: string) => `storefront-profile:${establishmentId}`
 const recentKey = (establishmentId: string) => `storefront-recent:${establishmentId}`
+const sessionKey = (establishmentId: string) => `storefront-session:${establishmentId}`
 const lastOrderKey = (establishmentId: string) => `storefront-last-order:${establishmentId}`
 
 /** Itens do último pedido feito neste aparelho, para o "Peça de novo" no topo do cardápio. */
@@ -59,6 +60,12 @@ export const storefrontStorage = {
   /** Último pedido feito neste aparelho, para "Acompanhar meu pedido" no topo do cardápio. */
   loadRecentOrder: (establishmentId: string): RecentOrder | null => read<RecentOrder>(recentKey(establishmentId)),
   saveRecentOrder: (establishmentId: string, order: RecentOrder) => write(recentKey(establishmentId), order),
+  /** Sessão de quem entrou com o WhatsApp (vale 90 dias; "Sair" apaga). */
+  loadSession: (establishmentId: string): string | null => {
+    const token = read<string>(sessionKey(establishmentId))
+    return typeof token === 'string' && token ? token : null
+  },
+  saveSession: (establishmentId: string, token: string | null) => write(sessionKey(establishmentId), token),
   loadLastOrderItems: (establishmentId: string): LastOrderItems | null => {
     const saved = read<LastOrderItems>(lastOrderKey(establishmentId))
     return saved && Array.isArray(saved.lines) && saved.lines.length > 0 ? saved : null

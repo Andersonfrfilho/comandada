@@ -363,6 +363,15 @@ A API reduz para 800 px em WebP (`productImage.ts`) e grava os bytes em `product
 online mostra a foto no card e na folha do item (tamanhos do mesmo grupo usam a primeira foto). Fotos do Yuyaki:
 `seeds/data/yuyaki/fotos.csv` (arquivo local ou URL) com `db:seed:yuyaki -- --fotos` (só quem está sem foto; `--fotos-forcar` regrava).
 
+**Cadastro do cardápio online (opcional, sem senha):** `POST /public/storefront/:id/login/code` manda um código de 6
+números pelo WhatsApp do restaurante (mensagem do bot; código com hash no Redis por 10 min, 5 tentativas, 3 envios por
+15 min por telefone). Janela de 24 h fechada → erro `whatsapp_window_closed` e a página pede um "oi" no WhatsApp antes.
+`POST …/login/verify` devolve uma sessão assinada (HMAC com `STOREFRONT_TRACKING_SECRET`/`JWT_SECRET`, 90 dias, só daquele
+restaurante) e `GET …/me` (Bearer) traz endereços das últimas entregas, pagamento do último pedido e os 5 últimos pedidos
+para repetir. Sessão inválida responde 403 (`storefront_session_expired`), não 401, para não acionar a renovação do painel.
+Código em `apps/api/src/modules/storefront/application/StorefrontAccountService.ts` e
+`apps/web/src/pages/storefront/StorefrontAccount.tsx`.
+
 ## Lógica do bot (src/)
 
 O nó `Rotear e Responder` do workflow é gerado a partir de módulos em `src/`:

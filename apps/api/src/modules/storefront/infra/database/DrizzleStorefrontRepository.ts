@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import { deliveryAddressText, singlePaymentMethod } from '@/modules/bot/application/use-cases/GetBotContextUseCase'
@@ -9,10 +9,11 @@ import type {
   StorefrontRepository,
   StorefrontTrackedOrder,
 } from '../../application/StorefrontService'
+import type { StorefrontAccountOrder, StorefrontAccountRepository } from '../../application/StorefrontAccountService'
 
 type Database = NodePgDatabase<typeof schema>
 
-export class DrizzleStorefrontRepository implements StorefrontRepository {
+export class DrizzleStorefrontRepository implements StorefrontRepository, StorefrontAccountRepository {
   constructor(private readonly db: Database) {}
 
   /** Pelo id da URL; senão pelo domínio cadastrado na marca; senão o primeiro restaurante (como o bot). */
@@ -53,6 +54,55 @@ export class DrizzleStorefrontRepository implements StorefrontRepository {
       .orderBy(desc(schema.deliveries.createdAt))
       .limit(1)
     return row ? deliveryAddressText(row.snapshot) : null
+  }
+
+  async deliveryAddresses(establishmentId: string, customerId: string, limit: number): Promise<string[]> {
+    const rows = await this.db
+      .select({ snapshot: schema.deliveries.addressSnapshot })
+      .from(schema.deliveries)
+      .innerJoin(schema.orders, eq(schema.orders.id, schema.deliveries.orderId))
+      .where(and(eq(schema.orders.customerId, customerId), eq(schema.deliveries.establishmentId, establishmentId)))
+      .orderBy(desc(schema.deliveries.createdAt))
+      .limit(limit * 5)
+    const addresses: string[] = []
+    for (const row of rows) {
+      const text = deliveryAddressText(row.snapshot)
+      if (text && !addresses.some((address) => address.toLowerCase() === text.toLowerCase())) addresses.push(text)
+      if (addresses.length >= limit) break
+    }
+    return addresses
+  }
+
+  async recentOrders(establishmentId: string, customerId: string, limit: number): Promise<StorefrontAccountOrder[]> {
+    const orders = await this.db
+      .select({
+        id: schema.orders.id,
+        number: schema.orders.number,
+        createdAt: schema.orders.createdAt,
+        totalAmount: schema.orders.totalAmount,
+        type: schema.orders.type,
+      })
+      .from(schema.orders)
+      .where(and(eq(schema.orders.customerId, customerId), eq(schema.orders.establishmentId, establishmentId), ne(schema.orders.status, 'cancelled')))
+      .orderBy(desc(schema.orders.createdAt))
+      .limit(limit)
+    if (orders.length === 0) return []
+    const items = await this.db.query.orderItems.findMany({
+      where: inArray(
+        schema.orderItems.orderId,
+        orders.map((order) => order.id)
+      ),
+    })
+    return orders.map((order) => ({
+      id: order.id,
+      number: order.number ?? null,
+      createdAt: order.createdAt,
+      totalAmount: Number(order.totalAmount),
+      type: order.type,
+      items: items
+        .filter((item) => item.orderId === order.id)
+        .map((item) => ({ productId: item.productId ?? null, name: item.productName, quantity: item.quantity, notes: item.notes ?? null })),
+    }))
   }
 
   async lastPaymentMethod(customerId: string): Promise<string | null> {

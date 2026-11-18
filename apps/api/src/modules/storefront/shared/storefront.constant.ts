@@ -7,6 +7,9 @@ export const STOREFRONT_RATE_LIMITS = {
   customer: { keyPrefix: 'storefront:customer', windowSeconds: 60, maxRequests: 10 },
   order: { keyPrefix: 'storefront:order', windowSeconds: 600, maxRequests: 6 },
   tracking: { keyPrefix: 'storefront:tracking', windowSeconds: 60, maxRequests: 60 },
+  loginCode: { keyPrefix: 'storefront:login-code', windowSeconds: 600, maxRequests: 6 },
+  loginVerify: { keyPrefix: 'storefront:login-verify', windowSeconds: 600, maxRequests: 20 },
+  account: { keyPrefix: 'storefront:account', windowSeconds: 60, maxRequests: 60 },
 } as const
 
 export const STOREFRONT_ORDER_CODE_PREFIX = 'WEB-'
