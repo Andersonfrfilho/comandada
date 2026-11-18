@@ -36,6 +36,15 @@ export interface StorefrontCategory {
 }
 
 /**
+ * Nome do card de um item com tamanhos, como o bot mostra: "Temaki de Salmão (Médio)" vira "Temaki de Salmão".
+ * O `variant_group` do seed é uma chave ("temaki-salmao") e não serve de título.
+ */
+function variantBaseName(product: StorefrontSourceProduct): string {
+  const base = product.variant_label ? product.name.replace(/\s*\([^)]*\)\s*$/, '').trim() : product.name
+  return base || product.name
+}
+
+/**
  * Cardápio do bot (já na ordem certa) em categorias, com os tamanhos do mesmo item juntos num card
  * só ("Temaki salmão": Médio R$ 25 · Grande R$ 32), como a tela do tamanho do bot.
  */
@@ -59,7 +68,7 @@ export function groupStorefrontMenu(products: StorefrontSourceProduct[]): Storef
         existing.image ??= image
         continue
       }
-      category.items.push({ key, name: groupName, description: product.description, image, options: [option] })
+      category.items.push({ key, name: variantBaseName(product), description: product.description, image, options: [option] })
       continue
     }
     category.items.push({ key: product.id, name: product.name, description: product.description, image, options: [option] })
