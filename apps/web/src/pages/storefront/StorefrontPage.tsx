@@ -13,6 +13,7 @@ import { CheckoutSheet } from './CheckoutSheet'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
+import { MOTION, StorefrontMotionStyles, flyToCart, useRevealOnScroll } from './storefrontMotion'
 
 const NOTE_MAX_LENGTH = 140
 const FEATURED_LIMIT = 8
@@ -126,12 +127,13 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
       .map((line) => ({ ...line, unitPrice: priceById.get(line.productId) ?? line.unitPrice }))
   }, [lastOrder, priceById])
 
-  function quickAdd(item: StorefrontItem) {
+  function quickAdd(item: StorefrontItem, source?: HTMLElement) {
     const option = item.options[0]
     if (item.options.length !== 1 || !option) {
       setSelectedItem(item)
       return
     }
+    flyToCart(source ?? null, productImageUrl(item.image))
     setLines((current) => addToCart(current, { productId: option.productId, name: item.name, unitPrice: option.price, quantity: 1, notes: '' }))
   }
 
@@ -156,9 +158,12 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
   const count = cartCount(lines)
   const total = cartTotal(lines)
   const searching = normalizeSearch(search).length > 0
+  const mainRef = useRef<HTMLElement>(null)
+  useRevealOnScroll(mainRef, `${search}|${menu.categories.length}`)
 
   return (
     <div className={`min-h-screen pb-28 text-[#1c120d] lg:pb-12 ${STOREFRONT_CREAM}`}>
+      <StorefrontMotionStyles />
       <MenuHeader
         menu={menu}
         account={account}
@@ -176,7 +181,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
       />
 
       <div className="mx-auto max-w-6xl px-4 lg:flex lg:items-start lg:gap-8">
-        <main className="min-w-0 flex-1">
+        <main ref={mainRef} className="min-w-0 flex-1">
           {recentOrder && (
             <Link
               to={`/cardapio/pedido/${recentOrder.orderId}?t=${encodeURIComponent(recentOrder.token)}`}
@@ -197,8 +202,8 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
             <section className="pt-7" aria-labelledby="destaques">
               <h2 id="destaques" className={`mb-3 text-2xl font-semibold ${DISPLAY_FONT}`}>Destaques</h2>
               <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
-                {featured.map((item) => (
-                  <FeaturedCard key={item.key} item={item} onOpen={() => setSelectedItem(item)} onAdd={() => quickAdd(item)} />
+                {featured.map((item, index) => (
+                  <FeaturedCard key={item.key} index={index} item={item} onOpen={() => setSelectedItem(item)} onAdd={(source) => quickAdd(item, source)} />
                 ))}
               </ul>
             </section>
@@ -211,13 +216,14 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
             <section key={category.name} id={sectionId(category.name)} data-category={category.name} className="scroll-mt-36 pt-7">
               <h2 className={`mb-3 text-2xl font-semibold ${DISPLAY_FONT}`}>{category.name}</h2>
               <ul className="grid gap-3 xl:grid-cols-2">
-                {category.items.map((item) => (
+                {category.items.map((item, index) => (
                   <ItemRow
                     key={item.key}
+                    index={index}
                     item={item}
                     quantity={item.options.reduce((sum, option) => sum + (quantityByProduct.get(option.productId) ?? 0), 0)}
                     onOpen={() => setSelectedItem(item)}
-                    onAdd={() => quickAdd(item)}
+                    onAdd={(source) => quickAdd(item, source)}
                     onRemove={() => quickRemove(item)}
                   />
                 ))}
@@ -231,17 +237,18 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
       </div>
 
       {count > 0 && !checkoutOpen && (
-        <div className={`fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#fbf4ea] via-[#fbf4ea]/95 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:hidden`}>
+        <div className={`fixed inset-x-0 bottom-0 z-30 ${MOTION.rise} bg-gradient-to-t from-[#fbf4ea] via-[#fbf4ea]/95 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:hidden`}>
           <button
             type="button"
             onClick={() => setCheckoutOpen(true)}
+            data-cart-target
             className={`mx-auto flex w-full max-w-2xl items-center justify-between rounded-2xl px-5 py-4 text-[#fbebd3] shadow-lg shadow-black/25 transition active:scale-[0.99] ${STOREFRONT_INK}`}
           >
             <span className="flex items-center gap-3">
-              <span className="flex h-7 min-w-7 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[13px] font-bold text-white">{count}</span>
+              <span key={count} className={`flex h-7 min-w-7 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[13px] font-bold text-white ${MOTION.pop}`}>{count}</span>
               <span className="font-semibold">Ver carrinho</span>
             </span>
-            <span className="font-semibold tabular-nums">{formatBRL(total)}</span>
+            <span key={total} className={`font-semibold tabular-nums ${MOTION.rise}`}>{formatBRL(total)}</span>
           </button>
         </div>
       )}
@@ -250,7 +257,8 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
         <ItemSheet
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
-          onAdd={(line) => {
+          onAdd={(line, source) => {
+            flyToCart(source, productImageUrl(selectedItem.image))
             setLines((current) => addToCart(current, line))
             setSelectedItem(null)
           }}
@@ -358,13 +366,13 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
         </div>
         <div className="flex items-center gap-4 sm:gap-6">
           {establishment.logo ? (
-            <img src={establishment.logo} alt="" className="h-20 w-24 shrink-0 object-contain sm:h-24 sm:w-32" />
+            <img src={establishment.logo} alt="" className={`h-20 w-24 shrink-0 object-contain sm:h-24 sm:w-32 ${MOTION.intro}`} />
           ) : (
             <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-xl font-bold text-white">
               {initials}
             </div>
           )}
-          <div className="min-w-0">
+          <div className={`min-w-0 ${MOTION.intro}`} style={{ ['--sf-delay' as string]: '80ms' }}>
             <h1 className={`text-xl font-semibold uppercase leading-tight tracking-[0.1em] sm:text-4xl sm:tracking-[0.12em] ${DISPLAY_FONT}`}>{establishment.name}</h1>
             <p className="mt-2 flex items-center gap-2 text-sm">
               <span
@@ -378,7 +386,7 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
             </p>
           </div>
         </div>
-        <div className="mt-5 flex flex-wrap gap-2 text-xs">
+        <div className={`mt-5 flex flex-wrap gap-2 text-xs ${MOTION.intro}`} style={{ ['--sf-delay' as string]: '160ms' }}>
           {deliveryText && <Chip>{deliveryText}</Chip>}
           {delivery?.freeAbove && menu.orderTypes.includes('delivery') && <Chip>Grátis acima de {formatBRL(delivery.freeAbove)}</Chip>}
           {menu.orderTypes.includes('retirada') && <Chip>Retirada no local</Chip>}
@@ -557,13 +565,21 @@ function optionsLabel(item: StorefrontItem): string | null {
   return labels.length ? labels.join(' ou ') : null
 }
 
-function FeaturedCard({ item, onOpen, onAdd }: { item: StorefrontItem; onOpen: () => void; onAdd: () => void }) {
+function FeaturedCard({ item, index, onOpen, onAdd }: { item: StorefrontItem; index: number; onOpen: () => void; onAdd: (source: HTMLElement) => void }) {
   const imageUrl = productImageUrl(item.image)
   const detail = optionsLabel(item) ?? item.description
   return (
-    <li className={`relative flex w-44 shrink-0 snap-start flex-col overflow-hidden sm:w-auto ${CARD}`}>
+    <li
+      data-reveal
+      data-reveal-index={index}
+      className={`group relative flex w-44 shrink-0 snap-start flex-col overflow-hidden sm:w-auto ${MOTION.reveal} ${CARD} motion-safe:sm:transition-shadow motion-safe:sm:hover:shadow-lg`}
+    >
       <button type="button" onClick={onOpen} className="flex flex-1 flex-col text-left">
-        {imageUrl && <img src={imageUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full bg-stone-100 object-cover" />}
+        {imageUrl && (
+          <span className="block overflow-hidden">
+            <img src={imageUrl} alt="" loading="lazy" decoding="async" className="aspect-[4/3] w-full bg-stone-100 object-cover motion-safe:transition-transform motion-safe:duration-500 motion-safe:group-hover:scale-105" />
+          </span>
+        )}
         <span className="flex flex-1 flex-col gap-1 px-3 pb-3 pt-2.5">
           <span className="font-semibold leading-snug">{item.name}</span>
           {detail && <span className="line-clamp-1 text-xs text-[#6b574b]">{detail}</span>}
@@ -572,7 +588,7 @@ function FeaturedCard({ item, onOpen, onAdd }: { item: StorefrontItem; onOpen: (
       </button>
       <button
         type="button"
-        onClick={onAdd}
+        onClick={(event) => onAdd(event.currentTarget)}
         aria-label={`Adicionar ${item.name}`}
         className="absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white shadow-md active:scale-95 transition"
       >
@@ -584,22 +600,24 @@ function FeaturedCard({ item, onOpen, onAdd }: { item: StorefrontItem; onOpen: (
 
 function ItemRow({
   item,
+  index,
   quantity,
   onOpen,
   onAdd,
   onRemove,
 }: {
   item: StorefrontItem
+  index: number
   quantity: number
   onOpen: () => void
-  onAdd: () => void
+  onAdd: (source: HTMLElement) => void
   onRemove: () => void
 }) {
   const singleOption = item.options.length === 1
   const imageUrl = productImageUrl(item.image)
   const options = optionsLabel(item)
   return (
-    <li className={`flex items-center gap-3 p-3.5 ${CARD}`}>
+    <li data-reveal data-reveal-index={index} className={`group flex items-center gap-3 p-3.5 ${MOTION.reveal} ${CARD} motion-safe:sm:transition-shadow motion-safe:sm:hover:shadow-lg`}>
       <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">{item.name}</span>
@@ -613,31 +631,31 @@ function ItemRow({
             alt=""
             loading="lazy"
             decoding="async"
-            className="h-24 w-24 shrink-0 rounded-xl bg-stone-100 object-cover"
+            className="h-24 w-24 shrink-0 rounded-xl bg-stone-100 object-cover motion-safe:transition-transform motion-safe:duration-500 motion-safe:group-hover:scale-[1.04]"
           />
         )}
       </button>
       <div className="flex shrink-0 items-center self-center">
         {quantity > 0 && singleOption ? (
-          <div className="flex flex-col items-center gap-1 rounded-full bg-brand-50 p-1 ring-1 ring-brand-200">
-            <button type="button" onClick={onAdd} aria-label={`Adicionar mais um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm">
+          <div className={`flex flex-col items-center gap-1 rounded-full bg-brand-50 p-1 ring-1 ring-brand-200 ${MOTION.rise}`}>
+            <button type="button" onClick={(event) => onAdd(event.currentTarget)} aria-label={`Adicionar mais um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm transition active:scale-90">
               <Plus className="h-4 w-4" />
             </button>
-            <span className="text-sm font-bold tabular-nums text-brand-700">{quantity}</span>
-            <button type="button" onClick={onRemove} aria-label={`Tirar um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-brand-700 shadow-sm">
+            <span key={quantity} className={`text-sm font-bold tabular-nums text-brand-700 ${MOTION.pop}`}>{quantity}</span>
+            <button type="button" onClick={onRemove} aria-label={`Tirar um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-white text-brand-700 shadow-sm transition active:scale-90">
               <Minus className="h-4 w-4" />
             </button>
           </div>
         ) : (
           <button
             type="button"
-            onClick={onAdd}
+            onClick={(event) => onAdd(event.currentTarget)}
             aria-label={`Adicionar ${item.name}`}
             className="relative flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-md shadow-brand-600/25 transition active:scale-95"
           >
             <Plus className="h-5 w-5" />
             {quantity > 0 && (
-              <span className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${STOREFRONT_INK}`}>
+              <span key={quantity} className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${STOREFRONT_INK} ${MOTION.pop}`}>
                 {quantity}
               </span>
             )}
@@ -665,7 +683,7 @@ function CartPanel({
   const missing = minimum > 0 && total < minimum ? minimum - total : 0
   return (
     <aside aria-label="Seu pedido" className="sticky top-24 mt-7 hidden w-[360px] shrink-0 lg:block">
-      <div className={`flex max-h-[calc(100vh-8rem)] flex-col p-5 ${CARD}`}>
+      <div data-cart-target className={`flex max-h-[calc(100vh-8rem)] flex-col p-5 ${CARD}`}>
         <h2 className={`text-2xl font-semibold ${DISPLAY_FONT}`}>Seu pedido</h2>
         {lines.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-[#6b574b]">
@@ -676,7 +694,7 @@ function CartPanel({
           <>
             <ul className="mt-3 flex-1 divide-y divide-[#f3e8da] overflow-y-auto">
               {lines.map((line) => (
-                <li key={line.lineId} className="flex items-center gap-3 py-3">
+                <li key={line.lineId} className={`flex items-center gap-3 py-3 ${MOTION.rise}`}>
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{line.name}</p>
                     {line.notes && <p className="text-xs italic text-[#6b574b]">{line.notes}</p>}
@@ -691,7 +709,7 @@ function CartPanel({
                     >
                       {line.quantity === 1 ? <Trash2 className="h-3.5 w-3.5 text-red-600" /> : <Minus className="h-3.5 w-3.5" />}
                     </button>
-                    <span className="w-6 text-center text-sm font-bold tabular-nums">{line.quantity}</span>
+                    <span key={line.quantity} className={`w-6 text-center text-sm font-bold tabular-nums ${MOTION.pop}`}>{line.quantity}</span>
                     <button
                       type="button"
                       onClick={() => onChangeLines(changeQuantity(lines, line.lineId, line.quantity + 1))}
@@ -706,7 +724,7 @@ function CartPanel({
             </ul>
             <div className="mt-2 flex items-center justify-between border-t border-dashed border-[#e0cdb4] pt-3 text-base font-bold">
               <span>Itens</span>
-              <span className="tabular-nums">{formatBRL(total)}</span>
+              <span key={total} className={`tabular-nums ${MOTION.rise}`}>{formatBRL(total)}</span>
             </div>
             {missing > 0 && <p className="mt-1 text-xs text-[#6b574b]">Faltam {formatBRL(missing)} para o pedido mínimo.</p>}
             <button
@@ -731,7 +749,7 @@ function ItemSheet({
 }: {
   item: StorefrontItem
   onClose: () => void
-  onAdd: (line: Omit<CartLine, 'lineId'>) => void
+  onAdd: (line: Omit<CartLine, 'lineId'>, source: HTMLElement) => void
 }) {
   const [optionId, setOptionId] = useState(item.options[0]?.productId ?? '')
   const [quantity, setQuantity] = useState(1)
@@ -746,7 +764,7 @@ function ItemSheet({
           <img
             src={productImageUrl(item.image) ?? undefined}
             alt={item.name}
-            className="aspect-[4/3] w-full rounded-2xl bg-stone-100 object-cover"
+            className={`aspect-[4/3] w-full rounded-2xl bg-stone-100 object-cover ${MOTION.rise}`}
           />
         )}
         {item.description && <p className="whitespace-pre-line text-[15px] leading-relaxed text-[#4f3e34]">{item.description}</p>}
@@ -798,26 +816,29 @@ function ItemSheet({
           <button type="button" onClick={() => setQuantity((value) => Math.max(1, value - 1))} aria-label="Diminuir" className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
             <Minus className="h-4 w-4" />
           </button>
-          <span className="w-7 text-center font-bold tabular-nums">{quantity}</span>
+          <span key={quantity} className={`w-7 text-center font-bold tabular-nums ${MOTION.pop}`}>{quantity}</span>
           <button type="button" onClick={() => setQuantity((value) => Math.min(99, value + 1))} aria-label="Aumentar" className="flex h-9 w-9 items-center justify-center rounded-full bg-white shadow-sm">
             <Plus className="h-4 w-4" />
           </button>
         </div>
         <button
           type="button"
-          onClick={() =>
-            onAdd({
-              productId: option.productId,
-              name: option.label && item.options.length > 1 ? `${item.name} (${option.label})` : item.name,
-              unitPrice: option.price,
-              quantity,
-              notes,
-            })
+          onClick={(event) =>
+            onAdd(
+              {
+                productId: option.productId,
+                name: option.label && item.options.length > 1 ? `${item.name} (${option.label})` : item.name,
+                unitPrice: option.price,
+                quantity,
+                notes,
+              },
+              event.currentTarget
+            )
           }
-          className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 font-semibold text-white shadow-md shadow-brand-600/25"
+          className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 font-semibold text-white shadow-md shadow-brand-600/25 transition active:scale-[0.98]"
         >
           <span>Adicionar</span>
-          <span className="tabular-nums">{formatBRL(option.price * quantity)}</span>
+          <span key={option.price * quantity} className={`tabular-nums ${MOTION.pop}`}>{formatBRL(option.price * quantity)}</span>
         </button>
       </div>
     </BottomSheet>
