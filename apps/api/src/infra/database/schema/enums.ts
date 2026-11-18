@@ -12,7 +12,7 @@ export const orderStatusEnum = pgEnum('order_status', [
 
 export const orderTypeEnum = pgEnum('order_type', ['delivery', 'pickup', 'table'])
 
-export const orderChannelEnum = pgEnum('order_channel', ['whatsapp', 'ifood', 'manual'])
+export const orderChannelEnum = pgEnum('order_channel', ['whatsapp', 'ifood', 'manual', 'web'])
 
 export const deliveryStatusEnum = pgEnum('delivery_status', [
   'pending',

@@ -93,3 +93,13 @@ export const ORDER_STATUS_TEMPLATE_TEXTS = {
   delivered: 'Ele foi entregue. Bom apetite! 😋',
   cancelled: 'Ele foi cancelado. Se tiver dúvida, responda esta mensagem. 🧡',
 } as const
+
+/**
+ * Canais em que o cliente deu o WhatsApp para acompanhar o pedido: o bot e o cardápio online.
+ * Só eles recebem aviso de status, pagamento e estorno pelo WhatsApp.
+ */
+export const CUSTOMER_WHATSAPP_CHANNELS: ReadonlySet<string> = new Set(['whatsapp', 'web'])
+
+export function notifiesCustomerByWhatsApp(channel: string): boolean {
+  return CUSTOMER_WHATSAPP_CHANNELS.has(channel)
+}

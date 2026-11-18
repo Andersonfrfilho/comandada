@@ -1,6 +1,11 @@
 import { db } from '@/infra/database/connection'
 import { isAudioOrdersEnabled } from '@/shared/constants/featureFlags.constant'
 import { RedisProvider } from '@/infra/redis/RedisProvider'
+import type { CacheProvider } from '@/shared/providers/CacheProvider'
+import { StorefrontController } from '@/modules/storefront/infra/http/StorefrontController'
+import { StorefrontService } from '@/modules/storefront/application/StorefrontService'
+import { DrizzleStorefrontRepository } from '@/modules/storefront/infra/database/DrizzleStorefrontRepository'
+import { storefrontTrackingSecret } from '@/modules/storefront/shared/storefrontSecret'
 
 // Auth
 import { DrizzleUserRepository } from '@/modules/auth/infra/repositories/DrizzleUserRepository'
@@ -266,6 +271,9 @@ export interface AppContainer {
   settingsController: SettingsController
   brandingController: BrandingController
   menuPdfController: MenuPdfController
+  storefrontController: StorefrontController
+  /** Contador do limite por IP das rotas públicas do cardápio online. */
+  storefrontRateLimitCache: CacheProvider
   deliveryFeeController: DeliveryFeeController
   botController: BotController
   reminderController: ReminderController
@@ -555,22 +563,33 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
         )
       : null,
   })
+  const createBotOrderUseCase = new CreateBotOrderUseCase(
+    db,
+    botCustomerService,
+    createOrderUseCase,
+    scheduleBooking,
+    new EstimateOrderTimeUseCase(db),
+    createOrderChargeUseCase
+  )
   const botController = new BotController(
     getBotContextUseCase,
     new SaveBotSessionUseCase(db, wsHub),
-    new CreateBotOrderUseCase(
-      db,
-      botCustomerService,
-      createOrderUseCase,
-      scheduleBooking,
-      new EstimateOrderTimeUseCase(db),
-      createOrderChargeUseCase
-    ),
+    createBotOrderUseCase,
     botCustomerService,
     new CreateBotReservationUseCase(botCustomerService, new ReserveTableUseCase(db, scheduling, agendaSetupService)),
     new CreateOrderIssueUseCase(db, botCustomerService, wsHub),
     new AnswerPartialConfirmationUseCase(db, wsHub, updateOrderStatusUseCase, refundOrderPaymentUseCase),
     transcribeBotAudioUseCase
+  )
+  // Cardápio online: mesmo cardápio e mesmo gravador de pedido do bot, com canal `web`.
+  const storefrontController = new StorefrontController(
+    new StorefrontService(
+      new DrizzleStorefrontRepository(db),
+      getBotContextUseCase,
+      calculateDeliveryFeeUseCase,
+      createBotOrderUseCase,
+      storefrontTrackingSecret()
+    )
   )
   // Lembretes dos crons do n8n (04: "faz X dias que você pediu", 05: reserva de mesa).
   const reminderRepository = new DrizzleReminderRepository(db)
@@ -790,6 +809,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     settingsController,
     brandingController,
     menuPdfController,
+    storefrontController,
+    storefrontRateLimitCache: cache,
     deliveryFeeController,
     botController,
     reminderController,
