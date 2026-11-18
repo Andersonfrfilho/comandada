@@ -574,7 +574,7 @@ async function runTests() {
   });
 
   await test('retirada → pede pagamento diretamente', async () => {
-    const r = await exec({ texto: 'retirada', state: 'awaiting_type', cart: { ...cartWithItem, order_type: '' } });
+    const r = await exec({ texto: 'retirada', state: 'awaiting_type', cart: { ...cartWithItem, order_type: '', order_note_asked: true } });
     assertState(r, 'awaiting_payment');
     assertResponseType(r, 'list');
     assertNoObjectObject(r);
@@ -787,7 +787,7 @@ async function runTests() {
     const r = await exec({ texto: 'size:9', state: 'awaiting_size', provider: 'evolution', cart: { items: [], browse_category: 'Temakis', pending_group: 'temaki-hot' } });
     assertState(r, 'awaiting_qty');
     const text = r[0].json.respostas.find((message) => typeof message === 'string' && message.includes('Adicionar'));
-    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar 1*') && text.includes('• *📝 Com observação*'), String(text));
+    assert(text && !/\*1\.\*/.test(text) && text.includes('• *✅ Adicionar 1*') && !text.includes('Com observação'), String(text));
     assert(Object.keys(r[0].json.cart.menu_choices).length === 0, 'não deveria guardar números');
   });
 
@@ -1041,10 +1041,10 @@ async function runTests() {
 
   await test('botões do complemento: sem complemento → pagamento, corrigir → endereço, voltar → forma de receber', async () => {
     const cart = { ...filledCart, order_type: 'delivery', address: 'Av Presidente Vargas, 6531, Franca, SP', delivery_fee: 5 };
-    const none = await exec({ texto: 'sem complemento', state: 'awaiting_complement', cart });
+    const none = await exec({ texto: 'sem complemento', state: 'awaiting_complement', cart: { ...cart, order_note_asked: true } });
     assertState(none, 'awaiting_payment');
     assert(none[0].json.cart.complement === '', 'complemento vazio');
-    const typed = await exec({ texto: 'Apto 42', state: 'awaiting_complement', cart });
+    const typed = await exec({ texto: 'Apto 42', state: 'awaiting_complement', cart: { ...cart, order_note_asked: true } });
     assertState(typed, 'awaiting_payment');
     assert(typed[0].json.cart.complement === 'Apto 42', typed[0].json.cart.complement);
     const fix = await exec({ texto: 'endereco:corrigir', state: 'awaiting_complement', cart });
@@ -1073,7 +1073,7 @@ async function runTests() {
   });
 
   await test('usar este endereço: taxa calculada e vai direto ao pagamento', async () => {
-    const cart = { ...filledCart, order_type: 'delivery' };
+    const cart = { ...filledCart, order_type: 'delivery', order_note_asked: true };
     const r = await exec({ texto: 'endereco:usar', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED });
     assertState(r, 'awaiting_payment');
     assert(r[0].json.cart.address === SAVED, r[0].json.cart.address);
@@ -1082,7 +1082,7 @@ async function runTests() {
   });
 
   await test('usar este endereço sem achar no mapa: segue com a taxa base', async () => {
-    const cart = { ...filledCart, order_type: 'delivery' };
+    const cart = { ...filledCart, order_type: 'delivery', order_note_asked: true };
     const r = await exec({ texto: 'endereco:usar', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED, geocodeMiss: () => true });
     assertState(r, 'awaiting_payment');
     assert(r[0].json.cart.address === SAVED, r[0].json.cart.address);
@@ -1097,6 +1097,67 @@ async function runTests() {
     assertState(back, 'awaiting_type');
     const typed = await exec({ texto: 'Rua Voluntários da Franca, 200', state: 'awaiting_saved_address', cart, config: NEAR, last_delivery_address: SAVED });
     assertState(typed, 'awaiting_complement');
+  });
+
+  // ── Observação do pedido e pagamento do último pedido ─────────────────
+  await test('antes do pagamento pergunta a observação uma vez (Sim / Não, seguir)', async () => {
+    const r = await exec({ texto: 'retirada', state: 'awaiting_type', cart: { ...filledCart, order_type: '' } });
+    assertState(r, 'awaiting_order_note_choice');
+    const message = r[0].json.respostas.find((m) => m && m.type === 'buttons');
+    assert(message.body.includes('Deseja informar alguma observação'), message.body);
+    assert(JSON.stringify(buttonIds(message)) === JSON.stringify(['note:yes', 'note:no']), JSON.stringify(message.buttons));
+  });
+
+  await test('observação: Não segue para o pagamento; Sim pede o texto e ele vai no pedido', async () => {
+    const cart = { ...filledCart, order_type: 'retirada' };
+    const no = await exec({ texto: 'note:no', state: 'awaiting_order_note_choice', cart });
+    assertState(no, 'awaiting_payment');
+    assert(no[0].json.cart.order_note_asked === true && !no[0].json.cart.order_note, JSON.stringify(no[0].json.cart));
+    const yes = await exec({ texto: 'note:yes', state: 'awaiting_order_note_choice', cart });
+    assertState(yes, 'awaiting_order_note');
+    const noted = await exec({ texto: 'Combo sem cebolinha, alergia a camarão', state: 'awaiting_order_note', cart: yes[0].json.cart });
+    assertState(noted, 'awaiting_payment');
+    assertResponseContains(noted, 'Anotado: _Combo sem cebolinha, alergia a camarão_');
+    const paid = await exec({ texto: 'pix', state: 'awaiting_payment', cart: noted[0].json.cart });
+    const order = paid[0].json.order;
+    assert(order && /sem cebolinha/i.test(order.notes || ''), 'observação no pedido: ' + JSON.stringify(order));
+    assertResponseContains(paid, 'Observação:');
+  });
+
+  await test('observação escrita direto na pergunta já vale', async () => {
+    const r = await exec({ texto: 'sem pimenta', state: 'awaiting_order_note_choice', cart: { ...filledCart, order_type: 'retirada' } });
+    assertState(r, 'awaiting_payment');
+    assert(r[0].json.cart.order_note === 'sem pimenta', r[0].json.cart.order_note);
+  });
+
+  await test('pagamento do último pedido: oferece usar o mesmo, e usar fecha o pedido com ele', async () => {
+    const recent = [{ code: 'PED-1', status: 'delivered', order_type: 'delivery', total: 50, created_at: '13/11', payment_method: 'pix' }];
+    const cart = { ...filledCart, order_type: 'retirada', order_note_asked: true };
+    const ask = await exec({ texto: 'note:no', state: 'awaiting_order_note_choice', cart: { ...filledCart, order_type: 'retirada' }, recent_orders: recent });
+    assertState(ask, 'awaiting_saved_payment');
+    const message = ask[0].json.respostas.find((m) => m && m.type === 'buttons');
+    assert(message.body.includes('Vai pagar igual ao último pedido'), message.body);
+    assert(JSON.stringify(buttonIds(message)) === JSON.stringify(['pay:same', 'pay:other', '0']), JSON.stringify(message.buttons));
+    const used = await exec({ texto: 'pay:same', state: 'awaiting_saved_payment', cart, recent_orders: recent });
+    assert(used[0].json.order && used[0].json.order.payment_method === 'pix', JSON.stringify(used[0].json.order));
+    const other = await exec({ texto: 'pay:other', state: 'awaiting_saved_payment', cart, recent_orders: recent });
+    assertState(other, 'awaiting_payment');
+    assertResponseType(other, 'list');
+    const back = await exec({ texto: '0', state: 'awaiting_saved_payment', cart, recent_orders: recent });
+    assertState(back, 'awaiting_type');
+  });
+
+  await test('sem forma anterior (ou forma desativada) mostra a lista', async () => {
+    const recent = [{ code: 'PED-1', status: 'delivered', order_type: 'delivery', total: 50, created_at: '13/11', payment_method: 'boleto' }];
+    const r = await exec({ texto: 'note:no', state: 'awaiting_order_note_choice', cart: { ...filledCart, order_type: 'retirada' }, recent_orders: recent });
+    assertState(r, 'awaiting_payment');
+    assertResponseType(r, 'list');
+  });
+
+  await test('escolha do item sem o botão de observação', async () => {
+    const r = await exec({ texto: '1', state: 'ordering_items', browse_category: 'Temaki' });
+    const message = r[0].json.respostas.find((m) => m && m.type === 'buttons');
+    assert(message && !buttonIds(message).includes('qty:note'), JSON.stringify(message));
   });
 
   await test('agendar mostra os dias e depois os horários livres', async () => {
@@ -1150,7 +1211,7 @@ async function runTests() {
     assert(typeButtons[typeButtons.length - 1].id === '0' && typeButtons.length <= 3, JSON.stringify(typeButtons));
     const backToSummary = await exec({ texto: '0', state: 'awaiting_type', cart: filledCart });
     assertState(backToSummary, 'confirming');
-    const payment = await exec({ texto: 'retirada', state: 'awaiting_type', cart: filledCart });
+    const payment = await exec({ texto: 'retirada', state: 'awaiting_type', cart: { ...filledCart, order_note_asked: true } });
     const payRows = payment[0].json.respostas.find((m) => m && m.type === 'list').sections[0].rows;
     assert(payRows[payRows.length - 1].id === '0', JSON.stringify(payRows));
     const backToType = await exec({ texto: '0', state: 'awaiting_payment', cart: { ...filledCart, order_type: 'retirada' } });

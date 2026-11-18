@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { GetBotContextUseCase, deliveryAddressText, type BotSharedContext } from './GetBotContextUseCase'
+import { GetBotContextUseCase, deliveryAddressText, singlePaymentMethod, type BotSharedContext } from './GetBotContextUseCase'
 import type { BotCustomerService } from '../services/BotCustomerService'
 import type { BotConfigRepository } from '@/infra/database/BotConfigRepository'
 import { BOT_SHARED_CONTEXT_CACHE_PREFIX } from '../../shared/bot.constant'
@@ -98,5 +98,16 @@ describe('deliveryAddressText — endereço da última entrega para o bot', () =
   it('snapshot sem endereço vira null', () => {
     expect(deliveryAddressText({ address: '  ' })).toBeNull()
     expect(deliveryAddressText(null)).toBeNull()
+  })
+})
+
+describe('singlePaymentMethod — pagar igual ao último pedido', () => {
+  it('pedido numa parte só devolve a forma', () => {
+    expect(singlePaymentMethod(['pix'])).toBe('pix')
+  })
+
+  it('divisão ou misto (várias partes) e pedido sem pagamento devolvem null', () => {
+    expect(singlePaymentMethod(['pix', 'dinheiro'])).toBeNull()
+    expect(singlePaymentMethod([])).toBeNull()
   })
 })

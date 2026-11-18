@@ -38,6 +38,8 @@ interface BotOrderSummary {
   estimated_at: string | null
   scheduled_for: string | null
   completed_at: string | null
+  // Forma de pagamento quando o pedido foi pago de um jeito só (sem divisão nem misto); senão null.
+  payment_method: string | null
   items: Array<{ id: string; name: string; qty: number; price: number }>
 }
 
@@ -392,8 +394,13 @@ export class GetBotContextUseCase {
         orders.map((order) => order.id)
       ),
     })
+    const payments = await this.db
+      .select({ orderId: schema.orderPayments.orderId, method: schema.orderPayments.paymentTypeName })
+      .from(schema.orderPayments)
+      .where(inArray(schema.orderPayments.orderId, orders.map((order) => order.id)))
     return orders.map((order) => {
       const orderItems = items.filter((item) => item.orderId === order.id)
+      const methods = payments.filter((payment) => payment.orderId === order.id).map((payment) => payment.method)
       return {
         code: orderBotCode(order),
         status: API_ORDER_STATUS_TO_BOT[order.status],
@@ -403,6 +410,7 @@ export class GetBotContextUseCase {
         estimated_at: order.estimatedAt?.toISOString() ?? null,
         scheduled_for: order.scheduledFor?.toISOString() ?? null,
         completed_at: order.completedAt?.toISOString() ?? null,
+        payment_method: singlePaymentMethod(methods),
         items_count: orderItems.length,
         items: orderItems.map((item) => ({
           id: item.productId ?? item.id,
@@ -436,6 +444,11 @@ export class GetBotContextUseCase {
       .where(eq(schema.restaurantTables.establishmentId, establishmentId))
       .orderBy(asc(schema.restaurantTables.number))
   }
+}
+
+/** Pedido pago numa parte só: essa forma. Divisão ou misto (mais de uma parte) não vira "pagar igual". */
+export function singlePaymentMethod(methods: string[]): string | null {
+  return methods.length === 1 ? methods[0] ?? null : null
 }
 
 /** Endereço + complemento do snapshot da entrega; o bot já grava o complemento junto do endereço. */

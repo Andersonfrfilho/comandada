@@ -11,6 +11,7 @@ interface Order {
   tel: string;
   customer_name: string | null;
   code: string;
+  notes?: string;
   items: OrderItem[];
   subtotal: number;
   delivery_fee: number;

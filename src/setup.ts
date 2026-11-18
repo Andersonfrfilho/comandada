@@ -92,6 +92,8 @@ if (Array.isArray(rawCart)) {
     edit_index:         typeof rawCart.edit_index === 'number' ? rawCart.edit_index : null,
     partial_picks:      rawCart.partial_picks && typeof rawCart.partial_picks === 'object' ? rawCart.partial_picks : null,
     partial_pick_index: typeof rawCart.partial_pick_index === 'number' ? rawCart.partial_pick_index : null,
+    order_note:         rawCart.order_note || '',
+    order_note_asked:   rawCart.order_note_asked === true,
   };
 } else {
   currentCart = CartConstants.EMPTY();
@@ -952,7 +954,7 @@ function startCheckout(): void {
     newCart.delivery_fee = 0;
     newState = BotState.AWAITING_PAYMENT;
     respostas.push(MessagesConstants.TIPO_CONFIRMADO(orderTypes[0] ? orderTypes[0].label : 'Retirada'));
-    respostas.push(paymentList(newCart.split_count));
+    goToPayment();
   }
 }
 
@@ -972,6 +974,60 @@ function moreItemsButtons(body: string): ButtonMessage {
     { id: 'finalizar', title: '✅ Finalizar' },
   ];
   return { type: 'buttons', body, buttons };
+}
+
+const ORDER_NOTE_YES_ID = 'note:yes';
+const ORDER_NOTE_NO_ID = 'note:no';
+const SAVED_PAYMENT_USE_ID = 'pay:same';
+const SAVED_PAYMENT_OTHER_ID = 'pay:other';
+
+// Antes do pagamento: uma pergunta só de observação para o pedido inteiro (vai para a cozinha).
+function goToPayment(): void {
+  if (!newCart.order_note_asked) {
+    newState = BotState.AWAITING_ORDER_NOTE_CHOICE;
+    respostas.push({
+      type: 'buttons',
+      body: MessagesConstants.OBSERVACAO_PEDIDO_PERGUNTA,
+      buttons: [
+        { id: ORDER_NOTE_YES_ID, title: MessagesConstants.OBSERVACAO_PEDIDO_SIM },
+        { id: ORDER_NOTE_NO_ID, title: MessagesConstants.OBSERVACAO_PEDIDO_NAO },
+      ],
+    });
+    return;
+  }
+  askPaymentMethod();
+}
+
+// Forma de pagamento do último pedido, se ainda existe e foi uma parte só.
+function savedPaymentType(): PaymentType | null {
+  const lastMethod = recentOrders[0]?.payment_method;
+  if (!lastMethod || newCart.split_count > 1) return null;
+  return paymentTypes.find((paymentType: PaymentType) => paymentType.name === lastMethod) || null;
+}
+
+// Pagamento: com forma anterior, oferece usar a mesma; senão a lista de formas.
+function askPaymentMethod(): void {
+  const saved = savedPaymentType();
+  if (saved) {
+    newState = BotState.AWAITING_SAVED_PAYMENT;
+    respostas.push({
+      type: 'buttons',
+      body: MessagesConstants.PAGAMENTO_SALVO_PERGUNTA(saved.label, paymentEmoji(saved.name)),
+      buttons: [
+        { id: SAVED_PAYMENT_USE_ID, title: MessagesConstants.PAGAMENTO_SALVO_USAR },
+        { id: SAVED_PAYMENT_OTHER_ID, title: MessagesConstants.PAGAMENTO_SALVO_OUTRA },
+        { id: MENU_BACK_ID, title: MessagesConstants.COMPLEMENTO_VOLTAR },
+      ],
+    });
+    return;
+  }
+  newState = BotState.AWAITING_PAYMENT;
+  respostas.push(paymentList(newCart.split_count));
+}
+
+// Observação do pedido para a confirmação final (vazia sem observação).
+function orderNoteLine(): string {
+  return newCart.order_note ? MessagesConstants.OBSERVACAO_PEDIDO_LINHA(newCart.order_note) : '';
 }
 
 const SAVED_ADDRESS_USE_ID = 'endereco:usar';

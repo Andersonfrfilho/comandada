@@ -1,5 +1,14 @@
 class PaymentHandler extends BaseHandler {
   async handle(): Promise<boolean> {
+    if (currentState === BotState.AWAITING_ORDER_NOTE_CHOICE) {
+      return this._handleOrderNoteChoice();
+    }
+    if (currentState === BotState.AWAITING_ORDER_NOTE) {
+      return this._handleOrderNote();
+    }
+    if (currentState === BotState.AWAITING_SAVED_PAYMENT) {
+      return this._handleSavedPayment();
+    }
     if (currentState === BotState.AWAITING_MIXED_METHOD) {
       return this._handleMixedMethod();
     }
@@ -61,6 +70,7 @@ class PaymentHandler extends BaseHandler {
       + '\n\n' + typeLabel
       + MessagesConstants.PAGAMENTO_LINE(paymentMethodLabel, paymentEmoji(paymentName))
       + (changeFor ? MessagesConstants.TROCO_LINE(fmtBRL(changeFor)) : '')
+      + orderNoteLine()
       + orderFooter(orderCode)
     );
 
@@ -78,6 +88,7 @@ class PaymentHandler extends BaseHandler {
       maps_link: newCart.order_type === 'delivery' ? ('https://maps.google.com/?q=' + encodeURIComponent(addrFull)) : '',
       payment_method: paymentName,
       change_for: changeFor,
+      notes: newCart.order_note || undefined,
       payments: [{ method: paymentName, amount: total, change_for: changeFor, split_label: null }],
     };
     newState = BotState.START;
@@ -221,6 +232,7 @@ class PaymentHandler extends BaseHandler {
       + '\n\n' + typeLabel
       + MessagesConstants.DIVISAO_HEADER(splitTotal, fmtBRL(perPerson))
       + splitLines
+      + orderNoteLine()
       + orderFooter(orderCode)
     );
 
@@ -240,6 +252,7 @@ class PaymentHandler extends BaseHandler {
       change_for: null,
       split_count: splitTotal,
       split_payments: payments,
+      notes: newCart.order_note || undefined,
       payments: payments.map((splitPayment: SplitPayment) => ({
         method: splitPayment.method || 'dinheiro',
         amount: perPerson,
@@ -282,6 +295,7 @@ class PaymentHandler extends BaseHandler {
       + '\n\n' + typeLabel
       + '\n' + paymentEmoji(newCart.mixed_method || '') + ' *' + (newCart.mixed_label || 'Cartão') + ':* R$ ' + fmtBRL(entered)
       + '\n💵 *Dinheiro:* R$ ' + fmtBRL(cashPart) + changeInfo
+      + orderNoteLine()
       + orderFooter(orderCode)
     );
 
@@ -293,6 +307,7 @@ class PaymentHandler extends BaseHandler {
       maps_link: newCart.order_type === 'delivery' ? ('https://maps.google.com/?q=' + encodeURIComponent(addrFull)) : '',
       payment_method: (newCart.mixed_method || 'misto') + '+dinheiro',
       change_for: changeFor,
+      notes: newCart.order_note || undefined,
       payments: [
         { method: newCart.mixed_method || 'cartao', amount: entered, change_for: null, split_label: null },
         { method: 'dinheiro', amount: cashPart, change_for: changeFor, split_label: null },
@@ -304,9 +319,79 @@ class PaymentHandler extends BaseHandler {
     return true;
   }
 
-  private _handlePayment(): boolean {
-    // Voltar: escolhe de novo a forma de receber (ou o resumo, se só há uma).
+  // "Deseja informar alguma observação?": Sim pede o texto; Não segue; texto escrito direto já vale como observação.
+  private _handleOrderNoteChoice(): boolean {
     if (texto === MENU_BACK_ID || texto === 'voltar') {
+      this._backToOrderType();
+      return true;
+    }
+    if (texto === ORDER_NOTE_YES_ID || texto === 'sim') {
+      newState = BotState.AWAITING_ORDER_NOTE;
+      respostas.push(MessagesConstants.OBSERVACAO_PEDIDO_ESCREVA);
+      return true;
+    }
+    newCart.order_note_asked = true;
+    if (texto === ORDER_NOTE_NO_ID || texto === 'não' || texto === 'nao') {
+      newCart.order_note = '';
+    } else {
+      this._saveOrderNote();
+    }
+    askPaymentMethod();
+    return true;
+  }
+
+  private _handleOrderNote(): boolean {
+    if (texto === MENU_BACK_ID || texto === 'voltar') {
+      goToPayment();
+      return true;
+    }
+    newCart.order_note_asked = true;
+    this._saveOrderNote();
+    askPaymentMethod();
+    return true;
+  }
+
+  private _saveOrderNote(): void {
+    const note = rawText.trim().slice(0, 300);
+    newCart.order_note = note;
+    if (note) respostas.push(MessagesConstants.OBSERVACAO_PEDIDO_ANOTADA(note));
+  }
+
+  // "Vai pagar igual ao último pedido?": usar segue como se tivesse escolhido a forma na lista.
+  private _handleSavedPayment(): boolean {
+    if (texto === MENU_BACK_ID || texto === 'voltar') {
+      this._backToOrderType();
+      return true;
+    }
+    const saved = savedPaymentType();
+    if ((texto === SAVED_PAYMENT_USE_ID || texto === 'sim') && saved) {
+      return this._handlePayment(saved.name);
+    }
+    newState = BotState.AWAITING_PAYMENT;
+    if (texto === SAVED_PAYMENT_OTHER_ID || texto === 'outra' || texto === 'não' || texto === 'nao') {
+      respostas.push(paymentList(newCart.split_count));
+      return true;
+    }
+    return this._handlePayment();
+  }
+
+  // Voltar: escolhe de novo a forma de receber (ou o resumo, se só há uma).
+  private _backToOrderType(): void {
+    newCart.payment_method = '';
+    newCart.order_type = '';
+    newCart.address = '';
+    newCart.complement = '';
+    newCart.delivery_fee = 0;
+    if (orderTypes.length > 1) {
+      newState = BotState.AWAITING_TYPE;
+      respostas.push(orderTypeBtn());
+    } else {
+      showOrderConfirmation();
+    }
+  }
+
+  private _handlePayment(choice: string = texto): boolean {
+    if (choice === MENU_BACK_ID || choice === 'voltar') {
       newCart.payment_method = '';
       newCart.order_type = '';
       newCart.address = '';
@@ -320,9 +405,9 @@ class PaymentHandler extends BaseHandler {
       }
       return true;
     }
-    let choiceIndex = parseInt(texto) - 1;
+    let choiceIndex = parseInt(choice) - 1;
     if (isNaN(choiceIndex) || choiceIndex < 0)
-      choiceIndex = paymentTypes.findIndex((paymentType: PaymentType) => paymentType.name === texto);
+      choiceIndex = paymentTypes.findIndex((paymentType: PaymentType) => paymentType.name === choice);
 
     if (choiceIndex >= 0 && choiceIndex < paymentTypes.length) {
       const selectedPayment = paymentTypes[choiceIndex];
@@ -356,7 +441,8 @@ class PaymentHandler extends BaseHandler {
           + '\n\n' + typeLabel
           + MessagesConstants.PAGAMENTO_LINE(selectedPayment.label, paymentEmoji(selectedPayment.name))
           + pixInfo
-          + orderFooter(orderCode)
+          + orderNoteLine()
+      + orderFooter(orderCode)
         );
 
         save_order = true;
@@ -367,6 +453,7 @@ class PaymentHandler extends BaseHandler {
           maps_link: newCart.order_type === 'delivery' ? ('https://maps.google.com/?q=' + encodeURIComponent(addrFull)) : '',
           payment_method: selectedPayment.name,
           change_for: null,
+          notes: newCart.order_note || undefined,
           payments: [{ method: selectedPayment.name, amount: total, change_for: null, split_label: null }],
         };
         newState = BotState.START;
@@ -376,13 +463,13 @@ class PaymentHandler extends BaseHandler {
       return true;
     }
 
-    if (texto === 'dividir' || parseInt(texto) === paymentTypes.length + 1 || texto.toLowerCase().includes('dividir')) {
+    if (choice === 'dividir' || parseInt(choice) === paymentTypes.length + 1 || choice.toLowerCase().includes('dividir')) {
       newState = BotState.AWAITING_SPLIT_COUNT;
       respostas.push(MessagesConstants.DIVIDIR_CONTA);
       return true;
     }
 
-    if (texto === 'misto' || parseInt(texto) === paymentTypes.length + 2 || texto.toLowerCase().includes('misto')) {
+    if (choice === 'misto' || parseInt(choice) === paymentTypes.length + 2 || choice.toLowerCase().includes('misto')) {
       const nonCashTypes = this._nonCashTypes();
       if (nonCashTypes.length === 0) {
         respostas.push(MessagesConstants.SEM_FORMAS_MISTO);

@@ -41,6 +41,8 @@ export interface CreateBotOrderParams {
   deliveryFee?: number | undefined
   address?: string | undefined
   mapsLink?: string | undefined
+  // Observação do pedido inteiro; aparece na cozinha e no painel (`orders.notes`).
+  notes?: string | undefined
   // Encomenda: ISO instant the customer picked; absent means "para agora".
   scheduledFor?: string | undefined
 }
@@ -110,6 +112,7 @@ export class CreateBotOrderUseCase {
         // `delivery.address`, então ele não vai mais para a observação do pedido.
         delivery: type === 'delivery' && params.address ? { address: params.address, feeAmount: deliveryFee } : undefined,
         scheduledFor: scheduledFor?.toISOString(),
+        notes: params.notes?.trim() || undefined,
       })
       orderId = order.id
       orderNumber = order.number ?? undefined
