@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
+import { ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
 import { productImageUrl } from '@/lib/productImage'
@@ -12,6 +12,7 @@ import { AccountAvatar, AccountSheet, LoginSheet, firstName, useStorefrontAccoun
 import { CheckoutSheet } from './CheckoutSheet'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
+import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
 
 const NOTE_MAX_LENGTH = 140
 const FEATURED_LIMIT = 8
@@ -442,9 +443,12 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
     return () => observer.disconnect()
   }, [names])
 
+  const { canScrollLeft, canScrollRight, scrollByPage } = useHorizontalScroll(navRef)
+
   useEffect(() => {
-    const chip = navRef.current?.querySelector<HTMLElement>(`[data-chip="${CSS.escape(active)}"]`)
-    chip?.scrollIntoView({ block: 'nearest', inline: 'center', behavior: 'smooth' })
+    const strip = navRef.current
+    const chip = strip?.querySelector<HTMLElement>(`[data-chip="${CSS.escape(active)}"]`)
+    if (strip && chip) centerInStrip(strip, chip)
   }, [active])
 
   return (
@@ -465,7 +469,8 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
             </button>
           )}
         </label>
-        <div ref={navRef} className="-mx-4 flex gap-2 overflow-x-auto px-4 [scrollbar-width:none] lg:mx-0 lg:px-0 [&::-webkit-scrollbar]:hidden">
+        <div className="relative -mx-4 min-w-0 lg:mx-0 lg:flex-1">
+        <div ref={navRef} className="relative flex select-none gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] lg:px-0 [&::-webkit-scrollbar]:hidden">
           {categories.map((category) => (
             <button
               key={category.name}
@@ -484,7 +489,31 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
             </button>
           ))}
         </div>
+        {canScrollLeft && <StripArrow direction={-1} onClick={() => scrollByPage(-1)} />}
+        {canScrollRight && <StripArrow direction={1} onClick={() => scrollByPage(1)} />}
+        </div>
       </div>
+    </div>
+  )
+}
+
+/** Seta da faixa de categorias: só no computador (no celular o dedo rola). */
+function StripArrow({ direction, onClick }: { direction: -1 | 1; onClick: () => void }) {
+  const Icon = direction < 0 ? ChevronLeft : ChevronRight
+  return (
+    <div
+      className={`pointer-events-none absolute inset-y-0 hidden w-16 items-center sm:flex ${
+        direction < 0 ? 'left-0 justify-start bg-gradient-to-r' : 'right-0 justify-end bg-gradient-to-l'
+      } from-[#fbf4ea] via-[#fbf4ea]/90 to-transparent`}
+    >
+      <button
+        type="button"
+        onClick={onClick}
+        aria-label={direction < 0 ? 'Ver categorias anteriores' : 'Ver mais categorias'}
+        className="pointer-events-auto flex h-9 w-9 items-center justify-center rounded-full bg-white text-[#1c120d] shadow ring-1 ring-[#e6d3bb] transition hover:bg-[#fff7ec]"
+      >
+        <Icon className="h-4 w-4" />
+      </button>
     </div>
   )
 }
