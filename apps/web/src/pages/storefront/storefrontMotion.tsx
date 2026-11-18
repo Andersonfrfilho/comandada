@@ -19,6 +19,14 @@ export const MOTION = {
   bump: 'sf-bump',
   /** Entrada do topo da página, em sequência (`--sf-delay`). */
   intro: 'sf-intro',
+  /** Opção que acabou de ser escolhida: afunda e volta com mola. */
+  select: 'sf-select',
+  /** Ícone de check que aparece girando. */
+  check: 'sf-check',
+  /** Ícone da opção escolhida dá um pulinho. */
+  hop: 'sf-hop',
+  /** Destaque que desliza entre as categorias. */
+  slide: 'sf-slide',
 } as const
 
 export function StorefrontMotionStyles() {
@@ -30,12 +38,22 @@ export function StorefrontMotionStyles() {
       .sf-rise { animation: sfRise .34s cubic-bezier(.2,.8,.2,1) both; }
       .sf-bump { animation: sfBump .42s cubic-bezier(.3,1.5,.5,1); }
       .sf-intro { animation: sfRise .5s cubic-bezier(.2,.8,.2,1) both; animation-delay: var(--sf-delay, 0ms); }
+      .sf-select { animation: sfSelect .38s cubic-bezier(.3,1.5,.5,1); }
+      .sf-check { animation: sfCheck .34s cubic-bezier(.3,1.6,.5,1) both; }
+      .sf-hop { animation: sfHop .45s cubic-bezier(.3,1.5,.5,1); }
+      .sf-slide { transition: transform .38s cubic-bezier(.3,1.25,.5,1), width .38s cubic-bezier(.3,1.25,.5,1), opacity .2s; }
+      .sf-ping { animation: sfPing .5s ease-out; }
+      @keyframes sfSelect { 0% { transform: scale(1) } 35% { transform: scale(.96) } 70% { transform: scale(1.02) } 100% { transform: scale(1) } }
+      @keyframes sfCheck { from { transform: scale(0) rotate(-90deg); opacity: 0 } to { transform: none; opacity: 1 } }
+      @keyframes sfHop { 0%, 100% { transform: none } 40% { transform: translateY(-4px) scale(1.12) } }
+      @keyframes sfPing { from { box-shadow: 0 0 0 0 rgb(var(--brand-500, 224 90 20) / .5) } to { box-shadow: 0 0 0 14px rgb(var(--brand-500, 224 90 20) / 0) } }
       @keyframes sfPop { 0% { transform: scale(1) } 40% { transform: scale(1.35) } 100% { transform: scale(1) } }
       @keyframes sfRise { from { opacity: 0; transform: translateY(16px) } to { opacity: 1; transform: none } }
       @keyframes sfBump { 0% { transform: scale(1) } 30% { transform: scale(1.06) } 60% { transform: scale(.98) } 100% { transform: scale(1) } }
       @media (prefers-reduced-motion: reduce) {
         .sf-reveal { opacity: 1; transform: none; transition: none; }
-        .sf-pop, .sf-rise, .sf-bump, .sf-intro { animation: none; }
+        .sf-pop, .sf-rise, .sf-bump, .sf-intro, .sf-select, .sf-check, .sf-hop, .sf-ping { animation: none; }
+        .sf-slide { transition: none; }
       }
     `}</style>
   )
@@ -127,4 +145,12 @@ export function flyToCart(source: HTMLElement | null, imageUrl: string | null) {
     }
     animation.oncancel = () => flyer.remove()
   })
+}
+
+/** Onda que sai do botão ao tocar (adicionar). Reinicia se tocar de novo. */
+export function ping(element: HTMLElement | null) {
+  if (!element || prefersReducedMotion()) return
+  element.classList.remove('sf-ping')
+  void element.offsetWidth
+  element.classList.add('sf-ping')
 }

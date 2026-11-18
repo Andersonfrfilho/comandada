@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { useMutation } from '@tanstack/react-query'
 import { Bike, Check, Loader2, Minus, Plus, Store, Trash2 } from 'lucide-react'
 import { formatBRL } from '@/lib/listing'
+import { MOTION } from './storefrontMotion'
 import { ApiError } from '@/lib/api'
 import {
   storefrontApi,
@@ -494,11 +495,11 @@ function ChoiceCard({ selected, onSelect, icon, title }: { selected: boolean; on
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`flex flex-col items-center gap-1.5 rounded-xl px-3 py-3 text-sm font-semibold transition ${
-        selected ? 'bg-brand-50 text-brand-700 ring-2 ring-brand-500' : 'bg-white text-gray-700 ring-1 ring-stone-200'
+      className={`flex flex-col items-center gap-1.5 rounded-xl px-3 py-3 text-sm font-semibold transition-colors duration-200 active:scale-[0.97] ${
+        selected ? `bg-brand-50 text-brand-700 ring-2 ring-brand-500 ${MOTION.select}` : 'bg-white text-gray-700 ring-1 ring-stone-200'
       }`}
     >
-      {icon}
+      <span className={selected ? MOTION.hop : ''}>{icon}</span>
       {title}
     </button>
   )
@@ -522,12 +523,12 @@ function RadioRow({
       type="button"
       onClick={onSelect}
       aria-pressed={selected}
-      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition ${
-        selected ? 'bg-brand-50 ring-2 ring-brand-500' : 'bg-white ring-1 ring-stone-200'
+      className={`flex w-full items-center gap-3 rounded-xl px-4 py-3 text-left transition-colors duration-200 active:scale-[0.99] ${
+        selected ? `bg-brand-50 ring-2 ring-brand-500 ${MOTION.select}` : 'bg-white ring-1 ring-stone-200'
       }`}
     >
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full ${selected ? 'bg-brand-600 text-white' : 'ring-1 ring-stone-300'}`}>
-        {selected && <Check className="h-3.5 w-3.5" />}
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${selected ? 'bg-brand-600 text-white' : 'ring-1 ring-stone-300'}`}>
+        {selected && <Check className={`h-3.5 w-3.5 ${MOTION.check}`} strokeWidth={3} />}
       </span>
       <span className="min-w-0 flex-1">
         <span className="flex items-center gap-2 text-sm font-semibold text-gray-900">

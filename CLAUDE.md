@@ -374,7 +374,9 @@ Código em `apps/api/src/modules/storefront/application/StorefrontAccountService
 
 **Animações do cardápio online** (`apps/web/src/pages/storefront/storefrontMotion.tsx`): itens sobem ao entrar na tela
 (`data-reveal`), a foto voa até o carrinho ao adicionar (`flyToCart` até `[data-cart-target]`), números dão um pulo ao mudar
-(`key` com o valor). Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
+(`key` com o valor). Na seleção: o fundo da categoria ativa desliza entre as categorias, tamanho/entrega/pagamento
+escolhidos afundam e voltam com mola e o check aparece girando (`MOTION.select`/`check`/`hop`), botão de adicionar solta
+uma onda (`ping`). Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
 
 ## Lógica do bot (src/)
 

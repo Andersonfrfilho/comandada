@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
 import { productImageUrl } from '@/lib/productImage'
@@ -13,7 +13,7 @@ import { CheckoutSheet } from './CheckoutSheet'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
-import { MOTION, StorefrontMotionStyles, flyToCart, useRevealOnScroll } from './storefrontMotion'
+import { MOTION, StorefrontMotionStyles, flyToCart, ping, useRevealOnScroll } from './storefrontMotion'
 
 const NOTE_MAX_LENGTH = 140
 const FEATURED_LIMIT = 8
@@ -133,6 +133,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
       setSelectedItem(item)
       return
     }
+    ping(source ?? null)
     flyToCart(source ?? null, productImageUrl(item.image))
     setLines((current) => addToCart(current, { productId: option.productId, name: item.name, unitPrice: option.price, quantity: 1, notes: '' }))
   }
@@ -258,6 +259,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
           item={selectedItem}
           onClose={() => setSelectedItem(null)}
           onAdd={(line, source) => {
+            ping(source)
             flyToCart(source, productImageUrl(selectedItem.image))
             setLines((current) => addToCart(current, line))
             setSelectedItem(null)
@@ -452,6 +454,21 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
   }, [names])
 
   const { canScrollLeft, canScrollRight, scrollByPage } = useHorizontalScroll(navRef)
+  const [pill, setPill] = useState<{ left: number; width: number; height: number; top: number } | null>(null)
+
+  // Fundo escuro da categoria ativa é um só e desliza até a nova escolha.
+  useEffect(() => {
+    const strip = navRef.current
+    if (!strip) return
+    const place = () => {
+      const chip = strip.querySelector<HTMLElement>(`[data-chip="${CSS.escape(active)}"]`)
+      setPill(chip ? { left: chip.offsetLeft, width: chip.offsetWidth, height: chip.offsetHeight, top: chip.offsetTop } : null)
+    }
+    place()
+    const observer = new ResizeObserver(place)
+    observer.observe(strip)
+    return () => observer.disconnect()
+  }, [active, categories])
 
   useEffect(() => {
     const strip = navRef.current
@@ -479,20 +496,35 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
         </label>
         <div className="relative -mx-4 min-w-0 lg:mx-0 lg:flex-1">
         <div ref={navRef} className="relative flex select-none gap-2 overflow-x-auto overscroll-x-contain px-4 [scrollbar-width:none] lg:px-0 [&::-webkit-scrollbar]:hidden">
+          {pill && (
+            <span
+              aria-hidden="true"
+              className={`pointer-events-none absolute left-0 rounded-full shadow-md shadow-black/20 ${STOREFRONT_INK} ${MOTION.slide}`}
+              style={{ top: pill.top, height: pill.height, width: pill.width, transform: `translateX(${pill.left}px)` }}
+            />
+          )}
           {categories.map((category) => (
             <button
               key={category.name}
               type="button"
               data-chip={category.name}
+              aria-current={active === category.name ? 'true' : undefined}
               onClick={() => {
                 setActive(category.name)
                 document.getElementById(sectionId(category.name))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
-              className={`flex shrink-0 items-center gap-2 rounded-full py-1 text-sm font-semibold transition ${category.image ? 'pl-1 pr-4' : 'px-4 py-2'} ${
-                active === category.name ? `text-[#fbebd3] ${STOREFRONT_INK}` : 'bg-white text-[#1c120d] ring-1 ring-[#e6d3bb]'
+              className={`relative flex shrink-0 items-center gap-2 rounded-full py-1 text-sm font-semibold transition-colors duration-300 active:scale-95 ${category.image ? 'pl-1 pr-4' : 'px-4 py-2'} ${
+                active === category.name ? `text-[#fbebd3] ${pill ? 'bg-transparent' : STOREFRONT_INK}` : 'bg-white text-[#1c120d] ring-1 ring-[#e6d3bb]'
               }`}
             >
-              {category.image && <img src={category.image} alt="" loading="lazy" className="h-8 w-8 rounded-full object-cover" />}
+              {category.image && (
+                <img
+                  src={category.image}
+                  alt=""
+                  loading="lazy"
+                  className={`h-8 w-8 rounded-full object-cover ${active === category.name ? MOTION.hop : ''}`}
+                />
+              )}
               {category.name}
             </button>
           ))}
@@ -617,8 +649,12 @@ function ItemRow({
   const imageUrl = productImageUrl(item.image)
   const options = optionsLabel(item)
   return (
-    <li data-reveal data-reveal-index={index} className={`group flex items-center gap-3 p-3.5 ${MOTION.reveal} ${CARD} motion-safe:sm:transition-shadow motion-safe:sm:hover:shadow-lg`}>
-      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left">
+    <li
+      data-reveal
+      data-reveal-index={index}
+      className={`group flex items-center gap-3 p-3.5 ${MOTION.reveal} ${CARD} motion-safe:sm:transition-shadow motion-safe:sm:hover:shadow-lg ${quantity > 0 ? 'ring-1 ring-brand-300' : ''}`}
+    >
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-center gap-3 text-left transition-transform duration-150 active:scale-[0.98]">
         <span className="min-w-0 flex-1">
           <span className="block font-semibold">{item.name}</span>
           {item.description && <span className="mt-1 line-clamp-2 block text-sm leading-snug text-[#6b574b]">{item.description}</span>}
@@ -778,8 +814,8 @@ function ItemSheet({
                 return (
                   <label
                     key={candidate.productId}
-                    className={`relative flex cursor-pointer flex-col gap-0.5 rounded-xl bg-white px-4 py-3 transition ${
-                      checked ? 'ring-2 ring-brand-600' : 'ring-1 ring-[#e6d3bb]'
+                    className={`relative flex cursor-pointer flex-col gap-0.5 rounded-xl px-4 py-3 transition-colors duration-200 ${
+                      checked ? `bg-brand-50 ring-2 ring-brand-600 ${MOTION.select}` : 'bg-white ring-1 ring-[#e6d3bb]'
                     }`}
                   >
                     <input
@@ -787,8 +823,16 @@ function ItemSheet({
                       name="option"
                       checked={checked}
                       onChange={() => setOptionId(candidate.productId)}
-                      className="absolute right-3 top-3 h-4 w-4 accent-brand-600"
+                      className="peer sr-only"
                     />
+                    <span
+                      aria-hidden="true"
+                      className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 ${
+                        checked ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-[#d9c4aa]'
+                      }`}
+                    >
+                      {checked && <Check className={`h-3.5 w-3.5 ${MOTION.check}`} strokeWidth={3} />}
+                    </span>
                     <span className="pr-6 font-semibold">{candidate.label ?? item.name}</span>
                     <span className={`text-[15px] font-bold ${checked ? 'text-brand-700' : 'text-[#4f3e34]'}`}>{formatBRL(candidate.price)}</span>
                   </label>
