@@ -41,6 +41,9 @@ interface Cart {
   pending_item_note?: string;
   // Editar carrinho: posição (em items) da linha que o cliente escolheu mudar.
   edit_index?: number | null;
+  // Observação do pedido inteiro, perguntada uma vez antes do pagamento.
+  order_note?: string;
+  order_note_asked?: boolean;
   pending_group: string;
   // Último item adicionado: é a ele que a observação se aplica.
   last_item_id?: string | null;

@@ -164,11 +164,13 @@ formato já extraído só entra com `X-Internal-Token`. A mesma mensagem (id da 
 
 **Confirmação parcial:** o painel avisa que itens acabaram (`order_partial_confirmations`, pendente); o contexto do bot
 traz `partial_confirmation` e o `PartialConfirmationHandler` lê SIM/NÃO (antes do "cancelar" global). SIM tira os itens
-e ajusta total e partes do pagamento; NÃO cancela. **Observação por item:** na escolha do item (botões Adicionar 1 /
-📝 Com observação / ↩️ Trocar item; Evolution aceita "obs"; "2 sem cebolinha" já manda quantidade e observação), fica em
+e ajusta total e partes do pagamento; NÃO cancela. **Observação do pedido:** uma pergunta só, antes do pagamento (`goToPayment`): "Deseja informar alguma observação?"
+(📝 Sim / ➡️ Não, seguir; texto escrito direto já vale), estado `awaiting_order_note_choice` → `awaiting_order_note`, fica em
+`cart.order_note` e vai em `orders.notes` (`notes` no `POST /internal/bot/:whatsapp/orders`; cozinha e painel mostram).
+**Observação por item** (sem botão desde então): escrever "obs" na escolha do item ou "2 sem cebolinha" ainda funciona; fica em
 `cart.pending_item_note` até a quantidade e vai em `order_items.notes` (cozinha e painel). Mesmo produto com observação
 diferente é outra linha. No resumo, a observação aparece embaixo do nome, antes da conta.
-**Trocar item e editar carrinho:** a tela do produto tem Adicionar 1 / 📝 Com observação / ↩️ Trocar item (quantidade
+**Trocar item e editar carrinho:** a tela do produto tem Adicionar 1 / ↩️ Trocar item (quantidade
 maior é digitada); a da observação tem ⏭️ Sem observação / ↩️ Trocar item. `CartEditHandler`: "✏️ Editar carrinho"
 (depois de adicionar) e "✏️ Editar" (na confirmação) abrem a lista das linhas do carrinho (`awaiting_cart_edit`), e a
 linha escolhida (`cart.edit_index`) tem 🗑️ Remover / 🔢 Mudar qtd / ↩️ Voltar; 0 tira; carrinho vazio volta às categorias.
@@ -241,6 +243,10 @@ cliente vinculado; fora da janela vão os templates `lembrete_pedido` (marketing
 Detalhes em `n8n/workflows/README.md`.
 
 **Endereço da última entrega:** o contexto traz `last_delivery_address` (snapshot da última entrega do cliente, com complemento). Ao escolher Entregar, o bot pergunta "Entregamos no mesmo endereço?" (✅ Usar este / 📍 Outro endereço / ↩️ Voltar, estado `awaiting_saved_address`); usar recalcula a taxa pelo mapa (taxa base sem coordenadas, fora do raio oferece retirada) e vai direto ao pagamento; escrever outro endereço segue o fluxo normal.
+
+**Pagamento do último pedido:** cada pedido em `recent_orders` traz `payment_method` (só quando pago numa parte). Depois da
+observação, se a forma ainda está ativa, o bot pergunta "Vai pagar igual ao último pedido?" (✅ Usar o mesmo / 💳 Outra forma /
+↩️ Voltar, estado `awaiting_saved_payment`); usar segue como se tivesse escolhido na lista (dinheiro ainda pergunta o troco).
 
 **Endereço e complemento:** endereço achado no mapa → pin (`location`) + botões "Tem complemento?" (⏭️ Sem complemento /
 ✏️ Corrigir endereço / ↩️ Voltar); sem coordenadas → texto com o link do Google Maps e os mesmos botões. O nó Enviar

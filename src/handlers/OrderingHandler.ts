@@ -125,7 +125,6 @@ class OrderingHandler extends BaseHandler {
       body: MessagesConstants.PRODUTO_DETALHE(productEmoji(selectedProduct, newCart.browse_category), selectedProduct.name, fmtBRL(selectedProduct.price), descriptionText) + MessagesConstants.PRODUTO_VOLTAR_DICA,
       buttons: [
         { id: 'qty:1', title: MessagesConstants.QTD_ADICIONAR_UM },
-        { id: 'qty:note', title: MessagesConstants.OBSERVACAO_BOTAO },
         { id: 'item:back', title: MessagesConstants.TROCAR_ITEM },
       ],
     });

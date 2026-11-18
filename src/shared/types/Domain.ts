@@ -54,7 +54,7 @@ interface RecentOrder {
   estimated_at?: string | null;
   scheduled_for?: string | null;
   completed_at?: string | null;
-  payment_method?: string;
+  payment_method?: string | null;
   items_count?: number;
 }
 

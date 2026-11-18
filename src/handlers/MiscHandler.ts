@@ -51,7 +51,7 @@ class MiscHandler extends BaseHandler {
         newCart.complement = rawText.trim();
       }
       newState = BotState.AWAITING_PAYMENT;
-      respostas.push(paymentList(newCart.split_count));
+      goToPayment();
       return true;
     }
 

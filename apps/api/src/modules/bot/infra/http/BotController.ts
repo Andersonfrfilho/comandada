@@ -60,6 +60,8 @@ const orderSchema = z.object({
   scheduledFor: z.string().datetime({ offset: true }).optional(),
   address: z.string().trim().max(500).optional(),
   mapsLink: z.string().trim().max(500).optional(),
+  // Observação do pedido inteiro ("sem cebolinha em tudo"), perguntada antes do pagamento.
+  notes: z.string().trim().max(500).optional(),
 })
 
 const reservationSchema = z.object({

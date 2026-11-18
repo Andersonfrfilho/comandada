@@ -17,7 +17,7 @@ class DeliveryHandler extends BaseHandler {
           newCart.delivery_fee = 0;
           newState = BotState.AWAITING_PAYMENT;
           respostas.push(MessagesConstants.TIPO_CONFIRMADO(selectedType.label));
-          respostas.push(paymentList(newCart.split_count));
+          goToPayment();
         }
       } else {
         respostas.push(orderTypeBtn());
@@ -76,7 +76,7 @@ class DeliveryHandler extends BaseHandler {
         newCart.delivery_fee = 0;
         newState = BotState.AWAITING_PAYMENT;
         respostas.push(MessagesConstants.RETIRADA_CONFIRMADA);
-        respostas.push(paymentList(newCart.split_count));
+        goToPayment();
       } else {
         newState = BotState.AWAITING_ADDRESS;
         respostas.push(MessagesConstants.OUTRO_ENDERECO(estCity || ''));
@@ -131,7 +131,7 @@ class DeliveryHandler extends BaseHandler {
     const feeLine = this._buildEtaLine(calcFee, routeMin, routeKm)
       || (calcFee === 0 ? MessagesConstants.FRETE_GRATIS : MessagesConstants.TAXA_ENTREGA(fmtBRL(calcFee)));
     respostas.push(MessagesConstants.ENDERECO_SALVO_CONFIRMADO(address, feeLine.trim()));
-    respostas.push(paymentList(newCart.split_count));
+    goToPayment();
   }
 
   private _coordsConfigured(): boolean {
