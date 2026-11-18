@@ -1,5 +1,6 @@
 import type { PaymentTypeRow } from '@/infra/database/BotConfigRepository'
 import { CARD_LINK_PAYMENT_TYPE_NAME } from '@/modules/payments/shared/payments.constant'
+import { productImagePath } from '@/modules/products/shared/productImage'
 
 export interface StorefrontSourceProduct {
   id: string
@@ -9,6 +10,7 @@ export interface StorefrontSourceProduct {
   category: string
   variant_group: string | null
   variant_label: string | null
+  image_version?: string | null | undefined
 }
 
 export interface StorefrontOption {
@@ -23,12 +25,23 @@ export interface StorefrontItem {
   key: string
   name: string
   description: string | null
+  /** Caminho da foto na API (`/public/products/:id/foto.webp?v=`); o primeiro tamanho com foto vale para o card. */
+  image: string | null
   options: StorefrontOption[]
 }
 
 export interface StorefrontCategory {
   name: string
   items: StorefrontItem[]
+}
+
+/**
+ * Nome do card de um item com tamanhos, como o bot mostra: "Temaki de Salmão (Médio)" vira "Temaki de Salmão".
+ * O `variant_group` do seed é uma chave ("temaki-salmao") e não serve de título.
+ */
+function variantBaseName(product: StorefrontSourceProduct): string {
+  const base = product.variant_label ? product.name.replace(/\s*\([^)]*\)\s*$/, '').trim() : product.name
+  return base || product.name
 }
 
 /**
@@ -44,6 +57,7 @@ export function groupStorefrontMenu(products: StorefrontSourceProduct[]): Storef
       categories.push(category)
     }
     const option: StorefrontOption = { productId: product.id, label: product.variant_label?.trim() || null, price: product.price }
+    const image = productImagePath(product.id, product.image_version)
     const groupName = product.variant_group?.trim()
     if (groupName) {
       const key = `group:${groupName}`
@@ -51,12 +65,13 @@ export function groupStorefrontMenu(products: StorefrontSourceProduct[]): Storef
       if (existing) {
         existing.options.push(option)
         existing.description ??= product.description
+        existing.image ??= image
         continue
       }
-      category.items.push({ key, name: groupName, description: product.description, options: [option] })
+      category.items.push({ key, name: variantBaseName(product), description: product.description, image, options: [option] })
       continue
     }
-    category.items.push({ key: product.id, name: product.name, description: product.description, options: [option] })
+    category.items.push({ key: product.id, name: product.name, description: product.description, image, options: [option] })
   }
   for (const category of categories) {
     for (const item of category.items) item.options.sort((left, right) => left.price - right.price)

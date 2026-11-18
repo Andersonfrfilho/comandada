@@ -9,6 +9,9 @@ import type { ImportMenuProductParams } from '@/modules/products/application/use
 import { parseCsv } from './helpers/parseCsv'
 import { ROLE_IDS, seedRolesAndPermissions } from './roles-permissions.seed'
 import { BRANDING_SETTING_KEYS } from '@/modules/settings/shared/branding.constant'
+import { prepareProductImage } from '@/modules/products/shared/productImage'
+import { toSlug } from '@/shared/utils/toSlug'
+import { and, eq, isNull } from 'drizzle-orm'
 
 const YUYAKI_WHATSAPP_NUMBER = '5516994609688'
 const YUYAKI_NAME = 'Yuyaki Sushi Bar'
@@ -131,6 +134,63 @@ function parseCategoryFilter(argv: readonly string[]): ReadonlySet<string> | und
   return new Set(raw.split(',').map((id) => id.trim()).filter(Boolean))
 }
 
+async function readPhotoSource(source: string): Promise<Buffer> {
+  if (!/^https?:\/\//.test(source)) return readFileSync(path.join(YUYAKI_DATA_DIRECTORY, source))
+  const response = await fetch(source)
+  if (!response.ok) throw new Error(`HTTP ${response.status}`)
+  return Buffer.from(await response.arrayBuffer())
+}
+
+/**
+ * Fotos de `fotos.csv` (recortes dos cardápios do restaurante e fotos do iFood dele). Só preenche quem
+ * está sem foto: a foto trocada no painel não volta para a do seed no próximo deploy. `--fotos-forcar`
+ * regrava todas.
+ */
+export async function seedYuyakiPhotos(options: { overwrite?: boolean } = {}): Promise<void> {
+  const establishmentId = await ensureEstablishment()
+  const summary = { saved: [] as string[], skipped: [] as string[], missing: [] as string[], failed: [] as string[] }
+  for (const row of readCsv('fotos.csv')) {
+    const productName = row['produto'] ?? ''
+    const source = row['foto'] ?? ''
+    const product = await db.query.products.findFirst({
+      where: and(
+        eq(schema.products.establishmentId, establishmentId),
+        eq(schema.products.slug, toSlug(productName)),
+        ...(options.overwrite ? [] : [isNull(schema.products.imageVersion)])
+      ),
+      columns: { id: true },
+    })
+    if (!product) {
+      const exists = await db.query.products.findFirst({
+        where: and(eq(schema.products.establishmentId, establishmentId), eq(schema.products.slug, toSlug(productName))),
+        columns: { id: true },
+      })
+      ;(exists ? summary.skipped : summary.missing).push(productName)
+      continue
+    }
+    try {
+      const prepared = await prepareProductImage(await readPhotoSource(source))
+      await db.transaction(async (transaction) => {
+        await transaction
+          .insert(schema.productImages)
+          .values({ productId: product.id, content: prepared.content, contentType: 'image/webp' })
+          .onConflictDoUpdate({
+            target: schema.productImages.productId,
+            set: { content: prepared.content, contentType: 'image/webp', updatedAt: new Date() },
+          })
+        await transaction
+          .update(schema.products)
+          .set({ imageVersion: prepared.version, updatedAt: new Date() })
+          .where(eq(schema.products.id, product.id))
+      })
+      summary.saved.push(productName)
+    } catch (error: unknown) {
+      summary.failed.push(`${productName}: ${error instanceof Error ? error.message : String(error)}`)
+    }
+  }
+  console.log('[Seed] Yuyaki fotos', summary)
+}
+
 export async function seedYuyaki(options: { categoryIds?: ReadonlySet<string> | undefined } = {}): Promise<void> {
   const establishmentId = await ensureEstablishment()
   await ensureBotHours(establishmentId)
@@ -155,7 +215,13 @@ export async function seedYuyaki(options: { categoryIds?: ReadonlySet<string> | 
 }
 
 if (import.meta.main) {
-  seedYuyaki({ categoryIds: parseCategoryFilter(process.argv.slice(2)) })
+  const argv = process.argv.slice(2)
+  // `--fotos` grava só as fotos (o cardápio já está no banco); `--fotos-forcar` regrava as que já existem.
+  const onlyPhotos = argv.includes('--fotos') || argv.includes('--fotos-forcar')
+  const run = onlyPhotos
+    ? seedYuyakiPhotos({ overwrite: argv.includes('--fotos-forcar') })
+    : seedYuyaki({ categoryIds: parseCategoryFilter(argv) })
+  run
     .then(() => process.exit(0))
     .catch((error: unknown) => {
       console.error('[Seed] Yuyaki failed:', error)

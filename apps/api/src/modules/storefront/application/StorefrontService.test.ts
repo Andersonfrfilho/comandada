@@ -29,9 +29,9 @@ function sharedContext(overrides: Partial<BotSharedContext> = {}): BotSharedCont
     establishment: { id: ESTABLISHMENT_ID, name: 'Yuyaki', whatsappNumber: '5516999990000', settings: {} },
     config: { opening_time: '18:00', closing_time: '23:30', working_days: 'ter,qua,qui,sex,sab,dom', min_order_value: '30', brand_name: 'Yuyaki Sushi Bar' },
     products: [
-      { id: COMBO_ID, name: 'Combo tradicional', price: 89.9, description: '32 unidades', category: 'Combos', variant_group: null, variant_label: null },
-      { id: TEMAKI_G, name: 'Temaki salmão G', price: 32, description: null, category: 'Temakis', variant_group: 'Temaki salmão', variant_label: 'Grande' },
-      { id: TEMAKI_M, name: 'Temaki salmão M', price: 25, description: 'Salmão e cream cheese', category: 'Temakis', variant_group: 'Temaki salmão', variant_label: 'Médio' },
+      { id: COMBO_ID, name: 'Combo tradicional', price: 89.9, description: '32 unidades', category: 'Combos', variant_group: null, variant_label: null, image_version: null },
+      { id: TEMAKI_G, name: 'Temaki salmão (Grande)', price: 32, description: null, category: 'Temakis', variant_group: 'temaki-salmao', variant_label: 'Grande', image_version: 'f0f0f0f0f0f0' },
+      { id: TEMAKI_M, name: 'Temaki salmão (Médio)', price: 25, description: 'Salmão e cream cheese', category: 'Temakis', variant_group: 'temaki-salmao', variant_label: 'Médio', image_version: null },
     ],
     paymentTypes: [
       { id: 1, name: 'pix', type: 'digital', label: 'PIX', config: { chave: 'pix@yuyaki.com', nome: 'Yuyaki' } },
@@ -125,6 +125,12 @@ describe('cardápio online: regras compartilhadas', () => {
     expect(temaki.name).toBe('Temaki salmão')
     expect(temaki.description).toBe('Salmão e cream cheese')
     expect(temaki.options.map((option) => option.label)).toEqual(['Médio', 'Grande'])
+  })
+
+  it('usa a foto de qualquer tamanho no card e deixa sem foto quem não tem', () => {
+    const categories = groupStorefrontMenu(sharedContext().products)
+    expect(categories[0]!.items[0]!.image).toBeNull()
+    expect(categories[1]!.items[0]!.image).toBe(`/public/products/${TEMAKI_G}/foto.webp?v=f0f0f0f0f0f0`)
   })
 
   it('mostra a chave Pix só quando o Pix não é cobrado online', () => {

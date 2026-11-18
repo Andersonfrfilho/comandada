@@ -1,7 +1,7 @@
 import { eq, and, asc, inArray } from 'drizzle-orm'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import type { RouteHandler } from '@/infra/http/router'
+import type { RawRouteHandler, RouteHandler } from '@/infra/http/router'
 import * as schema from '@/infra/database/schema'
 import { UnauthorizedError, ValidationError, NotFoundError, ConflictError } from '@/shared/errors/AppError'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
@@ -17,6 +17,7 @@ import { PRODUCT_AFFINITY_SUGGESTION_LIMIT } from '@/infra/queue/QueueNames.cons
 import { parseMultipart } from '@/shared/utils/parseMultipart'
 import { parseProductsCsv } from '../../application/parseProductsCsv'
 import { toSlug } from '@/shared/utils/toSlug'
+import { PRODUCT_IMAGE, decodeImagePayload, prepareProductImage } from '../../shared/productImage'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -56,6 +57,13 @@ const kitComponentsSchema = z.object({
     )
     .max(20),
 })
+
+const productImageSchema = z.object({
+  /** Data URL ou base64 da foto (JPEG, PNG, WebP...); a API reduz e grava em WebP. */
+  image: z.string().min(1),
+})
+
+const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i
 
 /** Endereço do estabelecimento mora em `settings`; a tabela não tem colunas de local. */
 const establishmentLocationSchema = z.object({
@@ -325,6 +333,92 @@ export class CatalogController {
 
     await this.invalidateCache(establishmentId)
     response.json(updated)
+  }
+
+  // ── Foto do produto ──────────────────────────────────────────────────────
+
+  setProductImage: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const { establishmentId } = request.user
+    const id = request.params['id']!
+
+    const parsed = productImageSchema.safeParse(request.body)
+    if (!parsed.success) throw new ValidationError('Dados inválidos', parsed.error.flatten())
+
+    const existing = await this.db.query.products.findFirst({
+      where: and(eq(schema.products.id, id), eq(schema.products.establishmentId, establishmentId)),
+      columns: { id: true },
+    })
+    if (!existing) throw new NotFoundError('Produto')
+
+    const original = decodeImagePayload(parsed.data.image)
+    if (original.length === 0) throw new ValidationError('Foto vazia')
+    if (original.length > PRODUCT_IMAGE.maxUploadBytes) throw new ValidationError('Foto muito grande (máximo 12 MB)')
+    const prepared = await prepareProductImage(original).catch(() => {
+      throw new ValidationError('Arquivo não é uma imagem válida')
+    })
+
+    const [updated] = await this.db.transaction(async (transaction) => {
+      await transaction
+        .insert(schema.productImages)
+        .values({ productId: id, content: prepared.content, contentType: PRODUCT_IMAGE.contentType })
+        .onConflictDoUpdate({
+          target: schema.productImages.productId,
+          set: { content: prepared.content, contentType: PRODUCT_IMAGE.contentType, updatedAt: new Date() },
+        })
+      return transaction
+        .update(schema.products)
+        .set({ imageVersion: prepared.version, updatedAt: new Date() })
+        .where(eq(schema.products.id, id))
+        .returning()
+    })
+
+    await this.invalidateCache(establishmentId)
+    response.json(updated)
+  }
+
+  deleteProductImage: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const { establishmentId } = request.user
+    const id = request.params['id']!
+
+    const existing = await this.db.query.products.findFirst({
+      where: and(eq(schema.products.id, id), eq(schema.products.establishmentId, establishmentId)),
+      columns: { id: true },
+    })
+    if (!existing) throw new NotFoundError('Produto')
+
+    const [updated] = await this.db.transaction(async (transaction) => {
+      await transaction.delete(schema.productImages).where(eq(schema.productImages.productId, id))
+      return transaction
+        .update(schema.products)
+        .set({ imageVersion: null, updatedAt: new Date() })
+        .where(eq(schema.products.id, id))
+        .returning()
+    })
+
+    await this.invalidateCache(establishmentId)
+    response.json(updated)
+  }
+
+  /**
+   * Foto pública (cardápio online, painel). A URL leva `?v=` com o hash da foto, então pode ficar em
+   * cache para sempre; trocar a foto muda a URL.
+   */
+  servePublicImage: RawRouteHandler = async (_request, params) => {
+    const productId = params['productId'] ?? ''
+    if (!UUID_PATTERN.test(productId)) return new Response('Not found', { status: 404 })
+    const image = await this.db.query.productImages.findFirst({
+      where: eq(schema.productImages.productId, productId),
+    })
+    if (!image) return new Response('Not found', { status: 404 })
+    return new Response(new Uint8Array(image.content), {
+      headers: {
+        'Content-Type': image.contentType,
+        'Cache-Control': 'public, max-age=31536000, immutable',
+        'Cross-Origin-Resource-Policy': 'cross-origin',
+      },
+    })
   }
 
   getProductPriceHistory: RouteHandler = async (request, response) => {

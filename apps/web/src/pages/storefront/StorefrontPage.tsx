@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { ChevronRight, Clock, Instagram, MapPin, Minus, Plus, Search, ShoppingBag, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
+import { productImageUrl } from '@/lib/productImage'
 import { storefrontApi, type StorefrontItem, type StorefrontMenu } from './storefrontApi'
 import { addToCart, cartCount, cartTotal, changeQuantity, hoursLabel, normalizeSearch, type CartLine } from './storefrontFormat'
 import { storefrontStorage } from './storefrontStorage'
@@ -345,15 +346,27 @@ function ItemRow({
   onRemove: () => void
 }) {
   const singleOption = item.options.length === 1
+  const imageUrl = productImageUrl(item.image)
   return (
     <li className="flex items-start gap-3 px-4 py-4">
-      <button type="button" onClick={onOpen} className="min-w-0 flex-1 text-left">
+      <button type="button" onClick={onOpen} className="flex min-w-0 flex-1 items-start gap-3 text-left">
+        <span className="min-w-0 flex-1">
         <p className="font-semibold text-gray-900">{item.name}</p>
         {item.description && <p className="mt-1 line-clamp-2 text-sm leading-snug text-gray-500">{item.description}</p>}
         {item.options.length > 1 && (
           <p className="mt-1 text-xs text-gray-500">{item.options.map((option) => option.label ?? '').filter(Boolean).join(' · ')}</p>
         )}
         <p className="mt-2 text-sm font-semibold text-brand-700">{priceLabel(item)}</p>
+        </span>
+        {imageUrl && (
+          <img
+            src={imageUrl}
+            alt=""
+            loading="lazy"
+            decoding="async"
+            className="h-20 w-20 shrink-0 rounded-xl bg-stone-100 object-cover ring-1 ring-stone-200/70"
+          />
+        )}
       </button>
       <div className="flex shrink-0 items-center self-center">
         {quantity > 0 && singleOption ? (
@@ -404,6 +417,13 @@ function ItemSheet({
   return (
     <BottomSheet title={item.name} onClose={onClose}>
       <div className="space-y-5 px-5 pb-4">
+        {item.image && (
+          <img
+            src={productImageUrl(item.image) ?? undefined}
+            alt={item.name}
+            className="aspect-[4/3] w-full rounded-2xl bg-stone-100 object-cover"
+          />
+        )}
         {item.description && <p className="whitespace-pre-line text-sm leading-relaxed text-gray-600">{item.description}</p>}
 
         {item.options.length > 1 && (
