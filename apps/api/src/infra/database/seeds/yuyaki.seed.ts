@@ -33,7 +33,12 @@ const YUYAKI_DEFAULT_BOT_HOURS: Readonly<Record<string, string | boolean>> = {
   establishment_city: 'Franca - SP',
 }
 
-const VARIANT_LABEL_BY_SIZE: Readonly<Record<string, string>> = { medio: 'Médio', grande: 'Grande' }
+const VARIANT_LABEL_BY_SIZE: Readonly<Record<string, string>> = {
+  medio: 'Médio',
+  grande: 'Grande',
+  copo: 'Copo 350 ml',
+  jarra: 'Jarra 750 ml',
+}
 
 async function ensureEstablishment(): Promise<string> {
   const existing = await db.query.establishments.findFirst({
@@ -117,12 +122,22 @@ async function ensureAdmin(establishmentId: string): Promise<void> {
     .onConflictDoNothing()
 }
 
-export async function seedYuyaki(): Promise<void> {
+// `--categorias 5,6` importa só essas categorias do CSV: serve para incluir itens novos num
+// ambiente que já roda, sem regravar preço e descrição dos produtos que o restaurante mexeu no painel.
+function parseCategoryFilter(argv: readonly string[]): ReadonlySet<string> | undefined {
+  const flagIndex = argv.indexOf('--categorias')
+  const raw = flagIndex >= 0 ? argv[flagIndex + 1] : undefined
+  if (!raw) return undefined
+  return new Set(raw.split(',').map((id) => id.trim()).filter(Boolean))
+}
+
+export async function seedYuyaki(options: { categoryIds?: ReadonlySet<string> | undefined } = {}): Promise<void> {
   const establishmentId = await ensureEstablishment()
   await ensureBotHours(establishmentId)
   await ensureBranding(establishmentId)
   await ensureAdmin(establishmentId)
-  const categoryRows = readCsv('categorias.csv')
+  const isSelected = (categoryId: string | undefined) => !options.categoryIds || options.categoryIds.has(categoryId ?? '')
+  const categoryRows = readCsv('categorias.csv').filter((row) => isSelected(row['id']))
   const catalogNameById = new Map(categoryRows.map((row) => [row['id'] ?? '', row['nome'] ?? '']))
 
   const result = await new ImportMenuUseCase(db).execute({
@@ -132,13 +147,15 @@ export async function seedYuyaki(): Promise<void> {
       sortOrder: Number(row['ordem']),
       active: row['ativa'] !== 'false',
     })),
-    products: readCsv('produtos.csv').map((row) => toProduct(row, catalogNameById)),
+    products: readCsv('produtos.csv')
+      .filter((row) => isSelected(row['categoria_id']))
+      .map((row) => toProduct(row, catalogNameById)),
   })
   console.log('[Seed] Yuyaki menu', result)
 }
 
 if (import.meta.main) {
-  seedYuyaki()
+  seedYuyaki({ categoryIds: parseCategoryFilter(process.argv.slice(2)) })
     .then(() => process.exit(0))
     .catch((error: unknown) => {
       console.error('[Seed] Yuyaki failed:', error)
