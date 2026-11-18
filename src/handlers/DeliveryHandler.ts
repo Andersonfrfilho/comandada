@@ -12,8 +12,7 @@ class DeliveryHandler extends BaseHandler {
         const selectedType = orderTypes[choiceIndex];
         newCart.order_type = selectedType.name;
         if (selectedType.name === 'delivery') {
-          newState = BotState.AWAITING_ADDRESS;
-          respostas.push(MessagesConstants.SOLICITAR_ENDERECO);
+          askDeliveryAddress();
         } else {
           newCart.delivery_fee = 0;
           newState = BotState.AWAITING_PAYMENT;
@@ -22,6 +21,22 @@ class DeliveryHandler extends BaseHandler {
         }
       } else {
         respostas.push(orderTypeBtn());
+      }
+      return true;
+    }
+
+    if (currentState === BotState.AWAITING_SAVED_ADDRESS) {
+      if (texto === MENU_BACK_ID || texto === 'voltar') {
+        this._backToOrderType();
+      } else if (texto === SAVED_ADDRESS_USE_ID || texto === 'sim' || texto === 'usar') {
+        await this._useSavedAddress();
+      } else if (texto === SAVED_ADDRESS_OTHER_ID || texto === 'outro' || texto === 'não' || texto === 'nao') {
+        newState = BotState.AWAITING_ADDRESS;
+        respostas.push(MessagesConstants.SOLICITAR_ENDERECO);
+      } else {
+        // Escreveu outro endereço (ou CEP, ou mandou a localização) direto: segue como endereço novo.
+        newState = BotState.AWAITING_ADDRESS;
+        await this._handleAddress();
       }
       return true;
     }
@@ -83,6 +98,40 @@ class DeliveryHandler extends BaseHandler {
       return;
     }
     showOrderConfirmation();
+  }
+
+  // Mesmo endereço da última entrega (já com complemento): recalcula a taxa e vai direto ao pagamento.
+  private async _useSavedAddress(): Promise<void> {
+    const address = lastDeliveryAddress;
+    const { total: cartSubtotal } = cartSummary(newCart.items);
+    let routeKm = 0;
+    let routeMin = 0;
+    if (this._coordsConfigured()) {
+      const streetAndNum = (address.match(/^(.+?\s+\d+)/) || [])[1];
+      const geoResult = await geocodingProvider.search(address + ', Brasil')
+        || (streetAndNum && estCity ? await geocodingProvider.search(streetAndNum.trim() + ', ' + estCity + ', Brasil') : null);
+      if (geoResult) {
+        const lat = parseFloat(geoResult.lat);
+        const lng = parseFloat(geoResult.lon);
+        if (haversine(estLat, estLng, lat, lng) > maxRadiusKm) {
+          newCart.address = address;
+          newState = BotState.OFFER_PICKUP;
+          respostas.push(offerPickupBtn(MessagesConstants.ENDERECO_FORA_AREA(maxRadiusKm)));
+          return;
+        }
+        const route = await routingProvider.route(estLat, estLng, lat, lng);
+        if (route) { routeKm = route.km; routeMin = route.min; }
+      }
+    }
+    const calcFee = calcDeliveryFee(routeKm, routeMin, cartSubtotal);
+    newCart.address = address;
+    newCart.complement = '';
+    newCart.delivery_fee = calcFee;
+    newState = BotState.AWAITING_PAYMENT;
+    const feeLine = this._buildEtaLine(calcFee, routeMin, routeKm)
+      || (calcFee === 0 ? MessagesConstants.FRETE_GRATIS : MessagesConstants.TAXA_ENTREGA(fmtBRL(calcFee)));
+    respostas.push(MessagesConstants.ENDERECO_SALVO_CONFIRMADO(address, feeLine.trim()));
+    respostas.push(paymentList(newCart.split_count));
   }
 
   private _coordsConfigured(): boolean {

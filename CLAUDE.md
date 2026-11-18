@@ -240,6 +240,8 @@ fiscal vai pelo mesmo WhatsApp (sem n8n).
 cliente vinculado; fora da janela vão os templates `lembrete_pedido` (marketing) e `lembrete_reserva` (utilidade).
 Detalhes em `n8n/workflows/README.md`.
 
+**Endereço da última entrega:** o contexto traz `last_delivery_address` (snapshot da última entrega do cliente, com complemento). Ao escolher Entregar, o bot pergunta "Entregamos no mesmo endereço?" (✅ Usar este / 📍 Outro endereço / ↩️ Voltar, estado `awaiting_saved_address`); usar recalcula a taxa pelo mapa (taxa base sem coordenadas, fora do raio oferece retirada) e vai direto ao pagamento; escrever outro endereço segue o fluxo normal.
+
 **Endereço e complemento:** endereço achado no mapa → pin (`location`) + botões "Tem complemento?" (⏭️ Sem complemento /
 ✏️ Corrigir endereço / ↩️ Voltar); sem coordenadas → texto com o link do Google Maps e os mesmos botões. O nó Enviar
 Resposta manda todo texto com link com `preview_url: true` (a Meta mostra a prévia da primeira URL; mensagem interativa

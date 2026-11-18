@@ -103,12 +103,13 @@ export class GetBotContextUseCase {
     const customer = await this.customerService.findByNumber({ establishmentId, whatsappNumber: params.whatsappNumber })
 
     // O que é do cliente (sessão, pedidos, conversa) e a agenda mudam a cada mensagem: sempre do banco.
-    const [session, recentOrders, scheduleSlots, conversation, partialConfirmation] = await Promise.all([
+    const [session, recentOrders, scheduleSlots, conversation, partialConfirmation, lastDeliveryAddress] = await Promise.all([
       this.loadSession(establishmentId, params.whatsappNumber),
       customer ? this.loadRecentOrders(customer.id) : Promise.resolve([]),
       this.loadScheduleSlots(establishmentId),
       this.loadConversation(establishmentId, params.whatsappNumber),
       customer ? this.loadPartialConfirmation(establishmentId, customer.id) : Promise.resolve(null),
+      customer ? this.loadLastDeliveryAddress(establishmentId, customer.id) : Promise.resolve(null),
     ])
 
     return {
@@ -149,6 +150,8 @@ export class GetBotContextUseCase {
       session,
       last_order: recentOrders[0] ?? null,
       recent_orders: recentOrders,
+      // Endereço da última entrega (com complemento): o bot oferece "Usar este endereço" ao escolher Entregar.
+      last_delivery_address: lastDeliveryAddress,
       payment_types: paymentTypes,
       order_types: orderTypes,
       restaurant_tables: tables,
@@ -411,6 +414,17 @@ export class GetBotContextUseCase {
     })
   }
 
+  private async loadLastDeliveryAddress(establishmentId: string, customerId: string): Promise<string | null> {
+    const [row] = await this.db
+      .select({ snapshot: schema.deliveries.addressSnapshot })
+      .from(schema.deliveries)
+      .innerJoin(schema.orders, eq(schema.orders.id, schema.deliveries.orderId))
+      .where(and(eq(schema.orders.customerId, customerId), eq(schema.deliveries.establishmentId, establishmentId)))
+      .orderBy(desc(schema.deliveries.createdAt))
+      .limit(1)
+    return row ? deliveryAddressText(row.snapshot) : null
+  }
+
   private async loadTables(establishmentId: string): Promise<BotTable[]> {
     return this.db
       .select({
@@ -422,6 +436,16 @@ export class GetBotContextUseCase {
       .where(eq(schema.restaurantTables.establishmentId, establishmentId))
       .orderBy(asc(schema.restaurantTables.number))
   }
+}
+
+/** Endereço + complemento do snapshot da entrega; o bot já grava o complemento junto do endereço. */
+export function deliveryAddressText(snapshot: unknown): string | null {
+  if (!snapshot || typeof snapshot !== 'object') return null
+  const record = snapshot as Record<string, unknown>
+  const address = typeof record['address'] === 'string' ? record['address'].trim() : ''
+  if (!address) return null
+  const complement = typeof record['complement'] === 'string' ? record['complement'].trim() : ''
+  return complement && !address.includes(complement) ? `${address}, ${complement}` : address
 }
 
 function toBotFeeRule(rule: DeliveryFeeRuleRow) {

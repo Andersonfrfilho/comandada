@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { GetBotContextUseCase, type BotSharedContext } from './GetBotContextUseCase'
+import { GetBotContextUseCase, deliveryAddressText, type BotSharedContext } from './GetBotContextUseCase'
 import type { BotCustomerService } from '../services/BotCustomerService'
 import type { BotConfigRepository } from '@/infra/database/BotConfigRepository'
 import { BOT_SHARED_CONTEXT_CACHE_PREFIX } from '../../shared/bot.constant'
@@ -83,5 +83,20 @@ describe('GetBotContextUseCase — cache do contexto compartilhado', () => {
     // Sem cache ele vai ao banco, que aqui não tem estabelecimentos: o erro prova que o Redis foi ignorado.
     await expect(useCase.execute({ whatsappNumber: '5511988887777' })).rejects.toThrow()
     expect(reads).toEqual([])
+  })
+})
+
+describe('deliveryAddressText — endereço da última entrega para o bot', () => {
+  it('junta o complemento guardado à parte', () => {
+    expect(deliveryAddressText({ address: 'Rua A, 1, Centro', complement: 'apto 12' })).toBe('Rua A, 1, Centro, apto 12')
+  })
+
+  it('não repete o complemento que o bot já gravou no endereço', () => {
+    expect(deliveryAddressText({ address: 'Rua A, 1, apto 12', complement: 'apto 12' })).toBe('Rua A, 1, apto 12')
+  })
+
+  it('snapshot sem endereço vira null', () => {
+    expect(deliveryAddressText({ address: '  ' })).toBeNull()
+    expect(deliveryAddressText(null)).toBeNull()
   })
 })

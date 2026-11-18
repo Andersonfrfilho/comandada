@@ -35,6 +35,7 @@ const STATE_LABELS: Record<string, string> = {
   awaiting_schedule_time: 'Agendando (horário)',
   awaiting_type: 'Escolhendo entrega/retirada',
   awaiting_address: 'Aguardando endereço',
+  awaiting_saved_address: 'Confirmando endereço salvo',
   awaiting_address_number: 'Aguardando número do endereço',
   awaiting_complement: 'Aguardando complemento',
   offer_pickup: 'Oferecendo retirada',
