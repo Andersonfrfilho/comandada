@@ -4,7 +4,10 @@ import { useQuery } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
 import { Check, CheckCircle2, Copy, CreditCard, MessageCircle, XCircle } from 'lucide-react'
 import { formatBRL } from '@/lib/listing'
+import { applyBranding, toBranding } from '@/lib/branding'
 import { storefrontApi, type OrderPayment, type StorefrontOrderStatus } from './storefrontApi'
+import { HankoStamp } from './storefrontOriental'
+import { STOREFRONT_CREAM, STOREFRONT_HERO } from './storefrontTheme'
 import { currentStepIndex, isFinalStatus, statusSteps, whatsappLink } from './storefrontFormat'
 
 const POLL_INTERVAL_MS = 10_000
@@ -65,10 +68,21 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
     document.title = `Pedido ${label} · ${order.establishment.name}`
   }, [label, order.establishment.name])
 
+  // Cor do restaurante também aqui (a página pode ser aberta direto pelo link do WhatsApp).
+  const { data: menu } = useQuery({
+    queryKey: ['storefront-menu', order.establishment.id],
+    queryFn: () => storefrontApi.menu(order.establishment.id),
+    staleTime: 5 * 60_000,
+  })
+  useEffect(() => {
+    if (menu) applyBranding(toBranding({ name: menu.establishment.name, logo: menu.establishment.logo, primaryColor: menu.establishment.primaryColor }))
+  }, [menu])
+
   return (
     <Shell>
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-200">
-        <div className="bg-brand-700 px-6 py-6 text-white">
+        <div className={`relative px-6 py-6 text-white ${justPlaced && !awaitingPayment && !cancelled ? 'pr-28' : ''} ${STOREFRONT_HERO}`}>
+          {justPlaced && !awaitingPayment && !cancelled && <HankoStamp className="absolute right-5 top-1/2 -translate-y-1/2" />}
           <p className="text-sm text-white/80">{order.establishment.name}</p>
           <h1 className="mt-1 text-2xl font-bold">
             {cancelled ? 'Pedido cancelado' : justPlaced && !awaitingPayment ? 'Pedido enviado!' : `Pedido ${label}`}
@@ -240,5 +254,5 @@ function PixKeyBox({ pixKey, total }: { pixKey: NonNullable<StorefrontOrderStatu
 }
 
 function Shell({ children }: { children: React.ReactNode }) {
-  return <div className="min-h-screen bg-stone-50 px-4 py-8"><div className="mx-auto max-w-md">{children}</div></div>
+  return <div className={`min-h-screen px-4 py-8 ${STOREFRONT_CREAM}`}><div className="mx-auto max-w-md">{children}</div></div>
 }

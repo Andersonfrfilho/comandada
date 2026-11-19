@@ -14,6 +14,7 @@ import { CartThumbnail, useProductImages } from './CartThumbnail'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_ACCENT, STOREFRONT_CREAM, STOREFRONT_HERO, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
+import { SakuraPetals } from './storefrontOriental'
 import { MOTION, StorefrontMotionStyles, flyToCart, ping, useRevealOnScroll } from './storefrontMotion'
 
 const NOTE_MAX_LENGTH = 140
@@ -334,7 +335,8 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
     : null
 
   return (
-    <header className={`text-white ${STOREFRONT_HERO}`}>
+    <header className={`relative overflow-hidden text-white ${STOREFRONT_HERO}`}>
+      <SakuraPetals />
       <div className="mx-auto max-w-6xl px-4 pb-6 pt-4 sm:pt-5">
         <div className="mb-3 flex justify-end">
           <button
