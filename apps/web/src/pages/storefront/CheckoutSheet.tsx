@@ -460,7 +460,7 @@ export function CheckoutSheet({
           type="button"
           onClick={submit}
           disabled={placeOrder.isPending || !menu.establishment.isOpen || lines.length === 0}
-          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-4 font-semibold text-white shadow-md shadow-brand-600/25 transition disabled:opacity-50"
+          className="flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-4 font-semibold text-white shadow-md shadow-brand-600/25 transition disabled:opacity-50"
         >
           {placeOrder.isPending && <Loader2 className="h-5 w-5 animate-spin" />}
           {!menu.establishment.isOpen ? 'Estamos fechados agora' : placeOrder.isPending ? 'Enviando…' : `Fazer pedido · ${formatBRL(total)}`}
@@ -530,7 +530,7 @@ function RadioRow({
         selected ? `bg-brand-50 ring-2 ring-brand-500 ${MOTION.select}` : 'bg-white ring-1 ring-stone-200'
       }`}
     >
-      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${selected ? 'bg-brand-600 text-white' : 'ring-1 ring-stone-300'}`}>
+      <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-full transition-colors duration-200 ${selected ? 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white' : 'ring-1 ring-stone-300'}`}>
         {selected && <Check className={`h-3.5 w-3.5 ${MOTION.check}`} strokeWidth={3} />}
       </span>
       <span className="min-w-0 flex-1">
