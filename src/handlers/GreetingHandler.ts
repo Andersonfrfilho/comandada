@@ -14,6 +14,7 @@ class GreetingHandler extends BaseHandler {
       welcome = MessagesConstants.BOAS_VINDAS_NOVO(estName);
       closing = MessagesConstants.PEDIR_NOME;
     } else {
+      welcome = welcomeFor(customerName);
       if (!customerNameFromDB && pushNameFormatted) {
         customerNameToSave = pushNameFormatted;
         save_customer_name = true;
@@ -21,7 +22,7 @@ class GreetingHandler extends BaseHandler {
       // Com pedido em andamento o menu já traz "Meu pedido" e "Ajuda": não oferece repetir o anterior.
       if (!hasOrderInProgress() && lastOrder && Array.isArray(lastOrder.items) && lastOrder.items.length > 0) {
         newState = BotState.REPEAT_ORDER;
-        repeatOrderLines = buildRepeatOrderLines({ lastOrder, products, header: MessagesConstants.SAUDACAO_REPEAT(customerName) }).join('\n');
+        repeatOrderLines = buildRepeatOrderLines({ lastOrder, products, header: customWelcome ? MessagesConstants.SAUDACAO_REPEAT(customerName) : MessagesConstants.SAUDACAO_REPEAT_SEM_NOME }).join('\n');
         closing = yesNo(MessagesConstants.SAUDACAO_REPEAT_PERGUNTA);
       } else {
         closing = mainMenu();

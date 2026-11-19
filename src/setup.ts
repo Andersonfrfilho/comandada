@@ -109,7 +109,12 @@ const customClosed   = establishment.msg_closed   || config['msg_closed'];
 const msgClosed      = customClosed
   ? customClosed.replace(/\\n/g, '\n')
   : MessagesConstants.FECHADO(estName, formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime));
-const msgWelcome     = (establishment.msg_welcome  || config['msg_welcome']  || MessagesConstants.BOAS_VINDAS(estName)).replace(/\\n/g, '\n');
+const customWelcome  = establishment.msg_welcome  || config['msg_welcome']  || '';
+const msgWelcome     = (customWelcome || MessagesConstants.BOAS_VINDAS(estName)).replace(/\\n/g, '\n');
+// Boas-vindas da saudação de quem já tem nome. Texto próprio do restaurante (msg_welcome) vale como está.
+function welcomeFor(name: string): string {
+  return customWelcome ? msgWelcome : MessagesConstants.BOAS_VINDAS_CLIENTE(name, estName);
+}
 const estCity        = establishment.city          || config['establishment_city']    || '';
 const estAddress     = establishment.address       || config['establishment_address'] || '';
 const estInstagram   = establishment.instagram     || config['establishment_instagram'] || '';
@@ -1158,8 +1163,8 @@ function buildPayload(): N8nResponsePayload {
 }
 
 // Cartão de visita da saudação, tudo do cadastro do restaurante: só entra o bloco cujo dado existe.
-// Blocos separados por linha em branco, para o cliente ter espaço para ler. Dentro da mensagem única
-// (compact) vai sem título e com o endereço e o link do mapa no lugar do pin.
+// Em mensagens separadas (Evolution) cada bloco tem título e linha em branco. Dentro da mensagem única
+// (compact) é uma linha por assunto, com o endereço e o link do mapa no lugar do pin.
 function buildCompanyInfo(compact?: boolean): string {
   const blocks: string[] = [];
   // 00:00 às 23:59 é "o dia todo": vira "24 horas" em vez de "das 0h às 23h59".
@@ -1167,25 +1172,37 @@ function buildCompanyInfo(compact?: boolean): string {
   const hoursLine = opensAllDay
     ? MessagesConstants.INFO_HORARIO_24H_LINHA(formatWorkingDays(workingDays))
     : MessagesConstants.INFO_HORARIO_LINHA(formatWorkingDays(workingDays), formatHour(openingTime), formatHour(closingTime));
-  blocks.push(MessagesConstants.INFO_HORARIO(isOpen && !ignoreHours, hoursLine));
+  // Com "ignorar horário" ligado o bot atende sempre: não diz aberto nem fechado.
+  const openStatus: boolean | null = ignoreHours ? null : isOpen;
+  blocks.push(compact ? MessagesConstants.INFO_HORARIO_COMPACTO(openStatus, hoursLine) : MessagesConstants.INFO_HORARIO(openStatus === true, hoursLine));
   // Com o pin no mapa o WhatsApp já mostra o endereço: no cartão ele só entra quando não há pin.
   const fullAddress = fullEstablishmentAddress();
   const mapLink = establishmentMapLink();
-  if (fullAddress && compact && mapLink) blocks.push(MessagesConstants.INFO_ENDERECO_COM_MAPA(fullAddress, mapLink));
-  else if (fullAddress && (compact || !establishmentLocationCard())) blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  if (fullAddress && compact) {
+    blocks.push(mapLink ? MessagesConstants.INFO_ENDERECO_COM_MAPA_COMPACTO(fullAddress, mapLink) : MessagesConstants.INFO_ENDERECO_COMPACTO(fullAddress));
+  } else if (fullAddress && !establishmentLocationCard()) {
+    blocks.push(MessagesConstants.INFO_ENDERECO(fullAddress));
+  }
   const feeText = describeDeliveryFee();
-  if (featureDelivery && featureRetirada) blocks.push(MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
-  else if (featureDelivery) blocks.push(MessagesConstants.INFO_SO_ENTREGA(feeText));
-  else if (featureRetirada) blocks.push(MessagesConstants.INFO_SO_RETIRADA);
+  if (featureDelivery && featureRetirada) {
+    blocks.push(compact ? MessagesConstants.INFO_ENTREGA_E_RETIRADA_COMPACTO(feeText) : MessagesConstants.INFO_ENTREGA_E_RETIRADA(feeText));
+  } else if (featureDelivery) {
+    blocks.push(compact ? MessagesConstants.INFO_SO_ENTREGA_COMPACTO(feeText) : MessagesConstants.INFO_SO_ENTREGA(feeText));
+  } else if (featureRetirada) {
+    blocks.push(compact ? MessagesConstants.INFO_SO_RETIRADA_COMPACTO : MessagesConstants.INFO_SO_RETIRADA);
+  }
   const paymentLabels = paymentTypes
     .map((paymentType: PaymentType) => paymentType.label)
     .filter((label: string, index: number, labels: string[]) => !!label && labels.indexOf(label) === index);
-  if (paymentLabels.length > 0) blocks.push(MessagesConstants.INFO_PAGAMENTO(joinWithAnd(paymentLabels)));
+  if (paymentLabels.length > 0) {
+    const payments = joinWithAnd(paymentLabels);
+    blocks.push(compact ? MessagesConstants.INFO_PAGAMENTO_COMPACTO(payments) : MessagesConstants.INFO_PAGAMENTO(payments));
+  }
   const instagramLink = toInstagramLink(estInstagram);
-  if (instagramLink) blocks.push(MessagesConstants.INFO_INSTAGRAM(instagramLink));
+  if (instagramLink) blocks.push(compact ? MessagesConstants.INFO_INSTAGRAM_COMPACTO(instagramLink) : MessagesConstants.INFO_INSTAGRAM(instagramLink));
   const websiteLink = toWebsiteLink(estWebsite);
-  if (websiteLink) blocks.push(MessagesConstants.INFO_SITE(websiteLink));
-  return (compact ? blocks : [MessagesConstants.INFO_TITULO(estName), ...blocks]).join('\n\n');
+  if (websiteLink) blocks.push(compact ? MessagesConstants.INFO_SITE_COMPACTO(websiteLink) : MessagesConstants.INFO_SITE(websiteLink));
+  return compact ? blocks.join('\n') : [MessagesConstants.INFO_TITULO(estName), ...blocks].join('\n\n');
 }
 
 function establishmentMapLink(): string {

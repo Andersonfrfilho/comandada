@@ -372,6 +372,13 @@
       "when": 1785520200000,
       "tag": "0053_product_images",
       "breakpoints": true
+    },
+    {
+      "idx": 53,
+      "version": "7",
+      "when": 1785606600000,
+      "tag": "0054_yuyake_brand_name",
+      "breakpoints": true
     }
   ]
 }

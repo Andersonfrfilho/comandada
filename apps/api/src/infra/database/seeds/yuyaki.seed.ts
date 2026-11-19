@@ -14,7 +14,7 @@ import { toSlug } from '@/shared/utils/toSlug'
 import { and, eq, isNull } from 'drizzle-orm'
 
 const YUYAKI_WHATSAPP_NUMBER = '5516994609688'
-const YUYAKI_NAME = 'Yuyaki Sushi Bar'
+const YUYAKI_NAME = 'Yuyake Sushi & Grill'
 const YUYAKI_DATA_DIRECTORY = path.resolve(import.meta.dir, 'data/yuyaki')
 
 const YUYAKI_ADMIN_EMAIL = 'admin@yuyaki.demo'
