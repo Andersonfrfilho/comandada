@@ -28,6 +28,7 @@ import {
 } from './storefrontFormat'
 import { storefrontStorage } from './storefrontStorage'
 import { BottomSheet } from './BottomSheet'
+import { CartThumbnail, useProductImages } from './CartThumbnail'
 
 const ORDER_NOTE_MAX_LENGTH = 500
 const LOOKUP_DELAY_MS = 450
@@ -80,6 +81,7 @@ export function CheckoutSheet({
 }) {
   const navigate = useNavigate()
   const establishmentId = menu.establishment.id
+  const imageByProduct = useProductImages(menu)
   const profile = useMemo(() => storefrontStorage.loadProfile(establishmentId), [establishmentId])
 
   const [phone, setPhone] = useState(account ? maskPhone(account.phone) : (profile?.phone ?? ''))
@@ -247,6 +249,7 @@ export function CheckoutSheet({
             <ul className="divide-y divide-stone-100">
               {lines.map((line) => (
                 <li key={line.lineId} className="flex items-center gap-3 py-3">
+                  <CartThumbnail imageUrl={imageByProduct.get(line.productId)} name={line.name} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium text-gray-900">{line.name}</p>
                     {line.notes && <p className="text-xs italic text-gray-500">{line.notes}</p>}
