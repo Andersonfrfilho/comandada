@@ -376,7 +376,9 @@ Código em `apps/api/src/modules/storefront/application/StorefrontAccountService
 (`data-reveal`), a foto voa até o carrinho ao adicionar (`flyToCart` até `[data-cart-target]`), números dão um pulo ao mudar
 (`key` com o valor). Na seleção: o fundo da categoria ativa desliza entre as categorias, tamanho/entrega/pagamento
 escolhidos afundam e voltam com mola e o check aparece girando (`MOTION.select`/`check`/`hop`), botão de adicionar solta
-uma onda (`ping`). Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
+uma onda (`ping`). Toques japoneses (`storefrontOriental.tsx`): pétalas de sakura caem no topo por 9 s ao abrir,
+o hashi pega a foto e leva ao carrinho (`flyToCart`) e o selo hanko "受付" carimba o "Pedido enviado!". A página do pedido
+aplica a cor do restaurante (busca o cardápio pelo id). Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
 
 ## Lógica do bot (src/)
 
