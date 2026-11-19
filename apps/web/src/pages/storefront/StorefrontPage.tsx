@@ -12,6 +12,7 @@ import { AccountAvatar, AccountSheet, LoginSheet, firstName, useStorefrontAccoun
 import { CheckoutSheet } from './CheckoutSheet'
 import { CartThumbnail, useProductImages } from './CartThumbnail'
 import { BottomSheet } from './BottomSheet'
+import { AppFooter } from '@/components/brand/AppFooter'
 import { CARD, DISPLAY_FONT, STOREFRONT_ACCENT, STOREFRONT_CREAM, STOREFRONT_HERO, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
 import { SakuraPetals } from './storefrontOriental'
@@ -45,11 +46,12 @@ export function StorefrontPage() {
   if (isLoading) return <MenuSkeleton />
   if (isError || !menu) {
     return (
-      <div className={`flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center ${STOREFRONT_CREAM}`}>
+      <div className={`relative flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center ${STOREFRONT_CREAM}`}>
         <p className="text-lg font-semibold text-gray-800">Não conseguimos abrir o cardápio agora.</p>
         <button type="button" onClick={() => void refetch()} className="rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-2.5 text-sm font-semibold text-white">
           Tentar de novo
         </button>
+        <AppFooter textClassName="text-[#8a7466]" className="absolute inset-x-0 bottom-0" />
       </div>
     )
   }
@@ -157,7 +159,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
   useRevealOnScroll(mainRef, `${search}|${menu.categories.length}`)
 
   return (
-    <div className={`min-h-screen pb-28 text-[#1c120d] lg:pb-12 ${STOREFRONT_CREAM}`}>
+    <div className={`flex min-h-screen flex-col pb-28 text-[#1c120d] lg:pb-0 ${STOREFRONT_CREAM}`}>
       <StorefrontMotionStyles />
       <MenuHeader
         menu={menu}
@@ -174,7 +176,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
         onSearch={setSearch}
       />
 
-      <div className="mx-auto max-w-6xl px-4 lg:flex lg:items-start lg:gap-8">
+      <div className="mx-auto w-full max-w-6xl flex-1 px-4 lg:flex lg:items-start lg:gap-8">
         <main ref={mainRef} className="min-w-0 flex-1">
           {recentOrder && (
             <Link
@@ -229,6 +231,8 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
 
         <CartPanel menu={menu} lines={lines} onChangeLines={setLines} onCheckout={() => setCheckoutOpen(true)} />
       </div>
+
+      <AppFooter brandName={menu.establishment.name} textClassName="text-[#8a7466]" className="mt-4 border-t border-[#f0e2cf]" />
 
       {count > 0 && !checkoutOpen && (
         <div className={`fixed inset-x-0 bottom-0 z-30 ${MOTION.rise} bg-gradient-to-t from-[#fff4e8] via-[#fff4e8]/95 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:hidden`}>

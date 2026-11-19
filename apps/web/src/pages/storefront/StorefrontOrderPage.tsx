@@ -7,6 +7,7 @@ import { formatBRL } from '@/lib/listing'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { storefrontApi, type OrderPayment, type StorefrontOrderStatus } from './storefrontApi'
 import { HankoStamp } from './storefrontOriental'
+import { AppFooter } from '@/components/brand/AppFooter'
 import { playStampSound } from './storefrontSound'
 import { STOREFRONT_CREAM, STOREFRONT_HERO } from './storefrontTheme'
 import { currentStepIndex, isFinalStatus, statusSteps, whatsappLink } from './storefrontFormat'
@@ -88,7 +89,7 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
   }, [menu])
 
   return (
-    <Shell>
+    <Shell brandName={order.establishment.name}>
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-200">
         <div className={`relative px-6 py-6 text-white ${celebrates ? 'pr-28' : ''} ${STOREFRONT_HERO}`}>
           {celebrates && <HankoStamp className="absolute right-5 top-1/2 -translate-y-1/2" />}
@@ -262,6 +263,11 @@ function PixKeyBox({ pixKey, total }: { pixKey: NonNullable<StorefrontOrderStatu
   )
 }
 
-function Shell({ children }: { children: React.ReactNode }) {
-  return <div className={`min-h-screen px-4 py-8 ${STOREFRONT_CREAM}`}><div className="mx-auto max-w-md">{children}</div></div>
+function Shell({ children, brandName }: { children: React.ReactNode; brandName?: string }) {
+  return (
+    <div className={`flex min-h-screen flex-col ${STOREFRONT_CREAM}`}>
+      <div className="mx-auto w-full max-w-md flex-1 px-4 py-8">{children}</div>
+      <AppFooter brandName={brandName} textClassName="text-[#8a7466]" className="border-t border-[#f0e2cf]" />
+    </div>
+  )
 }
