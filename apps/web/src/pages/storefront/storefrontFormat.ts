@@ -170,6 +170,17 @@ export function isFinalStatus(status: string): boolean {
   return status === 'completed' || status === 'picked_up' || status === 'cancelled'
 }
 
+export type OrderStatusTone = 'active' | 'payment' | 'done' | 'cancelled'
+
+/** Selo do status na lista "Meus pedidos": o passo atual da linha do tempo, pagamento pendente ou fim. */
+export function orderStatusBadge(type: string, status: string, paymentStatus: string | null): { label: string; tone: OrderStatusTone } {
+  if (status === 'cancelled') return { label: 'Cancelado', tone: 'cancelled' }
+  if (paymentStatus === 'awaiting') return { label: 'Aguardando pagamento', tone: 'payment' }
+  const steps = statusSteps(type)
+  if (isFinalStatus(status)) return { label: steps[steps.length - 1]?.label ?? 'Concluído', tone: 'done' }
+  return { label: steps[currentStepIndex(type, status)]?.label ?? 'Recebido', tone: 'active' }
+}
+
 /** Link do WhatsApp do restaurante. */
 export function whatsappLink(number: string | null, text?: string): string | null {
   if (!number) return null

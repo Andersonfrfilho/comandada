@@ -5,6 +5,7 @@ import type { SendBotTextParams } from '@/shared/providers/BotMessageProvider'
 import { StorefrontAccountService, type StorefrontAccountRepository } from './StorefrontAccountService'
 import type { StorefrontCustomer } from './StorefrontService'
 import { createSessionToken, readSessionToken, SESSION_TTL_SECONDS } from '../shared/storefrontSession'
+import { isValidTrackingToken } from '../shared/storefront.constant'
 
 const ESTABLISHMENT_ID = '11111111-1111-4111-8111-111111111111'
 const OTHER_ESTABLISHMENT_ID = '99999999-9999-4999-8999-999999999999'
@@ -53,6 +54,8 @@ function build(options: { customer?: StorefrontCustomer | null; sendError?: Erro
         createdAt: new Date('2026-11-14T22:00:00Z'),
         totalAmount: 149,
         type: 'delivery',
+        status: 'preparing',
+        paymentStatus: null,
         items: [
           { productId: 'p1', name: 'Combo Executivo', quantity: 1, notes: null },
           { productId: null, name: 'Item apagado', quantity: 1, notes: null },
@@ -95,6 +98,8 @@ describe('StorefrontAccountService', () => {
     expect(result.account.lastPaymentMethod).toBe('pix')
     // Item sem produto (apagado do cardápio) não entra no "repetir".
     expect(result.account.recentOrders[0]?.items.map((item) => item.productId)).toEqual(['p1'])
+    expect(result.account.recentOrders[0]?.status).toBe('preparing')
+    expect(isValidTrackingToken('o1', result.account.recentOrders[0]?.trackingToken ?? '', SECRET)).toBe(true)
 
     const account = await service.account({ establishmentId: ESTABLISHMENT_ID, token: result.token })
     expect(account.phone).toBe('5516981234567')
