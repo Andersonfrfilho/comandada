@@ -1,6 +1,7 @@
 /**
- * Bipe curto feito na hora (Web Audio), sem arquivo de som. O navegador só libera áudio depois de um
- * toque na página, então o contexto é criado no primeiro clique e reaproveitado.
+ * Sons do painel. O navegador só libera áudio depois de um toque na página, então o contexto é
+ * criado no primeiro clique e reaproveitado. Pedido novo toca o "Yooo!" (arquivo); o resto, um bipe
+ * feito na hora (Web Audio).
  */
 let audioContext: AudioContext | null = null
 
@@ -9,6 +10,7 @@ export function unlockAlertSound(): void {
   const AudioContextClass = window.AudioContext
   if (!AudioContextClass) return
   audioContext = new AudioContextClass()
+  void loadNewOrderSound(audioContext)
 }
 
 export function playAlertSound(): void {
@@ -29,5 +31,38 @@ export function playAlertSound(): void {
     oscillator.connect(gain).connect(audioContext.destination)
     oscillator.start(toneStart)
     oscillator.stop(toneStart + 0.17)
+  })
+}
+
+const NEW_ORDER_SOUND_URL = '/sounds/yo-longo.mp3'
+let newOrderBuffer: Promise<AudioBuffer | null> | null = null
+
+function loadNewOrderSound(context: AudioContext): Promise<AudioBuffer | null> {
+  newOrderBuffer ??= fetch(NEW_ORDER_SOUND_URL)
+    .then((response) => (response.ok ? response.arrayBuffer() : Promise.reject(new Error(String(response.status)))))
+    .then((bytes) => context.decodeAudioData(bytes))
+    .catch(() => {
+      newOrderBuffer = null
+      return null
+    })
+  return newOrderBuffer
+}
+
+/** Pedido novo: "Yooo!" com a batida do tsuzumi. Sem o arquivo, cai no bipe. */
+export function playNewOrderSound(): void {
+  const context = audioContext
+  if (!context) return
+  if (context.state === 'suspended') void context.resume()
+  void loadNewOrderSound(context).then((buffer) => {
+    if (!buffer) {
+      playAlertSound()
+      return
+    }
+    const source = context.createBufferSource()
+    const gain = context.createGain()
+    gain.gain.value = 0.9
+    source.buffer = buffer
+    source.connect(gain).connect(context.destination)
+    source.start()
   })
 }
