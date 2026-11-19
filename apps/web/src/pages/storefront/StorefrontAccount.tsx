@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useQuery, useQueryClient } from '@tanstack/react-query'
-import { Check, Loader2, LogOut, MapPin, MessageCircle, RotateCcw, Wallet } from 'lucide-react'
+import { Check, ChevronRight, Loader2, LogOut, MapPin, MessageCircle, ReceiptText, RotateCcw, Wallet } from 'lucide-react'
 import { ApiError } from '@/lib/api'
 import { formatBRL } from '@/lib/listing'
 import {
@@ -277,16 +277,18 @@ export function AccountSheet({
   account,
   onClose,
   onRepeat,
+  onOpenOrders,
   onSignOut,
 }: {
   menu: StorefrontMenu
   account: StorefrontAccount
   onClose: () => void
   onRepeat: (order: StorefrontAccountOrder) => void
+  onOpenOrders: () => void
   onSignOut: () => void
 }) {
   const payment = menu.paymentMethods.find((method) => method.name === account.lastPaymentMethod)
-  const orders = account.recentOrders.filter((order) => order.items.length > 0)
+  const orders = account.recentOrders.filter((order) => order.items.length > 0 && order.status !== 'cancelled').slice(0, 5)
   return (
     <BottomSheet title="Minha conta" onClose={onClose}>
       <div className="space-y-5 px-4 pb-6">
@@ -324,6 +326,16 @@ export function AccountSheet({
             ))
           )}
         </AccountSection>
+
+        <button
+          type="button"
+          onClick={onOpenOrders}
+          className="flex w-full items-center gap-3 rounded-2xl bg-white px-4 py-3.5 text-left shadow-sm ring-1 ring-[#f0e2cf]"
+        >
+          <ReceiptText className="h-5 w-5 shrink-0 text-brand-700" aria-hidden="true" />
+          <span className="flex-1 text-sm font-semibold">Meus pedidos e andamento</span>
+          <ChevronRight className="h-4 w-4 text-brand-700" aria-hidden="true" />
+        </button>
 
         <AccountSection title="Endereços">
           {account.addresses.length === 0 ? (

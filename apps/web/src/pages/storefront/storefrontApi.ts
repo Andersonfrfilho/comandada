@@ -125,6 +125,10 @@ export interface StorefrontAccountOrder {
   createdAt: string
   total: number
   type: string
+  status: string
+  paymentStatus: string | null
+  /** Abre `/cardapio/pedido/:id?t=` (acompanhamento). */
+  trackingToken: string
   items: Array<{ productId: string; name: string; quantity: number; notes: string | null }>
 }
 

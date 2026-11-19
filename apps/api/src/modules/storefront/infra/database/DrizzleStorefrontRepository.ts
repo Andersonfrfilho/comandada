@@ -1,4 +1,4 @@
-import { and, asc, desc, eq, inArray, ne } from 'drizzle-orm'
+import { and, asc, desc, eq, inArray } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
 import { deliveryAddressText, singlePaymentMethod } from '@/modules/bot/application/use-cases/GetBotContextUseCase'
@@ -81,9 +81,11 @@ export class DrizzleStorefrontRepository implements StorefrontRepository, Storef
         createdAt: schema.orders.createdAt,
         totalAmount: schema.orders.totalAmount,
         type: schema.orders.type,
+        status: schema.orders.status,
+        paymentStatus: schema.orders.paymentStatus,
       })
       .from(schema.orders)
-      .where(and(eq(schema.orders.customerId, customerId), eq(schema.orders.establishmentId, establishmentId), ne(schema.orders.status, 'cancelled')))
+      .where(and(eq(schema.orders.customerId, customerId), eq(schema.orders.establishmentId, establishmentId)))
       .orderBy(desc(schema.orders.createdAt))
       .limit(limit)
     if (orders.length === 0) return []
@@ -99,6 +101,8 @@ export class DrizzleStorefrontRepository implements StorefrontRepository, Storef
       createdAt: order.createdAt,
       totalAmount: Number(order.totalAmount),
       type: order.type,
+      status: order.status,
+      paymentStatus: order.paymentStatus ?? null,
       items: items
         .filter((item) => item.orderId === order.id)
         .map((item) => ({ productId: item.productId ?? null, name: item.productName, quantity: item.quantity, notes: item.notes ?? null })),

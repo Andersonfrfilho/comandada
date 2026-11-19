@@ -22,6 +22,7 @@ export interface RecentOrder {
 const cartKey = (establishmentId: string) => `storefront-cart:${establishmentId}`
 const profileKey = (establishmentId: string) => `storefront-profile:${establishmentId}`
 const recentKey = (establishmentId: string) => `storefront-recent:${establishmentId}`
+const historyKey = (establishmentId: string) => `storefront-orders:${establishmentId}`
 const sessionKey = (establishmentId: string) => `storefront-session:${establishmentId}`
 const lastOrderKey = (establishmentId: string) => `storefront-last-order:${establishmentId}`
 
@@ -49,6 +50,23 @@ function write(key: string, value: unknown): void {
   }
 }
 
+const ORDER_HISTORY_LIMIT = 10
+
+function isRecentOrder(value: unknown): value is RecentOrder {
+  if (!value || typeof value !== 'object') return false
+  const order = value as Partial<RecentOrder>
+  return typeof order.orderId === 'string' && typeof order.token === 'string' && typeof order.createdAt === 'string'
+}
+
+function loadOrderHistory(establishmentId: string): RecentOrder[] {
+  const saved = read<unknown>(historyKey(establishmentId))
+  const history = Array.isArray(saved) ? saved.filter(isRecentOrder) : []
+  // Quem pediu antes da lista existir tem só o último pedido guardado.
+  const recent = read<unknown>(recentKey(establishmentId))
+  if (isRecentOrder(recent) && !history.some((order) => order.orderId === recent.orderId)) history.unshift(recent)
+  return history.slice(0, ORDER_HISTORY_LIMIT)
+}
+
 export const storefrontStorage = {
   loadCart: (establishmentId: string): CartLine[] => {
     const lines = read<CartLine[]>(cartKey(establishmentId))
@@ -59,7 +77,13 @@ export const storefrontStorage = {
   saveProfile: (establishmentId: string, profile: StorefrontProfile) => write(profileKey(establishmentId), profile),
   /** Último pedido feito neste aparelho, para "Acompanhar meu pedido" no topo do cardápio. */
   loadRecentOrder: (establishmentId: string): RecentOrder | null => read<RecentOrder>(recentKey(establishmentId)),
-  saveRecentOrder: (establishmentId: string, order: RecentOrder) => write(recentKey(establishmentId), order),
+  saveRecentOrder: (establishmentId: string, order: RecentOrder) => {
+    write(recentKey(establishmentId), order)
+    const history = loadOrderHistory(establishmentId).filter((saved) => saved.orderId !== order.orderId)
+    write(historyKey(establishmentId), [order, ...history].slice(0, ORDER_HISTORY_LIMIT))
+  },
+  /** Pedidos feitos neste aparelho (mais recente primeiro), para "Meus pedidos" sem precisar entrar. */
+  loadOrderHistory: (establishmentId: string): RecentOrder[] => loadOrderHistory(establishmentId),
   /** Sessão de quem entrou com o WhatsApp (vale 90 dias; "Sair" apaga). */
   loadSession: (establishmentId: string): string | null => {
     const token = read<string>(sessionKey(establishmentId))

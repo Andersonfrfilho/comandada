@@ -1,11 +1,14 @@
 import { useCallback, useState } from 'react'
 
-// Som do cardápio online: só o "Yo!" curto quando o selo carimba o pedido enviado. O cliente
-// desliga no alto-falante do topo; a escolha fica no aparelho.
+// Som do cardápio online: o "Yo!" curto quando o selo carimba o pedido enviado e o "Yooo!" longo
+// quando o pedido anda (em preparo, saiu, pronto, entregue). O cliente desliga no alto-falante do
+// topo; a escolha fica no aparelho.
 
 const SOUND_STORAGE_KEY = 'storefront-sound'
 const STAMP_SOUND_URL = '/sounds/yo-curto.mp3'
 const STAMP_SOUND_VOLUME = 0.8
+const STATUS_SOUND_URL = '/sounds/yo-longo.mp3'
+const STATUS_SOUND_VOLUME = 0.7
 
 function readSoundEnabled(): boolean {
   try {
@@ -40,8 +43,20 @@ export function useStorefrontSound(): { enabled: boolean; toggle: () => void } {
  * "Fazer pedido", então costuma tocar. Se o navegador recusar, fica em silêncio.
  */
 export function playStampSound(): void {
+  play(STAMP_SOUND_URL, STAMP_SOUND_VOLUME)
+}
+
+/**
+ * "Yooo!" quando o pedido avança com a página de acompanhamento aberta. Página aberta direto pelo
+ * link, sem nenhum toque, o navegador pode segurar: aí fica só a animação.
+ */
+export function playStatusSound(): void {
+  play(STATUS_SOUND_URL, STATUS_SOUND_VOLUME)
+}
+
+function play(url: string, volume: number): void {
   if (!readSoundEnabled() || typeof Audio === 'undefined') return
-  const audio = new Audio(STAMP_SOUND_URL)
-  audio.volume = STAMP_SOUND_VOLUME
+  const audio = new Audio(url)
+  audio.volume = volume
   void audio.play().catch(() => undefined)
 }

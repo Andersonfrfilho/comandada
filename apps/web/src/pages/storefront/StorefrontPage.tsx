@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import { Link, useParams } from 'react-router-dom'
+import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, Volume2, VolumeX, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, ReceiptText, UserRound, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
 import { productImageUrl } from '@/lib/productImage'
@@ -16,7 +16,8 @@ import { AppFooter } from '@/components/brand/AppFooter'
 import { CARD, DISPLAY_FONT, STOREFRONT_ACCENT, STOREFRONT_CREAM, STOREFRONT_HERO, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
 import { SakuraPetals } from './storefrontOriental'
-import { useStorefrontSound } from './storefrontSound'
+import { SoundToggle } from './SoundToggle'
+import { LatestOrderCard, MyOrdersSheet } from './MyOrdersSheet'
 import { MOTION, StorefrontMotionStyles, flyToCart, ping, useRevealOnScroll } from './storefrontMotion'
 
 const NOTE_MAX_LENGTH = 140
@@ -69,6 +70,17 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
   const { account, signIn, signOut } = useStorefrontAccount(establishmentId)
   const [loginOpen, setLoginOpen] = useState(false)
   const [accountOpen, setAccountOpen] = useState(false)
+  // "Meus pedidos" abre também pelo link da página de acompanhamento (`?pedidos=1`).
+  const [searchParams, setSearchParams] = useSearchParams()
+  const [ordersOpen, setOrdersOpen] = useState(() => searchParams.get('pedidos') === '1')
+  function closeOrders() {
+    setOrdersOpen(false)
+    if (searchParams.has('pedidos')) {
+      const next = new URLSearchParams(searchParams)
+      next.delete('pedidos')
+      setSearchParams(next, { replace: true })
+    }
+  }
 
   // Item que saiu do cardápio não pode seguir no carrinho guardado no aparelho.
   const priceById = useMemo(() => {
@@ -112,7 +124,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
   // Peça de novo: o último pedido da conta (WhatsApp ou site) ou, sem entrar, o último feito neste
   // aparelho. Só os itens que ainda estão no cardápio, com o preço de hoje.
   const lastOrder = useMemo(() => {
-    const fromAccount = account?.recentOrders.find((order) => order.items.length > 0)
+    const fromAccount = account?.recentOrders.find((order) => order.items.length > 0 && order.status !== 'cancelled')
     if (fromAccount) return { createdAt: fromAccount.createdAt, lines: accountOrderLines(fromAccount) }
     return localLastOrder
   }, [account, localLastOrder])
@@ -149,6 +161,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
     // Repetir troca o carrinho pelo pedido escolhido: é isso que o cliente espera ver no fechamento.
     setLines(available.reduce<CartLine[]>((cart, line) => addToCart(cart, line), []))
     setAccountOpen(false)
+    closeOrders()
     setCheckoutOpen(true)
   }
 
@@ -165,6 +178,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
         menu={menu}
         account={account}
         onOpenAccount={() => (account ? setAccountOpen(true) : setLoginOpen(true))}
+        onOpenOrders={() => setOrdersOpen(true)}
       />
 
       <CategoryNav
@@ -178,17 +192,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
 
       <div className="mx-auto w-full max-w-6xl flex-1 px-4 lg:flex lg:items-start lg:gap-8">
         <main ref={mainRef} className="min-w-0 flex-1">
-          {recentOrder && (
-            <Link
-              to={`/cardapio/pedido/${recentOrder.orderId}?t=${encodeURIComponent(recentOrder.token)}`}
-              className={`mt-5 flex items-center justify-between px-4 py-3 text-sm ${CARD}`}
-            >
-              <span className="font-medium text-gray-800">
-                Acompanhar meu pedido{recentOrder.number ? ` #${recentOrder.number}` : ''}
-              </span>
-              <ChevronRight className="h-4 w-4 text-brand-700" />
-            </Link>
-          )}
+          {recentOrder && <LatestOrderCard order={recentOrder} onOpenOrders={() => setOrdersOpen(true)} />}
 
           {!searching && reorderLines.length > 0 && lastOrder && (
             <ReorderCard createdAt={lastOrder.createdAt} lines={reorderLines} image={imageFor(reorderLines, imageByProduct)} onRepeat={() => repeat(reorderLines)} />
@@ -286,12 +290,29 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
         />
       )}
 
+      {ordersOpen && (
+        <MyOrdersSheet
+          establishmentId={establishmentId}
+          account={account}
+          onClose={closeOrders}
+          onRepeat={(order) => repeat(accountOrderLines(order))}
+          onSignIn={() => {
+            closeOrders()
+            setLoginOpen(true)
+          }}
+        />
+      )}
+
       {accountOpen && account && (
         <AccountSheet
           menu={menu}
           account={account}
           onClose={() => setAccountOpen(false)}
           onRepeat={(order) => repeat(accountOrderLines(order))}
+          onOpenOrders={() => {
+            setAccountOpen(false)
+            setOrdersOpen(true)
+          }}
           onSignOut={() => {
             signOut()
             setAccountOpen(false)
@@ -325,7 +346,17 @@ function imageFor(lines: CartLine[], imageByProduct: Map<string, string>): strin
   return null
 }
 
-function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; account: StorefrontAccount | null; onOpenAccount: () => void }) {
+function MenuHeader({
+  menu,
+  account,
+  onOpenAccount,
+  onOpenOrders,
+}: {
+  menu: StorefrontMenu
+  account: StorefrontAccount | null
+  onOpenAccount: () => void
+  onOpenOrders: () => void
+}) {
   const { establishment, delivery } = menu
   const initials = establishment.name
     .split(/\s+/)
@@ -345,6 +376,15 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
       <div className="mx-auto max-w-6xl px-4 pb-6 pt-4 sm:pt-5">
         <div className="mb-3 flex justify-end gap-2">
           <SoundToggle />
+          <button
+            type="button"
+            onClick={onOpenOrders}
+            className="flex h-11 items-center gap-2 rounded-full bg-white/20 px-4 text-sm font-semibold transition hover:bg-white/30"
+          >
+            <ReceiptText className="h-4 w-4" aria-hidden="true" />
+            <span className="sm:hidden">Pedidos</span>
+            <span className="hidden sm:inline">Meus pedidos</span>
+          </button>
           <button
             type="button"
             onClick={onOpenAccount}
@@ -406,24 +446,6 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
         )}
       </div>
     </header>
-  )
-}
-
-/** Liga e desliga o som do cardápio (o "Yo!" do pedido enviado). */
-function SoundToggle() {
-  const { enabled, toggle } = useStorefrontSound()
-  const Icon = enabled ? Volume2 : VolumeX
-  return (
-    <button
-      type="button"
-      onClick={toggle}
-      aria-pressed={!enabled}
-      aria-label={enabled ? 'Desligar som' : 'Ligar som'}
-      title={enabled ? 'Desligar som' : 'Ligar som'}
-      className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition hover:bg-white/30 active:scale-95"
-    >
-      <Icon className="h-5 w-5" aria-hidden="true" />
-    </button>
   )
 }
 

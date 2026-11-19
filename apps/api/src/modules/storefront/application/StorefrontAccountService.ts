@@ -4,7 +4,7 @@ import { isWindowExpired } from '@/modules/conversations/application/services/Or
 import { AppError, RateLimitError, UnprocessableError, ValidationError } from '@/shared/errors/AppError'
 import type { BotMessageProvider } from '@/shared/providers/BotMessageProvider'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
-import { STOREFRONT_MESSAGES, normalizeBrazilianPhone, phoneVariants } from '../shared/storefront.constant'
+import { STOREFRONT_MESSAGES, normalizeBrazilianPhone, orderTrackingToken, phoneVariants } from '../shared/storefront.constant'
 import {
   LOGIN_CODE_MAX_ATTEMPTS,
   LOGIN_CODE_MAX_SENDS,
@@ -24,7 +24,7 @@ import {
 import type { StorefrontCustomer, StorefrontService } from './StorefrontService'
 
 const SAVED_ADDRESSES_LIMIT = 4
-const RECENT_ORDERS_LIMIT = 5
+const RECENT_ORDERS_LIMIT = 10
 
 export interface StorefrontAccountOrder {
   id: string
@@ -32,6 +32,8 @@ export interface StorefrontAccountOrder {
   createdAt: Date
   totalAmount: number
   type: string
+  status: string
+  paymentStatus: string | null
   items: Array<{ productId: string | null; name: string; quantity: number; notes: string | null }>
 }
 
@@ -55,6 +57,10 @@ export interface StorefrontAccount {
     createdAt: string
     total: number
     type: string
+    /** Status do pedido (inclui cancelado) e o token do link de acompanhamento, para "Meus pedidos". */
+    status: string
+    paymentStatus: string | null
+    trackingToken: string
     items: Array<{ productId: string; name: string; quantity: number; notes: string | null }>
   }>
 }
@@ -70,7 +76,7 @@ const sendsKey = (establishmentId: string, phone: string) => `storefront:login:s
 /**
  * Cadastro opcional do cardápio online. Entrar = provar o WhatsApp com um código que o próprio
  * número do restaurante manda. Com a sessão a página mostra os endereços já usados, a forma de
- * pagamento e os últimos pedidos (para repetir), o que antes ficava escondido por segurança.
+ * pagamento e os últimos pedidos (acompanhar e repetir), o que antes ficava escondido por segurança.
  */
 export class StorefrontAccountService {
   constructor(
@@ -173,6 +179,9 @@ export class StorefrontAccountService {
         createdAt: order.createdAt.toISOString(),
         total: order.totalAmount,
         type: order.type,
+        status: order.status,
+        paymentStatus: order.paymentStatus,
+        trackingToken: orderTrackingToken(order.id, this.secret),
         items: order.items
           .filter((item): item is typeof item & { productId: string } => Boolean(item.productId))
           .map((item) => ({ productId: item.productId, name: item.name, quantity: item.quantity, notes: item.notes })),

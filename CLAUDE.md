@@ -378,9 +378,14 @@ Código em `apps/api/src/modules/storefront/application/StorefrontAccountService
 (`key` com o valor). Na seleção: o fundo da categoria ativa desliza entre as categorias, tamanho/entrega/pagamento
 escolhidos afundam e voltam com mola e o check aparece girando (`MOTION.select`/`check`/`hop`), botão de adicionar solta
 uma onda (`ping`). Toques japoneses (`storefrontOriental.tsx`): pétalas de sakura caem no topo por 9 s ao abrir,
-o hashi pega a foto e leva ao carrinho (`flyToCart`) e o selo hanko "受付" carimba o "Pedido enviado!". A página do pedido
+o hashi pega a foto e leva ao carrinho (`flyToCart`) e o selo hanko "受付" carimba o "Pedido enviado!" (kanji desenhado em SVG com contornos da fonte IPA, porque nem todo celular tem fonte japonesa). A página do pedido
 aplica a cor do restaurante (busca o cardápio pelo id). O selo toca o "Yo!" curto (`public/sounds/yo-curto.mp3`,
-`storefrontSound.ts`); o alto-falante no topo do cardápio desliga (`storefront-sound` no aparelho). Carrinho não tem som. Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
+`storefrontSound.ts`) e a página de acompanhamento toca o "Yooo!" longo quando o pedido anda ou o pagamento cai
+(não na primeira leitura); o alto-falante (`SoundToggle`, no topo do cardápio e do acompanhamento) desliga (`storefront-sound` no aparelho).
+**Meus pedidos** (`MyOrdersSheet.tsx`): botão "Pedidos" no topo do cardápio, link na Minha conta e no acompanhamento
+(`/cardapio/:id?pedidos=1`). Junta os pedidos da conta (`/me` traz até 10, com `status`, `paymentStatus` e `trackingToken`,
+cancelados inclusive) com os 10 últimos feitos no aparelho (`storefront-orders:<id>`); em andamento atualiza a cada 15 s.
+O cartão do topo mostra o status do último pedido. Carrinho não tem som. Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
 
 ## Lógica do bot (src/)
 

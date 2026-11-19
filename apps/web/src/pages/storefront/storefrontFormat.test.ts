@@ -12,6 +12,7 @@ import {
   maskCep,
   maskPhone,
   normalizeSearch,
+  orderStatusBadge,
 } from './storefrontFormat'
 
 describe('cardápio online', () => {
@@ -61,5 +62,16 @@ describe('cardápio online', () => {
 
   test('busca sem acento', () => {
     expect(normalizeSearch('Temaki Salmão')).toContain('salmao')
+  })
+
+  test('selo do status em Meus pedidos', () => {
+    expect(orderStatusBadge('delivery', 'in_production', 'not_required')).toEqual({ label: 'Em preparo', tone: 'active' })
+    expect(orderStatusBadge('delivery', 'ready', 'not_required')).toEqual({ label: 'Em preparo', tone: 'active' })
+    expect(orderStatusBadge('delivery', 'in_delivery', null)).toEqual({ label: 'Saiu para entrega', tone: 'active' })
+    expect(orderStatusBadge('retirada', 'ready', null)).toEqual({ label: 'Pronto para retirar', tone: 'active' })
+    expect(orderStatusBadge('delivery', 'completed', 'paid')).toEqual({ label: 'Entregue', tone: 'done' })
+    expect(orderStatusBadge('retirada', 'completed', null)).toEqual({ label: 'Retirado', tone: 'done' })
+    expect(orderStatusBadge('delivery', 'received', 'awaiting')).toEqual({ label: 'Aguardando pagamento', tone: 'payment' })
+    expect(orderStatusBadge('delivery', 'cancelled', 'awaiting')).toEqual({ label: 'Cancelado', tone: 'cancelled' })
   })
 })

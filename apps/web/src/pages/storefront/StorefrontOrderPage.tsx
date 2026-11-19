@@ -1,14 +1,16 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import { Link, useLocation, useParams, useSearchParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
 import { QRCodeSVG } from 'qrcode.react'
-import { Check, CheckCircle2, Copy, CreditCard, MessageCircle, XCircle } from 'lucide-react'
+import { Check, CheckCircle2, Copy, CreditCard, MessageCircle, ReceiptText, XCircle } from 'lucide-react'
 import { formatBRL } from '@/lib/listing'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { storefrontApi, type OrderPayment, type StorefrontOrderStatus } from './storefrontApi'
 import { HankoStamp } from './storefrontOriental'
 import { AppFooter } from '@/components/brand/AppFooter'
-import { playStampSound } from './storefrontSound'
+import { playStampSound, playStatusSound } from './storefrontSound'
+import { SoundToggle } from './SoundToggle'
+import { MOTION, StorefrontMotionStyles } from './storefrontMotion'
 import { STOREFRONT_CREAM, STOREFRONT_HERO } from './storefrontTheme'
 import { currentStepIndex, isFinalStatus, statusSteps, whatsappLink } from './storefrontFormat'
 
@@ -78,6 +80,22 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
     return () => window.clearTimeout(timer)
   }, [celebrates])
 
+  // "Yooo!" quando o pedido anda com a página aberta (em preparo, saiu, pronto, entregue, pago).
+  // Na primeira leitura não toca: só quando muda depois. O passo novo dá um pulo.
+  const progress = cancelled ? -1 : current + (isFinalStatus(order.status) ? 1 : 0)
+  const paid = order.paymentStatus === 'paid'
+  const previousProgress = useRef<{ progress: number; paid: boolean } | null>(null)
+  const [advancedTo, setAdvancedTo] = useState<number | null>(null)
+  useEffect(() => {
+    const before = previousProgress.current
+    previousProgress.current = { progress, paid }
+    if (!before || cancelled) return
+    if (progress > before.progress || (paid && !before.paid)) {
+      playStatusSound()
+      if (progress > before.progress) setAdvancedTo(current)
+    }
+  }, [progress, paid, cancelled, current])
+
   // Cor do restaurante também aqui (a página pode ser aberta direto pelo link do WhatsApp).
   const { data: menu } = useQuery({
     queryKey: ['storefront-menu', order.establishment.id],
@@ -91,8 +109,9 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
   return (
     <Shell brandName={order.establishment.name}>
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-200">
-        <div className={`relative px-6 py-6 text-white ${celebrates ? 'pr-28' : ''} ${STOREFRONT_HERO}`}>
+        <div className={`relative px-6 py-6 text-white ${celebrates ? 'pr-28' : 'pr-16'} ${STOREFRONT_HERO}`}>
           {celebrates && <HankoStamp className="absolute right-5 top-1/2 -translate-y-1/2" />}
+          {!celebrates && <SoundToggle className="absolute right-4 top-4 h-9 w-9" />}
           <p className="text-sm text-white/80">{order.establishment.name}</p>
           <h1 className="mt-1 text-2xl font-bold">
             {cancelled ? 'Pedido cancelado' : justPlaced && !awaitingPayment ? 'Pedido enviado!' : `Pedido ${label}`}
@@ -121,7 +140,8 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
                 return (
                   <li key={step.key} className="flex items-center gap-3">
                     <span
-                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
+                      key={advancedTo === index ? `step-${index}-advanced` : `step-${index}`}
+                      className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${advancedTo === index ? MOTION.pop : ''} ${
                         done ? 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white' : active ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500' : 'bg-stone-100 text-gray-400'
                       }`}
                     >
@@ -174,6 +194,12 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
             <MessageCircle className="h-4 w-4 text-emerald-600" /> Falar com o restaurante
           </a>
         )}
+        <Link
+          to={`/cardapio/${order.establishment.id}?pedidos=1`}
+          className="flex items-center justify-center gap-2 rounded-2xl bg-white px-5 py-3.5 text-sm font-semibold text-gray-800 ring-1 ring-stone-200"
+        >
+          <ReceiptText className="h-4 w-4 text-brand-700" /> Meus pedidos
+        </Link>
         <Link to={`/cardapio/${order.establishment.id}`} className="rounded-2xl px-5 py-3 text-center text-sm font-semibold text-brand-700">
           Voltar ao cardápio
         </Link>
@@ -266,6 +292,7 @@ function PixKeyBox({ pixKey, total }: { pixKey: NonNullable<StorefrontOrderStatu
 function Shell({ children, brandName }: { children: React.ReactNode; brandName?: string }) {
   return (
     <div className={`flex min-h-screen flex-col ${STOREFRONT_CREAM}`}>
+      <StorefrontMotionStyles />
       <div className="mx-auto w-full max-w-md flex-1 px-4 py-8">{children}</div>
       <AppFooter brandName={brandName} textClassName="text-[#8a7466]" className="border-t border-[#f0e2cf]" />
     </div>
