@@ -2,9 +2,19 @@ import { useBrandingStore } from '@/stores/brandingStore'
 import { ADA_MARK_SOURCE, ADA_WEBSITE_URL, DEFAULT_BRANDING, PLATFORM_NAME } from '@/constants/branding'
 
 // Rodapé de todas as telas. Marca branca: o copyright é do restaurante e a Ada assina a
-// plataforma na segunda linha. Sem marca própria, o copyright é da Ada.
-export function AppFooter({ className = '' }: { className?: string }) {
-  const brandName = useBrandingStore((state) => state.branding.name)
+// plataforma na segunda linha. Sem marca própria, o copyright é da Ada. O cardápio online passa o
+// nome do restaurante (`brandName`), porque lá não há login que carregue a marca.
+export function AppFooter({
+  className = '',
+  brandName: brandNameOverride,
+  textClassName = 'text-gray-400',
+}: {
+  className?: string
+  brandName?: string
+  textClassName?: string
+}) {
+  const storedBrandName = useBrandingStore((state) => state.branding.name)
+  const brandName = brandNameOverride ?? storedBrandName
   const year = new Date().getFullYear()
   const isWhiteLabel = brandName !== DEFAULT_BRANDING.name
   const adaLink = (
@@ -14,7 +24,7 @@ export function AppFooter({ className = '' }: { className?: string }) {
   )
 
   return (
-    <footer className={`flex flex-col sm:flex-row items-center justify-center gap-2 px-4 py-4 text-xs text-gray-400 ${className}`}>
+    <footer className={`flex flex-col sm:flex-row items-center justify-center gap-2 px-4 py-4 text-xs ${textClassName} ${className}`}>
       <img alt="" aria-hidden="true" src={ADA_MARK_SOURCE} className="h-6 w-auto opacity-70" />
       <div className="text-center leading-relaxed">
         {isWhiteLabel ? (
