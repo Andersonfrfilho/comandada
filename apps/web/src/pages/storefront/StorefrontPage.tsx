@@ -10,6 +10,7 @@ import { addToCart, cartCount, cartTotal, changeQuantity, hoursLabel, normalizeS
 import { storefrontStorage } from './storefrontStorage'
 import { AccountAvatar, AccountSheet, LoginSheet, firstName, useStorefrontAccount } from './StorefrontAccount'
 import { CheckoutSheet } from './CheckoutSheet'
+import { CartThumbnail, useProductImages } from './CartThumbnail'
 import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
@@ -71,16 +72,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
     for (const category of menu.categories) for (const item of category.items) for (const option of item.options) prices.set(option.productId, option.price)
     return prices
   }, [menu])
-  const imageByProduct = useMemo(() => {
-    const images = new Map<string, string>()
-    for (const category of menu.categories) {
-      for (const item of category.items) {
-        const url = productImageUrl(item.image)
-        if (url) for (const option of item.options) images.set(option.productId, url)
-      }
-    }
-    return images
-  }, [menu])
+  const imageByProduct = useProductImages(menu)
   useEffect(() => {
     setLines((current) =>
       current
@@ -715,6 +707,7 @@ function CartPanel({
   onCheckout: () => void
 }) {
   const total = cartTotal(lines)
+  const imageByProduct = useProductImages(menu)
   const minimum = menu.establishment.minOrderValue
   const missing = minimum > 0 && total < minimum ? minimum - total : 0
   return (
@@ -731,6 +724,7 @@ function CartPanel({
             <ul className="mt-3 flex-1 divide-y divide-[#f3e8da] overflow-y-auto">
               {lines.map((line) => (
                 <li key={line.lineId} className={`flex items-center gap-3 py-3 ${MOTION.rise}`}>
+                  <CartThumbnail imageUrl={imageByProduct.get(line.productId)} name={line.name} />
                   <div className="min-w-0 flex-1">
                     <p className="text-sm font-medium">{line.name}</p>
                     {line.notes && <p className="text-xs italic text-[#6b574b]">{line.notes}</p>}
