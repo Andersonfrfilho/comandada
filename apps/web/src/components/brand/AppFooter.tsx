@@ -25,7 +25,7 @@ export function AppFooter({
 
   return (
     <footer className={`flex flex-col sm:flex-row items-center justify-center gap-2 px-4 py-4 text-xs ${textClassName} ${className}`}>
-      <img alt="" aria-hidden="true" src={ADA_MARK_SOURCE} className="h-6 w-auto opacity-70" />
+      <img alt="" aria-hidden="true" src={ADA_MARK_SOURCE} className="h-5 w-auto opacity-80" />
       <div className="text-center leading-relaxed">
         {isWhiteLabel ? (
           <>

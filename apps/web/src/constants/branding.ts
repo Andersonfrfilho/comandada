@@ -18,4 +18,4 @@ export const BRAND_LOGO_MAX_SIZE = 512
 // Atribuição da Ada Technology no rodapé (padrão Ada: ano do relógio, link com rel="noreferrer").
 export const PLATFORM_NAME = 'ComandAdA'
 export const ADA_WEBSITE_URL = 'https://adatechnology.com.br'
-export const ADA_MARK_SOURCE = '/icons/ada-technology.png'
+export const ADA_MARK_SOURCE = '/icons/ada-technology-mark.png'
