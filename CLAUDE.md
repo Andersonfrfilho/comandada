@@ -318,7 +318,8 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - **Número do pedido:** `orders.number` sequencial por restaurante (`order_counters`, migration `0049`); tudo mostra
   `#N` (`orderDisplayCode`/`orderBotCode`, painel `orderNumberLabel`), e mesa ou cliente vem junto na cozinha e nas listas.
 - **Alertas:** pedido novo e cliente pedindo atendente (`conversation:handoff-requested`) tocam som, toast, notificação do
-  navegador e contador no menu (`useOperationAlerts`). Erro de ação vira toast (`toastStore`); botões travam enquanto a ação roda.
+  navegador e contador no menu (`useOperationAlerts`). Pedido novo toca o "Yooo!" (`public/sounds/yo-longo.mp3`,
+  `playNewOrderSound`); atendente, o bipe. Erro de ação vira toast (`toastStore`); botões travam enquanto a ação roda.
 - **Entrega segue o pedido** (`UpdateOrderStatusUseCase.syncDelivery`); pedido cancelado/concluído não muda a entrega;
   "não entregue" exige motivo; entregador é escolhido em Entregas (`PATCH /delivery/:id/assign`).
 - **Taxa no pedido do painel:** `POST /orders/delivery-fee/quote` mostra a taxa antes do pagamento; atendente pode ajustar (`feeAmount`).
@@ -378,7 +379,8 @@ Código em `apps/api/src/modules/storefront/application/StorefrontAccountService
 escolhidos afundam e voltam com mola e o check aparece girando (`MOTION.select`/`check`/`hop`), botão de adicionar solta
 uma onda (`ping`). Toques japoneses (`storefrontOriental.tsx`): pétalas de sakura caem no topo por 9 s ao abrir,
 o hashi pega a foto e leva ao carrinho (`flyToCart`) e o selo hanko "受付" carimba o "Pedido enviado!". A página do pedido
-aplica a cor do restaurante (busca o cardápio pelo id). Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
+aplica a cor do restaurante (busca o cardápio pelo id). O selo toca o "Yo!" curto (`public/sounds/yo-curto.mp3`,
+`storefrontSound.ts`); o alto-falante no topo do cardápio desliga (`storefront-sound` no aparelho). Carrinho não tem som. Só transform/opacity, e tudo some com "reduzir movimento" do sistema.
 
 ## Lógica do bot (src/)
 

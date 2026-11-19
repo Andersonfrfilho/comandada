@@ -7,6 +7,7 @@ import { formatBRL } from '@/lib/listing'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { storefrontApi, type OrderPayment, type StorefrontOrderStatus } from './storefrontApi'
 import { HankoStamp } from './storefrontOriental'
+import { playStampSound } from './storefrontSound'
 import { STOREFRONT_CREAM, STOREFRONT_HERO } from './storefrontTheme'
 import { currentStepIndex, isFinalStatus, statusSteps, whatsappLink } from './storefrontFormat'
 
@@ -68,6 +69,14 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
     document.title = `Pedido ${label} · ${order.establishment.name}`
   }, [label, order.establishment.name])
 
+  // "Yo!" quando o selo bate (a animação do selo leva ~0,7 s até o impacto). Uma vez só.
+  const celebrates = justPlaced && !awaitingPayment && !cancelled
+  useEffect(() => {
+    if (!celebrates) return
+    const timer = window.setTimeout(playStampSound, 600)
+    return () => window.clearTimeout(timer)
+  }, [celebrates])
+
   // Cor do restaurante também aqui (a página pode ser aberta direto pelo link do WhatsApp).
   const { data: menu } = useQuery({
     queryKey: ['storefront-menu', order.establishment.id],
@@ -81,8 +90,8 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
   return (
     <Shell>
       <div className="overflow-hidden rounded-3xl bg-white shadow-sm ring-1 ring-stone-200">
-        <div className={`relative px-6 py-6 text-white ${justPlaced && !awaitingPayment && !cancelled ? 'pr-28' : ''} ${STOREFRONT_HERO}`}>
-          {justPlaced && !awaitingPayment && !cancelled && <HankoStamp className="absolute right-5 top-1/2 -translate-y-1/2" />}
+        <div className={`relative px-6 py-6 text-white ${celebrates ? 'pr-28' : ''} ${STOREFRONT_HERO}`}>
+          {celebrates && <HankoStamp className="absolute right-5 top-1/2 -translate-y-1/2" />}
           <p className="text-sm text-white/80">{order.establishment.name}</p>
           <h1 className="mt-1 text-2xl font-bold">
             {cancelled ? 'Pedido cancelado' : justPlaced && !awaitingPayment ? 'Pedido enviado!' : `Pedido ${label}`}

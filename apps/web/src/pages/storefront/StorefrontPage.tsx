@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import { useQuery } from '@tanstack/react-query'
-import { Check, ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, X } from 'lucide-react'
+import { Check, ChevronLeft, ChevronRight, Instagram, MapPin, Minus, Plus, RotateCcw, Search, ShoppingBag, Trash2, UserRound, Volume2, VolumeX, X } from 'lucide-react'
 import { applyBranding, toBranding } from '@/lib/branding'
 import { formatBRL } from '@/lib/listing'
 import { productImageUrl } from '@/lib/productImage'
@@ -15,6 +15,7 @@ import { BottomSheet } from './BottomSheet'
 import { CARD, DISPLAY_FONT, STOREFRONT_ACCENT, STOREFRONT_CREAM, STOREFRONT_HERO, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
 import { SakuraPetals } from './storefrontOriental'
+import { useStorefrontSound } from './storefrontSound'
 import { MOTION, StorefrontMotionStyles, flyToCart, ping, useRevealOnScroll } from './storefrontMotion'
 
 const NOTE_MAX_LENGTH = 140
@@ -338,7 +339,8 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
     <header className={`relative overflow-hidden text-white ${STOREFRONT_HERO}`}>
       <SakuraPetals />
       <div className="mx-auto max-w-6xl px-4 pb-6 pt-4 sm:pt-5">
-        <div className="mb-3 flex justify-end">
+        <div className="mb-3 flex justify-end gap-2">
+          <SoundToggle />
           <button
             type="button"
             onClick={onOpenAccount}
@@ -400,6 +402,24 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
         )}
       </div>
     </header>
+  )
+}
+
+/** Liga e desliga o som do cardápio (o "Yo!" do pedido enviado). */
+function SoundToggle() {
+  const { enabled, toggle } = useStorefrontSound()
+  const Icon = enabled ? Volume2 : VolumeX
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-pressed={!enabled}
+      aria-label={enabled ? 'Desligar som' : 'Ligar som'}
+      title={enabled ? 'Desligar som' : 'Ligar som'}
+      className="flex h-11 w-11 items-center justify-center rounded-full bg-white/20 transition hover:bg-white/30 active:scale-95"
+    >
+      <Icon className="h-5 w-5" aria-hidden="true" />
+    </button>
   )
 }
 

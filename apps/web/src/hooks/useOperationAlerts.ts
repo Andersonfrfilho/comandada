@@ -4,7 +4,7 @@ import { useWebSocket } from '@/hooks/useWebSocket'
 import { useCan } from '@/stores/authStore'
 import { useAlertsStore } from '@/stores/alertsStore'
 import { toast } from '@/stores/toastStore'
-import { playAlertSound, unlockAlertSound } from '@/lib/alertSound'
+import { playAlertSound, playNewOrderSound, unlockAlertSound } from '@/lib/alertSound'
 
 const HELD_PAYMENT_STATUSES = ['awaiting', 'failed']
 
@@ -56,7 +56,7 @@ export function useOperationAlerts(): void {
     if (isNewOrder && (watchesOrders || watchesKitchen)) {
       const number = payloadField(message.payload, 'number')
       const label = typeof number === 'number' ? `Pedido novo #${number}` : 'Pedido novo'
-      playAlertSound()
+      playNewOrderSound()
       toast.info(label)
       notifyBrowser(label, 'Chegou um pedido no ComandAdA.')
       const onOrderScreen = location.pathname === '/orders' || location.pathname === '/kitchen'
