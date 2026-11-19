@@ -1,11 +1,15 @@
 import { useEffect } from 'react'
 
-// Visual do cardápio online: topo escuro e quente, fundo creme e títulos numa fonte geométrica.
-// A cor do restaurante (brand-*) continua nos botões e nas faixas; o resto é neutro para servir
-// qualquer marca.
+// Visual do cardápio online: topo em degradê da cor do restaurante até um dourado (pôr do sol),
+// fundo pêssego claro e títulos numa fonte geométrica. Tudo parte da cor da marca (brand-*), então
+// serve para qualquer restaurante; o dourado só esquenta o fim do degradê.
 
-export const STOREFRONT_INK = 'bg-[#1c120d]'
-export const STOREFRONT_CREAM = 'bg-[#fbf4ea]'
+/** Topo da página. */
+export const STOREFRONT_HERO =
+  'bg-[linear-gradient(160deg,rgb(var(--brand-700))_0%,rgb(var(--brand-600))_35%,color-mix(in_srgb,rgb(var(--brand-500))_45%,#f59e0b)_75%,color-mix(in_srgb,rgb(var(--brand-400))_35%,#fbbf24)_100%)]'
+/** Botões, categoria ativa e barra do carrinho. */
+export const STOREFRONT_ACCENT = 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)]'
+export const STOREFRONT_CREAM = 'bg-[#fff4e8]'
 export const DISPLAY_FONT = "font-['Jost',ui-sans-serif,system-ui,sans-serif]"
 export const CARD = 'rounded-2xl bg-white shadow-sm ring-1 ring-[#f0e2cf]'
 

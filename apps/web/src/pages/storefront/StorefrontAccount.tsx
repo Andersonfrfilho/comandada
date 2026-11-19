@@ -69,7 +69,7 @@ function initialsOf(account: StorefrontAccount): string {
 
 export function AccountAvatar({ account, className = '' }: { account: StorefrontAccount; className?: string }) {
   return (
-    <span className={`flex shrink-0 items-center justify-center rounded-full bg-brand-600 font-bold text-white ${className}`}>{initialsOf(account)}</span>
+    <span className={`flex shrink-0 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] font-bold text-white ${className}`}>{initialsOf(account)}</span>
   )
 }
 
@@ -193,7 +193,7 @@ export function LoginSheet({
               <button
                 type="submit"
                 disabled={busy}
-                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-base font-bold text-white shadow-md shadow-brand-600/25 disabled:opacity-60"
+                className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-base font-bold text-white shadow-md shadow-brand-600/25 disabled:opacity-60"
               >
                 {busy ? <Loader2 className="h-5 w-5 animate-spin" /> : <MessageCircle className="h-5 w-5" aria-hidden="true" />}
                 {windowClosed ? 'Já mandei, enviar o código' : 'Receber código no WhatsApp'}
@@ -239,7 +239,7 @@ export function LoginSheet({
               type="button"
               onClick={() => void verify(code)}
               disabled={busy || code.length !== CODE_LENGTH}
-              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 text-base font-bold text-white shadow-md shadow-brand-600/25 disabled:opacity-50"
+              className="flex h-14 w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-base font-bold text-white shadow-md shadow-brand-600/25 disabled:opacity-50"
             >
               {busy && <Loader2 className="h-5 w-5 animate-spin" />} Entrar
             </button>
@@ -315,7 +315,7 @@ export function AccountSheet({
                   type="button"
                   onClick={() => onRepeat(order)}
                   className={`flex h-10 shrink-0 items-center gap-1.5 rounded-xl px-3 text-sm font-bold ${
-                    index === 0 ? 'bg-brand-600 text-white' : 'bg-brand-50 text-brand-700'
+                    index === 0 ? 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white' : 'bg-brand-50 text-brand-700'
                   }`}
                 >
                   <RotateCcw className="h-4 w-4" aria-hidden="true" /> Repetir

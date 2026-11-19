@@ -12,7 +12,7 @@ import { AccountAvatar, AccountSheet, LoginSheet, firstName, useStorefrontAccoun
 import { CheckoutSheet } from './CheckoutSheet'
 import { CartThumbnail, useProductImages } from './CartThumbnail'
 import { BottomSheet } from './BottomSheet'
-import { CARD, DISPLAY_FONT, STOREFRONT_CREAM, STOREFRONT_INK, useDisplayFont } from './storefrontTheme'
+import { CARD, DISPLAY_FONT, STOREFRONT_ACCENT, STOREFRONT_CREAM, STOREFRONT_HERO, useDisplayFont } from './storefrontTheme'
 import { centerInStrip, useHorizontalScroll } from './useHorizontalScroll'
 import { MOTION, StorefrontMotionStyles, flyToCart, ping, useRevealOnScroll } from './storefrontMotion'
 
@@ -45,7 +45,7 @@ export function StorefrontPage() {
     return (
       <div className={`flex min-h-screen flex-col items-center justify-center gap-4 px-6 text-center ${STOREFRONT_CREAM}`}>
         <p className="text-lg font-semibold text-gray-800">Não conseguimos abrir o cardápio agora.</p>
-        <button type="button" onClick={() => void refetch()} className="rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white">
+        <button type="button" onClick={() => void refetch()} className="rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-2.5 text-sm font-semibold text-white">
           Tentar de novo
         </button>
       </div>
@@ -162,7 +162,6 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
         account={account}
         onOpenAccount={() => (account ? setAccountOpen(true) : setLoginOpen(true))}
       />
-      <BrandStripes />
 
       <CategoryNav
         categories={visibleCategories.map((category) => ({
@@ -193,7 +192,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
 
           {!searching && featured.length > 0 && (
             <section className="pt-7" aria-labelledby="destaques">
-              <h2 id="destaques" className={`mb-3 text-2xl font-semibold ${DISPLAY_FONT}`}>Destaques</h2>
+              <h2 id="destaques" className={`mb-3 text-2xl font-semibold text-brand-700 ${DISPLAY_FONT}`}>Destaques</h2>
               <ul className="-mx-4 flex snap-x gap-3 overflow-x-auto px-4 pb-1 [scrollbar-width:none] sm:mx-0 sm:grid sm:grid-cols-3 sm:overflow-visible sm:px-0 xl:grid-cols-4 [&::-webkit-scrollbar]:hidden">
                 {featured.map((item, index) => (
                   <FeaturedCard key={item.key} index={index} item={item} onOpen={() => setSelectedItem(item)} onAdd={(source) => quickAdd(item, source)} />
@@ -207,7 +206,7 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
           )}
           {visibleCategories.map((category) => (
             <section key={category.name} id={sectionId(category.name)} data-category={category.name} className="scroll-mt-36 pt-7">
-              <h2 className={`mb-3 text-2xl font-semibold ${DISPLAY_FONT}`}>{category.name}</h2>
+              <h2 className={`mb-3 text-2xl font-semibold text-brand-700 ${DISPLAY_FONT}`}>{category.name}</h2>
               <ul className="grid gap-3 xl:grid-cols-2">
                 {category.items.map((item, index) => (
                   <ItemRow
@@ -230,15 +229,15 @@ function StorefrontMenuView({ menu }: { menu: StorefrontMenu }) {
       </div>
 
       {count > 0 && !checkoutOpen && (
-        <div className={`fixed inset-x-0 bottom-0 z-30 ${MOTION.rise} bg-gradient-to-t from-[#fbf4ea] via-[#fbf4ea]/95 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:hidden`}>
+        <div className={`fixed inset-x-0 bottom-0 z-30 ${MOTION.rise} bg-gradient-to-t from-[#fff4e8] via-[#fff4e8]/95 to-transparent px-4 pb-[max(1rem,env(safe-area-inset-bottom))] pt-3 lg:hidden`}>
           <button
             type="button"
             onClick={() => setCheckoutOpen(true)}
             data-cart-target
-            className={`mx-auto flex w-full max-w-2xl items-center justify-between rounded-2xl px-5 py-4 text-[#fbebd3] shadow-lg shadow-black/25 transition active:scale-[0.99] ${STOREFRONT_INK}`}
+            className={`mx-auto flex w-full max-w-2xl items-center justify-between rounded-2xl px-5 py-4 text-white shadow-lg shadow-brand-700/30 transition active:scale-[0.99] ${STOREFRONT_ACCENT}`}
           >
             <span className="flex items-center gap-3">
-              <span key={count} className={`flex h-7 min-w-7 items-center justify-center rounded-full bg-brand-600 px-1.5 text-[13px] font-bold text-white ${MOTION.pop}`}>{count}</span>
+              <span key={count} className={`flex h-7 min-w-7 items-center justify-center rounded-full bg-white px-1.5 text-[13px] font-bold text-brand-700 ${MOTION.pop}`}>{count}</span>
               <span className="font-semibold">Ver carrinho</span>
             </span>
             <span key={total} className={`font-semibold tabular-nums ${MOTION.rise}`}>{formatBRL(total)}</span>
@@ -335,13 +334,13 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
     : null
 
   return (
-    <header className={`text-[#fbebd3] ${STOREFRONT_INK}`}>
+    <header className={`text-white ${STOREFRONT_HERO}`}>
       <div className="mx-auto max-w-6xl px-4 pb-6 pt-4 sm:pt-5">
         <div className="mb-3 flex justify-end">
           <button
             type="button"
             onClick={onOpenAccount}
-            className="flex h-11 items-center gap-2 rounded-full bg-white/10 pl-1.5 pr-4 text-sm font-semibold transition hover:bg-white/15"
+            className="flex h-11 items-center gap-2 rounded-full bg-white/20 pl-1.5 pr-4 text-sm font-semibold transition hover:bg-white/30"
           >
             {account ? (
               <>
@@ -350,7 +349,7 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
               </>
             ) : (
               <>
-                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/10">
+                <span className="flex h-8 w-8 items-center justify-center rounded-full bg-white/20">
                   <UserRound className="h-4 w-4" aria-hidden="true" />
                 </span>
                 Entrar
@@ -362,7 +361,7 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
           {establishment.logo ? (
             <img src={establishment.logo} alt="" className={`h-20 w-24 shrink-0 object-contain sm:h-24 sm:w-32 ${MOTION.intro}`} />
           ) : (
-            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-brand-600 text-xl font-bold text-white">
+            <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-xl font-bold text-white">
               {initials}
             </div>
           )}
@@ -387,13 +386,13 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
           {establishment.minOrderValue > 0 && <Chip>Pedido mínimo {formatBRL(establishment.minOrderValue)}</Chip>}
         </div>
         {location && (
-          <p className="mt-3 flex items-start gap-1.5 text-xs text-[#d9c4aa]">
+          <p className="mt-3 flex items-start gap-1.5 text-xs text-white/90">
             <MapPin className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden="true" />
             {location}
           </p>
         )}
         {!establishment.isOpen && (
-          <p className="mt-4 rounded-xl bg-white/10 px-3 py-2 text-sm">
+          <p className="mt-4 rounded-xl bg-white/20 px-3 py-2 text-sm">
             {establishment.closedMessage ?? 'Estamos fechados agora, mas você já pode olhar o cardápio e montar o pedido.'}
           </p>
         )}
@@ -402,19 +401,8 @@ function MenuHeader({ menu, account, onOpenAccount }: { menu: StorefrontMenu; ac
   )
 }
 
-/** Três faixas na cor do restaurante embaixo do topo, como um pôr do sol. */
-function BrandStripes() {
-  return (
-    <div aria-hidden="true" className={`flex flex-col gap-[3px] ${STOREFRONT_INK}`}>
-      <div className="h-1 bg-brand-400" />
-      <div className="h-1 bg-brand-600" />
-      <div className="h-1 bg-brand-700" />
-    </div>
-  )
-}
-
 function Chip({ children }: { children: React.ReactNode }) {
-  return <span className="rounded-full bg-white/10 px-3 py-1.5 font-medium">{children}</span>
+  return <span className="rounded-full bg-white/20 px-3 py-1.5 font-medium">{children}</span>
 }
 
 interface CategoryChip {
@@ -469,7 +457,7 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
   }, [active])
 
   return (
-    <div className="sticky top-0 z-20 border-b border-[#f0e2cf] bg-[#fbf4ea]/95 backdrop-blur">
+    <div className="sticky top-0 z-20 border-b border-[#f0e2cf] bg-[#fff4e8]/95 backdrop-blur">
       <div className="mx-auto flex max-w-6xl flex-col gap-3 px-4 py-3 lg:flex-row lg:items-center">
         <label className="flex items-center gap-2 rounded-xl bg-white px-3 py-2.5 ring-1 ring-[#e6d3bb] focus-within:ring-2 focus-within:ring-brand-500 lg:w-72 lg:shrink-0">
           <Search className="h-4 w-4 text-gray-500" aria-hidden="true" />
@@ -491,7 +479,7 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
           {pill && (
             <span
               aria-hidden="true"
-              className={`pointer-events-none absolute left-0 rounded-full shadow-md shadow-black/20 ${STOREFRONT_INK} ${MOTION.slide}`}
+              className={`pointer-events-none absolute left-0 rounded-full shadow-md shadow-brand-700/30 ${STOREFRONT_ACCENT} ${MOTION.slide}`}
               style={{ top: pill.top, height: pill.height, width: pill.width, transform: `translateX(${pill.left}px)` }}
             />
           )}
@@ -506,7 +494,7 @@ function CategoryNav({ categories, search, onSearch }: { categories: CategoryChi
                 document.getElementById(sectionId(category.name))?.scrollIntoView({ behavior: 'smooth', block: 'start' })
               }}
               className={`relative flex shrink-0 items-center gap-2 rounded-full py-1 text-sm font-semibold transition-colors duration-300 active:scale-95 ${category.image ? 'pl-1 pr-4' : 'px-4 py-2'} ${
-                active === category.name ? `text-[#fbebd3] ${pill ? 'bg-transparent' : STOREFRONT_INK}` : 'bg-white text-[#1c120d] ring-1 ring-[#e6d3bb]'
+                active === category.name ? `text-white ${pill ? 'bg-transparent' : STOREFRONT_ACCENT}` : 'bg-white text-[#1c120d] ring-1 ring-[#e6d3bb]'
               }`}
             >
               {category.image && (
@@ -536,7 +524,7 @@ function StripArrow({ direction, onClick }: { direction: -1 | 1; onClick: () => 
     <div
       className={`pointer-events-none absolute inset-y-0 hidden w-16 items-center sm:flex ${
         direction < 0 ? 'left-0 justify-start bg-gradient-to-r' : 'right-0 justify-end bg-gradient-to-l'
-      } from-[#fbf4ea] via-[#fbf4ea]/90 to-transparent`}
+      } from-[#fff4e8] via-[#fff4e8]/90 to-transparent`}
     >
       <button
         type="button"
@@ -570,7 +558,7 @@ function ReorderCard({ createdAt, lines, image, onRepeat }: { createdAt: string;
           Último pedido, {when} · {formatBRL(cartTotal(lines))}
         </p>
       </div>
-      <button type="button" onClick={onRepeat} className="h-11 shrink-0 rounded-xl bg-brand-600 px-4 text-sm font-bold text-white shadow-sm active:scale-95 transition">
+      <button type="button" onClick={onRepeat} className="h-11 shrink-0 rounded-xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-4 text-sm font-bold text-white shadow-sm active:scale-95 transition">
         Repetir
       </button>
     </section>
@@ -614,7 +602,7 @@ function FeaturedCard({ item, index, onOpen, onAdd }: { item: StorefrontItem; in
         type="button"
         onClick={(event) => onAdd(event.currentTarget)}
         aria-label={`Adicionar ${item.name}`}
-        className="absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white shadow-md active:scale-95 transition"
+        className="absolute bottom-2.5 right-2.5 flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white shadow-md active:scale-95 transition"
       >
         <Plus className="h-4 w-4" />
       </button>
@@ -666,7 +654,7 @@ function ItemRow({
       <div className="flex shrink-0 items-center self-center">
         {quantity > 0 && singleOption ? (
           <div className={`flex flex-col items-center gap-1 rounded-full bg-brand-50 p-1 ring-1 ring-brand-200 ${MOTION.rise}`}>
-            <button type="button" onClick={(event) => onAdd(event.currentTarget)} aria-label={`Adicionar mais um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-brand-600 text-white shadow-sm transition active:scale-90">
+            <button type="button" onClick={(event) => onAdd(event.currentTarget)} aria-label={`Adicionar mais um ${item.name}`} className="flex h-9 w-9 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white shadow-sm transition active:scale-90">
               <Plus className="h-4 w-4" />
             </button>
             <span key={quantity} className={`text-sm font-bold tabular-nums text-brand-700 ${MOTION.pop}`}>{quantity}</span>
@@ -679,11 +667,11 @@ function ItemRow({
             type="button"
             onClick={(event) => onAdd(event.currentTarget)}
             aria-label={`Adicionar ${item.name}`}
-            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-brand-600 text-white shadow-md shadow-brand-600/25 transition active:scale-95"
+            className="relative flex h-10 w-10 items-center justify-center rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white shadow-md shadow-brand-600/25 transition active:scale-95"
           >
             <Plus className="h-5 w-5" />
             {quantity > 0 && (
-              <span key={quantity} className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full px-1 text-[11px] font-bold ${STOREFRONT_INK} ${MOTION.pop}`}>
+              <span key={quantity} className={`absolute -right-1 -top-1 flex h-5 min-w-5 items-center justify-center rounded-full bg-white px-1 text-[11px] font-bold text-brand-700 ring-1 ring-brand-200 ${MOTION.pop}`}>
                 {quantity}
               </span>
             )}
@@ -713,7 +701,7 @@ function CartPanel({
   return (
     <aside aria-label="Seu pedido" className="sticky top-24 mt-7 hidden w-[360px] shrink-0 lg:block">
       <div data-cart-target className={`flex max-h-[calc(100vh-8rem)] flex-col p-5 ${CARD}`}>
-        <h2 className={`text-2xl font-semibold ${DISPLAY_FONT}`}>Seu pedido</h2>
+        <h2 className={`text-2xl font-semibold text-brand-700 ${DISPLAY_FONT}`}>Seu pedido</h2>
         {lines.length === 0 ? (
           <div className="flex flex-col items-center gap-2 py-10 text-center text-sm text-[#6b574b]">
             <ShoppingBag className="h-8 w-8 text-brand-300" aria-hidden="true" />
@@ -760,7 +748,7 @@ function CartPanel({
             <button
               type="button"
               onClick={onCheckout}
-              className="mt-4 h-12 rounded-xl bg-brand-600 text-base font-bold text-white shadow-md shadow-brand-600/25 transition active:scale-[0.99]"
+              className="mt-4 h-12 rounded-xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-base font-bold text-white shadow-md shadow-brand-600/25 transition active:scale-[0.99]"
             >
               Fechar pedido
             </button>
@@ -822,7 +810,7 @@ function ItemSheet({
                     <span
                       aria-hidden="true"
                       className={`absolute right-3 top-3 flex h-5 w-5 items-center justify-center rounded-full transition-colors peer-focus-visible:ring-2 peer-focus-visible:ring-brand-500 ${
-                        checked ? 'bg-brand-600 text-white' : 'bg-white ring-1 ring-[#d9c4aa]'
+                        checked ? 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white' : 'bg-white ring-1 ring-[#d9c4aa]'
                       }`}
                     >
                       {checked && <Check className={`h-3.5 w-3.5 ${MOTION.check}`} strokeWidth={3} />}
@@ -873,7 +861,7 @@ function ItemSheet({
               event.currentTarget
             )
           }
-          className="flex flex-1 items-center justify-between rounded-2xl bg-brand-600 px-5 py-3.5 font-semibold text-white shadow-md shadow-brand-600/25 transition active:scale-[0.98]"
+          className="flex flex-1 items-center justify-between rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-3.5 font-semibold text-white shadow-md shadow-brand-600/25 transition active:scale-[0.98]"
         >
           <span>Adicionar</span>
           <span key={option.price * quantity} className={`tabular-nums ${MOTION.pop}`}>{formatBRL(option.price * quantity)}</span>
@@ -901,7 +889,7 @@ function MenuFooter({ menu }: { menu: StorefrontMenu }) {
 function MenuSkeleton() {
   return (
     <div className={`min-h-screen ${STOREFRONT_CREAM}`}>
-      <div className={`h-48 ${STOREFRONT_INK}`} />
+      <div className={`h-48 ${STOREFRONT_HERO}`} />
       <div className="mx-auto max-w-6xl space-y-3 px-4 pt-6">
         {Array.from({ length: 6 }, (_, index) => (
           <div key={index} className={`h-24 animate-pulse ${CARD}`} />

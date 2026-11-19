@@ -31,7 +31,7 @@ export function BottomSheet({
     <div className="fixed inset-0 z-40 flex items-end justify-center sm:items-center" role="dialog" aria-modal="true" aria-label={title}>
       <button type="button" aria-label="Fechar" onClick={onClose} className="absolute inset-0 bg-black/40 backdrop-blur-[2px] animate-[fadeIn_160ms_ease-out]" />
       <div
-        className={`relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#fbf4ea] shadow-2xl sm:rounded-3xl animate-[sheetUp_220ms_cubic-bezier(.2,.8,.2,1)] ${
+        className={`relative flex w-full max-w-lg flex-col overflow-hidden rounded-t-3xl bg-[#fff4e8] shadow-2xl sm:rounded-3xl animate-[sheetUp_220ms_cubic-bezier(.2,.8,.2,1)] ${
           fullHeight ? 'h-[94dvh] sm:h-[88vh]' : 'max-h-[90dvh]'
         }`}
       >

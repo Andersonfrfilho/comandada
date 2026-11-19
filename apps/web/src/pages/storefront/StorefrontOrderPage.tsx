@@ -43,7 +43,7 @@ export function StorefrontOrderPage() {
         <div className="rounded-3xl bg-white p-8 text-center shadow-sm ring-1 ring-stone-200">
           <p className="text-lg font-semibold text-gray-900">Não achamos esse pedido.</p>
           <p className="mt-2 text-sm text-gray-500">Confira o link ou fale com o restaurante pelo WhatsApp.</p>
-          <Link to="/cardapio" className="mt-6 inline-block rounded-full bg-brand-600 px-5 py-2.5 text-sm font-semibold text-white">
+          <Link to="/cardapio" className="mt-6 inline-block rounded-full bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-2.5 text-sm font-semibold text-white">
             Ver cardápio
           </Link>
         </div>
@@ -98,7 +98,7 @@ function OrderView({ order, justPlaced }: { order: StorefrontOrderStatus; justPl
                   <li key={step.key} className="flex items-center gap-3">
                     <span
                       className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-sm font-bold ${
-                        done ? 'bg-brand-600 text-white' : active ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500' : 'bg-stone-100 text-gray-400'
+                        done ? 'bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] text-white' : active ? 'bg-brand-100 text-brand-700 ring-2 ring-brand-500' : 'bg-stone-100 text-gray-400'
                       }`}
                     >
                       {done ? <Check className="h-4 w-4" /> : index + 1}
@@ -184,7 +184,7 @@ function PaymentBox({ payment, total }: { payment: NonNullable<StorefrontOrderSt
         <button
           type="button"
           onClick={() => void copy(payment.pixCopyPaste ?? '')}
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3.5 text-sm font-semibold text-white"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-3.5 text-sm font-semibold text-white"
         >
           {copied ? <Check className="h-4 w-4" /> : <Copy className="h-4 w-4" />}
           {copied ? 'Código copiado' : 'Copiar código Pix'}
@@ -202,7 +202,7 @@ function PaymentBox({ payment, total }: { payment: NonNullable<StorefrontOrderSt
           href={payment.paymentUrl}
           target="_blank"
           rel="noreferrer"
-          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-brand-600 px-5 py-3.5 text-sm font-semibold text-white"
+          className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-5 py-3.5 text-sm font-semibold text-white"
         >
           <CreditCard className="h-4 w-4" /> Pagar com cartão
         </a>
@@ -228,7 +228,7 @@ function PixKeyBox({ pixKey, total }: { pixKey: NonNullable<StorefrontOrderStatu
               setTimeout(() => setCopied(false), 2500)
             })
           }}
-          className="flex shrink-0 items-center gap-1 rounded-lg bg-brand-600 px-3 py-1.5 text-xs font-semibold text-white"
+          className="flex shrink-0 items-center gap-1 rounded-lg bg-[linear-gradient(135deg,rgb(var(--brand-600))_0%,rgb(var(--brand-500))_55%,color-mix(in_srgb,rgb(var(--brand-500))_25%,#f59e0b)_100%)] px-3 py-1.5 text-xs font-semibold text-white"
         >
           {copied ? <Check className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
           {copied ? 'Copiada' : 'Copiar'}
