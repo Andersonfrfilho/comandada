@@ -7,14 +7,16 @@ function capitalize(text: string): string {
 const MessagesConstants = {
   // Horário / Boas-vindas
   FECHADO:                      (estName: string, dias: string, abre: string, fecha: string) => `Oi! 👋 Que bom receber sua mensagem!\n\nNo momento o *${estName}* está fechado 🌙\n\n🕒 *Nosso horário:* ${dias}, das *${abre}* às *${fecha}*.\n\nAssim que abrirmos é só mandar um *oi* que a gente te atende rapidinho! 😉`,
-  BOAS_VINDAS:                  (estName: string) => `👋 Que bom ter você por aqui no *${estName}*! 😊`,
-  MENU_PRINCIPAL:               'O que vai ser hoje? 😋',
+  BOAS_VINDAS:                  (estName: string) => `👋 Bem-vindo(a) ao *${estName}*! 🧡`,
+  // Saudação de quem já tem nome: o nome do cliente e o do restaurante numa linha só.
+  BOAS_VINDAS_CLIENTE:          (customerName: string, estName: string) => `👋 Oi, *${customerName}*! Bem-vindo(a) ao *${estName}* 🧡`,
+  MENU_PRINCIPAL:               'Como posso te ajudar? 😊',
   MENU_PRINCIPAL_COM_PEDIDO:    '📦 Seu pedido está em andamento.\n\nO que você precisa agora?',
   MENU_MEU_PEDIDO:              '📦 Meu pedido',
   MENU_AJUDA_PEDIDO:            '🆘 Ajuda com o pedido',
   MENU_FAZER_PEDIDO:            '🛒 Fazer pedido',
-  MENU_RESERVAR_MESA:           '📋 Reservar mesa',
-  MENU_ATENDENTE:               '👤 Atendente',
+  MENU_RESERVAR_MESA:           '📅 Reservar mesa',
+  MENU_ATENDENTE:               '💬 Falar com a equipe',
   MENU_AGENDAR_PEDIDO:          '📅 Agendar pedido',
   MENU_RESERVAR_DICA:           '\n\n_Para reservar mesa, escreva *reservar*._',
 
@@ -33,7 +35,7 @@ const MessagesConstants = {
   ].join('\n\n'),
 
   // Saudação / Nome
-  BOAS_VINDAS_NOVO:             (estName: string) => `Olá! 👋 Seja muito bem-vindo(a) ao *${estName}*!`,
+  BOAS_VINDAS_NOVO:             (estName: string) => `👋 Olá! Bem-vindo(a) ao *${estName}* 🧡`,
   PEDIR_NOME:                   'Antes de começar: como posso te chamar? Me diz seu *nome* 😊',
   // Cartão de visita da saudação: mensagem própria, um bloco por assunto (título em negrito e o valor
   // na linha de baixo) com linha em branco entre eles. Cada bloco só entra quando o dado existe.
@@ -54,9 +56,22 @@ const MessagesConstants = {
   INFO_PAGAMENTO:               (formas: string) => `💳 *Pagamento*\n${formas}`,
   INFO_INSTAGRAM:               (link: string) => `📸 *Instagram*\n${link}`,
   INFO_SITE:                    (link: string) => `🌐 *Site*\n${link}`,
+  // Cartão enxuto da mensagem única da saudação (Meta): uma linha por assunto, sem título nem linha em
+  // branco, para o cliente chegar aos botões sem rolar a tela.
+  INFO_HORARIO_COMPACTO:        (aberto: boolean | null, linha: string) => `🕒 ${linha}${aberto === null ? '' : aberto ? ' · 🟢 aberto agora' : ' · 🔴 fechado agora'}`,
+  INFO_ENDERECO_COMPACTO:       (endereco: string) => `📍 ${endereco}`,
+  INFO_ENDERECO_COM_MAPA_COMPACTO: (endereco: string, mapa: string) => `📍 ${endereco}\n${mapa}`,
+  INFO_ENTREGA_E_RETIRADA_COMPACTO: (taxa: string) => `🛵 Entrega e retirada · ${taxa}`,
+  INFO_SO_ENTREGA_COMPACTO:     (taxa: string) => `🛵 Entrega · ${taxa}`,
+  INFO_SO_RETIRADA_COMPACTO:    '🛍️ Retirada no local',
+  INFO_PAGAMENTO_COMPACTO:      (formas: string) => `💳 ${formas}`,
+  INFO_INSTAGRAM_COMPACTO:      (link: string) => `📸 ${link}`,
+  INFO_SITE_COMPACTO:           (link: string) => `🌐 ${link}`,
   NOME_INVALIDO_GENERICO:       'Hmm, não consegui entender 😅\n\nPode me dizer seu *nome*? Só o primeiro já está ótimo!',
   NOME_INVALIDO_PALAVRAO:       'Haha, entendo 😄 Mas pra gente te atender direitinho, qual é o seu *nome*?',
   SAUDACAO_REPEAT:              (customerName: string) => `Que bom te ver de novo, *${customerName}*! 🥰\n\n🔄 Seu último pedido foi:`,
+  // Na mensagem única o nome já veio nas boas-vindas: o resumo abre direto.
+  SAUDACAO_REPEAT_SEM_NOME:     '🔄 Seu último pedido foi:',
   SAUDACAO_REPEAT_PERGUNTA:     'Bateu vontade de repetir? 😋',
   SAUDACAO_APOS_NOME:           (nameFormatted: string) => `Prazer, *${nameFormatted}*! 😊\n\n`,
   ULTIMO_PEDIDO_HEADER:         '🔄 *Seu último pedido foi:*',

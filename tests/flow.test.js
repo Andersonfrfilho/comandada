@@ -300,35 +300,61 @@ async function runTests() {
     assert(message.type === 'buttons' && message.headerImage === HEADER_URL, 'botões com o logo no topo: ' + JSON.stringify(message));
     const expectedBlocks = [
       'Olá! Bem-vindo ao Sakura 🌸',
-      '🕒 *Horário*\nTodos os dias, das 18h às 23h',
-      '📍 *Endereço*\nRua das Flores, 100 · Ribeirão Preto, SP\nhttps://maps.google.com/?q=-21.8,-47.8',
-      '🛵 *Entrega e retirada*\nTaxa de entrega *R$ 5,00*',
-      '💳 *Pagamento*\nPIX, Cartão Crédito e Dinheiro',
-      '📸 *Instagram*\nhttps://instagram.com/sakura.sushi',
-      '🌐 *Site*\nhttps://sakura.com.br',
-      'O que vai ser hoje? 😋',
+      [
+        '🕒 Todos os dias, das 18h às 23h',
+        '📍 Rua das Flores, 100 · Ribeirão Preto, SP',
+        'https://maps.google.com/?q=-21.8,-47.8',
+        '🛵 Entrega e retirada · taxa de entrega *R$ 5,00*',
+        '💳 PIX, Cartão Crédito e Dinheiro',
+        '📸 https://instagram.com/sakura.sushi',
+        '🌐 https://sakura.com.br',
+      ].join('\n'),
+      'Como posso te ajudar? 😊',
     ];
     for (const block of expectedBlocks) assert(message.body.includes(block), 'sem o bloco ' + JSON.stringify(block) + ':\n' + message.body);
-    assert(message.body.endsWith('O que vai ser hoje? 😋'), 'pergunta do menu por último');
+    assert(message.body.endsWith('Como posso te ajudar? 😊'), 'pergunta do menu por último');
+    assert(!message.body.includes('aberto agora') && !message.body.includes('fechado agora'), 'ignorar horário: sem aberto/fechado');
     assert(!message.body.includes('Sobre o'), 'sem título repetindo o nome');
     assert(!message.body.includes('digite'), 'sem instruções de digitar');
     assert(message.body.split('Rua das Flores').length === 2, 'endereço uma vez só');
     const ids = message.buttons.map((button) => button.id);
     assert(ids.join(',') === '2,3,4', 'sem pedido em andamento: fazer pedido, reservar, atendente: ' + ids);
+    assert(message.buttons.map((button) => button.title).join('|') === '🛒 Fazer pedido|📅 Reservar mesa|💬 Falar com a equipe', 'títulos: ' + JSON.stringify(message.buttons));
     assertNoObjectObject(r);
+  });
+
+  await test('saudação sem texto próprio → boas-vindas com o nome do cliente e do restaurante', async () => {
+    const r = await exec({ texto: 'oi', config: { msg_welcome: '' } });
+    const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
+    assert(body.startsWith('👋 Oi, *Anderson*! Bem-vindo(a) ao *Sakura* 🧡'), 'boas-vindas com nome: ' + body);
+  });
+
+  await test('saudação respeita o horário → aberto agora / fechado agora', async () => {
+    const open = await exec({ texto: 'oi', config: { ignore_hours: 'false' } });
+    const openBody = String((open?.[0]?.json?.respostas || [])[0]?.body);
+    assert(openBody.includes('🕒 Todos os dias, das 18h às 23h · 🟢 aberto agora'), 'aberto: ' + openBody);
+  });
+
+  await test('saudação com pedido anterior, sem texto próprio → nome só nas boas-vindas', async () => {
+    const r = await exec({ texto: 'oi', config: { msg_welcome: '' }, lastOrder: {
+      items: [{ id: 1, name: 'Temaki Salmão', price: 23.90, qty: 2 }], total: 47.80 } });
+    assertState(r, 'repeat_order');
+    const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
+    assert(body.split('Anderson').length === 2, 'nome uma vez só: ' + body);
+    assert(body.includes('🔄 Seu último pedido foi:') && body.includes('Temaki Salmão'), 'resumo do último pedido: ' + body);
   });
 
   await test('saudação 24h → "24 horas" em vez de "das 0h às 23h59"', async () => {
     const r = await exec({ texto: 'oi', establishment: { opening_time: '00:00', closing_time: '23:59' } });
     const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
-    assert(body.includes('🕒 *Horário*\nTodos os dias, 24 horas'), 'deve dizer 24 horas: ' + body);
+    assert(body.includes('🕒 Todos os dias, 24 horas'), 'deve dizer 24 horas: ' + body);
     assert(!body.includes('0h às 23h59'), 'não deve mostrar 0h às 23h59');
   });
 
   await test('saudação sem coordenadas → endereço sem link do mapa', async () => {
     const r = await exec({ texto: 'oi', establishment: { lat: 0, lng: 0, address: 'Rua das Flores, 100' } });
     const body = String((r?.[0]?.json?.respostas || [])[0]?.body);
-    assert(body.includes('📍 *Endereço*\nRua das Flores, 100'), 'endereço no texto: ' + body);
+    assert(body.includes('📍 Rua das Flores, 100'), 'endereço no texto: ' + body);
     assert(!body.includes('maps.google'), 'sem link do mapa');
   });
 
@@ -343,7 +369,7 @@ async function runTests() {
     assertState(r, 'awaiting_name');
     const resps = r?.[0]?.json?.respostas || [];
     assert(resps.length === 1 && resps[0].type === 'image' && resps[0].link === HEADER_URL, 'foto do logo: ' + JSON.stringify(resps));
-    assert(/nome/i.test(resps[0].caption) && resps[0].caption.includes('🕒 *Horário*'), 'legenda com cartão e pedido do nome: ' + resps[0].caption);
+    assert(/nome/i.test(resps[0].caption) && resps[0].caption.includes('🕒 Todos os dias'), 'legenda com cartão e pedido do nome: ' + resps[0].caption);
     assertNoObjectObject(r);
   });
 
@@ -354,7 +380,7 @@ async function runTests() {
     assertState(r, 'repeat_order');
     const resps = r?.[0]?.json?.respostas || [];
     assert(resps.length === 1 && resps[0].type === 'buttons' && resps[0].headerImage === HEADER_URL, 'uma mensagem: ' + JSON.stringify(resps));
-    assert(resps[0].body.includes('Temaki Salmão') && resps[0].body.includes('🕒 *Horário*'), 'cartão e pedido anterior: ' + resps[0].body);
+    assert(resps[0].body.includes('Temaki Salmão') && resps[0].body.includes('🕒 Todos os dias'), 'cartão e pedido anterior: ' + resps[0].body);
     assertNoObjectObject(r);
   });
 
