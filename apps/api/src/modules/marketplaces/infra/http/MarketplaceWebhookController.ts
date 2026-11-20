@@ -27,7 +27,7 @@ export class MarketplaceWebhookController {
       return
     }
     const events = connection.provider.parseWebhook(request.rawBody, request.body)
-    // Plataformas esperam a resposta em poucos segundos. Passou do prazo ou algum evento falhou: responde "tente de
+    // A 99Food espera resposta em até 6 s. Passou do prazo ou algum evento falhou: responde "tente de
     // novo"; o reenvio de um evento já tratado (ou ainda em andamento) cai no controle de repetidos.
     const handling = this.service.handleEvents(platform, events).then((handled) => handled.length === events.length)
     const ok = await Promise.race([handling, delay(WEBHOOK_DEADLINE_MS).then(() => false)])
