@@ -3,6 +3,7 @@ import { Navigate, useLocation } from 'react-router-dom'
 import { hasPermission } from '@/lib/permissions'
 import { homePathFor, permissionForPath } from '@/constants/navigation'
 import { useAuthStore } from '@/stores/authStore'
+import { isWaiterPath } from '@/pages/waiter/waiterModel'
 
 /**
  * Rota protegida pela permissão do item de menu correspondente (a mesma que a API confere).
@@ -46,6 +47,7 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   const accessToken = useAuthStore((state) => state.accessToken)
   const user = useAuthStore((state) => state.user)
   const refresh = useAuthStore((state) => state.refresh)
+  const location = useLocation()
   const [ready, setReady] = useState(false)
 
   useEffect(() => {
@@ -59,7 +61,9 @@ export function AuthGuard({ children }: { children: React.ReactNode }) {
   }, [])  // eslint-disable-line react-hooks/exhaustive-deps
 
   if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
+    // O app do garçom volta para ele depois do login (instalado, abre em /garcom).
+    const next = isWaiterPath(location.pathname) ? `?next=${encodeURIComponent(location.pathname)}` : ''
+    return <Navigate to={`/login${next}`} replace />
   }
 
   if (!ready) {

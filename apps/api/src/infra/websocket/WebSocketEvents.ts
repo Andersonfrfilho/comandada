@@ -20,6 +20,9 @@ export const WS_EVENTS = {
   KITCHEN_ORDER_STARTED: 'kitchen:order_started',
   KITCHEN_ORDER_READY: 'kitchen:order_ready',
 
+  // Mesa: garçom pediu a conta pelo app
+  COMANDA_BILL_REQUESTED: 'comanda:bill_requested',
+
   // Delivery
   DELIVERY_ASSIGNED: 'delivery:assigned',
   DELIVERY_DISPATCHED: 'delivery:dispatched',

@@ -9,7 +9,8 @@ import { elapsedLabel } from './elapsed'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Plus, Minus, LayoutGrid, Map, Link2, ReceiptText } from 'lucide-react'
+import { Plus, Minus, LayoutGrid, Map, Link2, ReceiptText, Smartphone } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { TableFloorMap } from './TableFloorMap'
 import { TableSeats } from './TableSeats'
 import { GuestsStepper } from './GuestsStepper'
@@ -258,6 +259,16 @@ export function TablesPage() {
               {selectionMode ? 'Cancelar' : 'Juntar mesas'}
             </button>
           )}
+          {canLaunch && (
+            <Link
+              to="/garcom"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+              title="Abra no celular do garçom e instale na tela inicial"
+            >
+              <Smartphone className="h-4 w-4" />
+              App do garçom
+            </Link>
+          )}
           {canLaunch && <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
@@ -326,10 +337,16 @@ export function TablesPage() {
               key={table.id}
               className={`flex flex-col border-2 rounded-xl p-3 sm:p-4 transition-all ${STATUS_CARD[table.status]}`}
             >
-              <div className="flex justify-end">
+              <div className="flex flex-col items-end gap-1">
                 <span className={`inline-flex px-1.5 py-0.5 rounded text-[11px] font-medium border ${STATUS_COLORS[table.status]}`}>
                   {STATUS_LABELS[table.status]}
                 </span>
+                {table.comandas.some((comanda) => comanda.billRequestedAt) && (
+                  <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[11px] font-semibold bg-amber-500 text-white">
+                    <ReceiptText className="h-3 w-3" />
+                    Conta pedida
+                  </span>
+                )}
               </div>
               <TableSeats
                 number={table.number}

@@ -158,6 +158,11 @@ export class UpdateOrderStatusUseCase {
       orderId: input.orderId,
       previousStatus: order.status,
       newStatus: input.newStatus,
+      // O app do garçom avisa "pedido da mesa pronto" sem ter que buscar o pedido de novo.
+      number: order.number ?? null,
+      type: order.type,
+      tableId: order.tableId ?? null,
+      comandaId: order.comandaId ?? null,
     })
 
     // Fire-and-forget: a fiscal hiccup must never block the order status change.

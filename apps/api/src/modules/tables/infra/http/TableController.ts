@@ -16,6 +16,7 @@ import type { ComandaRepository } from '../../domain/repositories/ComandaReposit
 import type { GetComandaBillUseCase } from '../../application/use-cases/GetComandaBillUseCase'
 import type { SettleComandaUseCase } from '../../application/use-cases/SettleComandaUseCase'
 import type { TransferComandaUseCase } from '../../application/use-cases/TransferComandaUseCase'
+import type { RequestComandaBillUseCase } from '../../application/use-cases/RequestComandaBillUseCase'
 import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 
 const createTableSchema = z.object({
@@ -50,14 +51,25 @@ const settleComandaSchema = z.object({
     .max(20),
 })
 
+// Pessoas na comanda: cadeiras ocupadas no desenho da mesa. Nulo apaga a informação.
+const guestsCountSchema = z.number().int().min(1).max(50).nullable()
+
+// Corpo vazio continua valendo (painel abre a comanda e o cliente confirma pelo código).
+const openComandaSchema = z
+  .object({
+    customerId: z.string().uuid().optional(),
+    customerName: z.string().trim().min(2).max(255).optional(),
+    customerPhone: z.string().trim().min(10).max(20).optional(),
+    guestsCount: guestsCountSchema.optional(),
+  })
+  .default({})
+
+const requestBillSchema = z.object({ requested: z.boolean().default(true) }).default({ requested: true })
+
 const transferComandaSchema = z.object({
   tableId: z.string().uuid(),
 })
 
-// Pessoas na comanda: cadeiras ocupadas no desenho da mesa. Nulo apaga a informação.
-const guestsCountSchema = z.number().int().min(1).max(50).nullable()
-
-const openComandaSchema = z.object({ guestsCount: guestsCountSchema.optional() })
 
 const updateGuestsSchema = z.object({ guestsCount: guestsCountSchema })
 
@@ -84,7 +96,8 @@ export class TableController {
     private readonly comandaRepository: ComandaRepository,
     private readonly getComandaBillUseCase: GetComandaBillUseCase,
     private readonly settleComandaUseCase: SettleComandaUseCase,
-    private readonly transferComandaUseCase: TransferComandaUseCase
+    private readonly transferComandaUseCase: TransferComandaUseCase,
+    private readonly requestComandaBillUseCase?: RequestComandaBillUseCase
   ) {}
 
   list: RouteHandler = async (request, response) => {
@@ -187,11 +200,11 @@ export class TableController {
   openComanda: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
     const parsed = openComandaSchema.safeParse(request.body ?? {})
-    if (!parsed.success) throw new ValidationError('Pessoas na mesa: de 1 a 50', parsed.error.flatten().fieldErrors)
+    if (!parsed.success) throw new ValidationError('Confira os dados do cliente', parsed.error.flatten().fieldErrors)
     const comanda = await this.openComandaUseCase.execute(
       request.params['id']!,
       request.user.establishmentId,
-      parsed.data.guestsCount ?? null
+      parsed.data
     )
     response.json(comanda, 201)
   }
@@ -206,6 +219,19 @@ export class TableController {
       parsed.data.guestsCount
     )
     if (!comanda) throw new NotFoundError('Comanda aberta')
+    response.json(comanda)
+  }
+
+  requestBill: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    if (!this.requestComandaBillUseCase) throw new Error('Pedido de conta indisponível')
+    const parsed = requestBillSchema.safeParse(request.body ?? {})
+    if (!parsed.success) throw new ValidationError('Dados inválidos', parsed.error.flatten().fieldErrors)
+    const comanda = await this.requestComandaBillUseCase.execute({
+      comandaId: request.params['comandaId']!,
+      establishmentId: request.user.establishmentId,
+      requested: parsed.data.requested,
+    })
     response.json(comanda)
   }
 

@@ -393,6 +393,13 @@
       "when": 1785779400000,
       "tag": "0056_comanda_guests_count",
       "breakpoints": true
+    },
+    {
+      "idx": 56,
+      "version": "7",
+      "when": 1785865800000,
+      "tag": "0057_comanda_bill_requested",
+      "breakpoints": true
     }
   ]
 }

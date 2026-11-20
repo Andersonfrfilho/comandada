@@ -13,6 +13,8 @@ export interface ComandaBillItem {
   unitPrice: number
   totalPrice: number
   notes: string | null
+  /** Cozinha marcou o item como pronto (check por item). */
+  readyAt: string | null
 }
 
 export interface ComandaBillOrder {
@@ -20,6 +22,7 @@ export interface ComandaBillOrder {
   displayCode: string
   status: OrderStatus
   createdAt: string
+  readyAt: string | null
   totalAmount: number
   paidAmount: number
   outstandingAmount: number
@@ -32,6 +35,9 @@ export interface ComandaBill {
     code: string
     status: 'open' | 'closed' | 'paid'
     customerName: string | null
+    customerPhone: string | null
+    guestsCount: number | null
+    billRequestedAt: string | null
     openedAt: string
     closedAt: string | null
     tableId: string
@@ -95,6 +101,7 @@ export class GetComandaBillUseCase {
         displayCode: orderDisplayCode(order),
         status: order.status,
         createdAt: order.createdAt.toISOString(),
+        readyAt: order.readyAt ? order.readyAt.toISOString() : null,
         totalAmount,
         paidAmount,
         outstandingAmount: roundMoney(Math.max(0, totalAmount - paidAmount)),
@@ -104,6 +111,7 @@ export class GetComandaBillUseCase {
           unitPrice: Number(item.unitPrice),
           totalPrice: Number(item.totalPrice),
           notes: item.notes,
+          readyAt: item.readyAt ? item.readyAt.toISOString() : null,
         })),
       }
     })
@@ -117,6 +125,9 @@ export class GetComandaBillUseCase {
         code: comanda.code,
         status: comanda.status,
         customerName: comanda.customerName,
+        customerPhone: comanda.customerPhone,
+        guestsCount: comanda.guestsCount,
+        billRequestedAt: comanda.billRequestedAt ? comanda.billRequestedAt.toISOString() : null,
         openedAt: comanda.openedAt.toISOString(),
         closedAt: comanda.closedAt ? comanda.closedAt.toISOString() : null,
         tableId: comanda.tableId,

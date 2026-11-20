@@ -5,6 +5,16 @@ export interface ComandaWithTable extends Comanda {
   tableCapacity: number
 }
 
+export interface CreateComandaInput {
+  establishmentId: string
+  tableId: string
+  code: string
+  customerId?: string
+  customerName?: string
+  customerPhone?: string
+  guestsCount?: number | null
+}
+
 export interface ComandaConsumption {
   totalAmount: number
   ordersCount: number
@@ -19,9 +29,11 @@ export interface ComandaRepository {
   findByCodePublic(code: string): Promise<ComandaWithTable | null>
   listByTable(tableId: string, establishmentId: string): Promise<Comanda[]>
   listOpenByEstablishment(establishmentId: string): Promise<ComandaWithTable[]>
-  create(input: { establishmentId: string; tableId: string; code: string; guestsCount?: number | null }): Promise<Comanda>
+  create(input: CreateComandaInput): Promise<Comanda>
   /** Muda quantas pessoas estão na comanda aberta; null quando a comanda não existe ou não está aberta. */
   updateGuestsCount(id: string, establishmentId: string, guestsCount: number | null): Promise<Comanda | null>
+  /** Garçom pediu a conta (ou desfez: `null`). */
+  setBillRequested(id: string, establishmentId: string, requestedAt: Date | null): Promise<Comanda | null>
   confirm(id: string, input: { customerId?: string; customerName: string; customerPhone: string; customerDocument?: string }): Promise<Comanda>
   close(id: string, establishmentId: string, status: 'closed' | 'paid'): Promise<Comanda>
   isCodeActiveInEstablishment(code: string, establishmentId: string): Promise<boolean>
