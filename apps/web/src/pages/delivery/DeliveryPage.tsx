@@ -1,12 +1,12 @@
 import { DELIVERY_STATUS_COLORS, DELIVERY_STATUS_LABELS } from '@/constants/statusLabels'
 import { formatDeliveryAddress } from '@/lib/deliveryAddress'
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { Link } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { Modal } from '@/components/ui/Modal'
 import { orderNumberLabel } from '@/lib/orderLabel'
 import { toast } from '@/stores/toastStore'
-import { Banknote, Clock, ExternalLink, Map as MapIcon, MapPin, MessageCircle, Navigation, Phone, Route, StickyNote } from 'lucide-react'
+import { Banknote, CheckCheck, Clock, ExternalLink, Map as MapIcon, MapPin, MessageCircle, Navigation, Phone, Route, StickyNote } from 'lucide-react'
 import { useAuthStore, useCan } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
@@ -42,6 +42,39 @@ interface DeliveryOrder {
     payments?: Array<{ id: string; paymentTypeName: string; amount: string; changeFor: string | null; splitLabel: string | null }>
     paymentStatus?: string | null
   }
+}
+
+const DELIVERY_CHECK_LABELS = {
+  title: 'Conferir itens',
+  progress: (checked: number, total: number) => `${checked}/${total} conferidos`,
+  markAll: 'Marcar todos',
+  clear: 'Desmarcar',
+  markItem: (name: string) => `Conferir ${name}`,
+} as const
+
+/**
+ * Conferência da sacola antes de sair: só ajuda o entregador, não muda o pedido, então fica no aparelho
+ * (some sozinha quando a entrega sai da fila). Sem armazenamento disponível, vale só enquanto a tela está aberta.
+ */
+function useCheckedItems(deliveryId: string): [ReadonlySet<number>, (next: ReadonlySet<number>) => void] {
+  const storageKey = `delivery-checked:${deliveryId}`
+  const [checked, setCheckedState] = useState<ReadonlySet<number>>(() => {
+    try {
+      const saved: unknown = JSON.parse(window.localStorage.getItem(storageKey) ?? '[]')
+      return new Set(Array.isArray(saved) ? saved.filter((value): value is number => typeof value === 'number') : [])
+    } catch {
+      return new Set()
+    }
+  })
+  useEffect(() => {
+    try {
+      if (checked.size === 0) window.localStorage.removeItem(storageKey)
+      else window.localStorage.setItem(storageKey, JSON.stringify([...checked]))
+    } catch {
+      // Sem armazenamento: a marcação vale só nesta tela.
+    }
+  }, [checked, storageKey])
+  return [checked, setCheckedState]
 }
 
 interface OrderRoute {
@@ -209,6 +242,15 @@ function DeliveryCard({
   const notes = splitLocationNote(order.notes).notes
   const payments = order.payments ?? []
   const paidOnline = order.paymentStatus === 'paid'
+  const [checked, setChecked] = useCheckedItems(delivery.id)
+  const checkedCount = order.items.filter((_, index) => checked.has(index)).length
+
+  function toggleChecked(index: number) {
+    const next = new Set(checked)
+    if (next.has(index)) next.delete(index)
+    else next.add(index)
+    setChecked(next)
+  }
 
   const { data: route } = useQuery({
     queryKey: ['order-route', order.id],
@@ -355,14 +397,64 @@ function DeliveryCard({
           ))}
         </div>
 
-        <ul className="mb-3 space-y-0.5 text-sm text-gray-700">
-          {order.items.map((item, index) => (
-            <li key={`${item.productName}-${index}`}>
-              <span className="font-semibold">{item.quantity}×</span> {item.productName}
-              {item.notes && <span className="text-xs italic text-gray-400"> · {item.notes}</span>}
-            </li>
-          ))}
-        </ul>
+        {/* Conferência do entregador antes de sair, no estilo da Cozinha. Fica só neste aparelho. */}
+        <div className="mb-3">
+          <div className="mb-1.5 flex items-center justify-between gap-2">
+            <p className="text-xs text-gray-500">
+              <span className="font-semibold text-gray-700">{DELIVERY_CHECK_LABELS.title}</span>
+              {' · '}
+              <span className="font-semibold tabular-nums text-gray-800">
+                {DELIVERY_CHECK_LABELS.progress(checkedCount, order.items.length)}
+              </span>
+            </p>
+            {checkedCount < order.items.length ? (
+              <button
+                type="button"
+                onClick={() => setChecked(new Set(order.items.map((_, index) => index)))}
+                className="inline-flex items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 active:scale-95"
+              >
+                <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
+                {DELIVERY_CHECK_LABELS.markAll}
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setChecked(new Set())}
+                className="text-xs font-medium text-gray-500 underline-offset-2 hover:underline"
+              >
+                {DELIVERY_CHECK_LABELS.clear}
+              </button>
+            )}
+          </div>
+          <progress
+            value={checkedCount}
+            max={Math.max(order.items.length, 1)}
+            aria-label={DELIVERY_CHECK_LABELS.progress(checkedCount, order.items.length)}
+            className="mb-1 h-1.5 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-green-500 [&::-webkit-progress-bar]:bg-gray-100 [&::-webkit-progress-value]:bg-green-500 [&::-webkit-progress-value]:transition-all"
+          />
+          <ul className="divide-y divide-gray-100">
+            {order.items.map((item, index) => {
+              const isChecked = checked.has(index)
+              return (
+                <li key={`${item.productName}-${index}`}>
+                  <label className="flex cursor-pointer items-center gap-3 py-2 text-sm">
+                    <input
+                      type="checkbox"
+                      checked={isChecked}
+                      onChange={() => toggleChecked(index)}
+                      aria-label={DELIVERY_CHECK_LABELS.markItem(item.productName)}
+                      className="h-6 w-6 flex-shrink-0 cursor-pointer rounded accent-green-600"
+                    />
+                    <span className={`min-w-0 flex-1 ${isChecked ? 'text-gray-400 line-through' : 'text-gray-800'}`}>
+                      <span className="font-semibold">{item.quantity}×</span> {item.productName}
+                      {item.notes && <span className="block text-xs italic text-gray-400">{item.notes}</span>}
+                    </span>
+                  </label>
+                </li>
+              )
+            })}
+          </ul>
+        </div>
 
         {notes && (
           <p className="mb-3 flex items-start gap-1.5 rounded-lg bg-amber-50 px-3 py-2 text-sm text-amber-800">
