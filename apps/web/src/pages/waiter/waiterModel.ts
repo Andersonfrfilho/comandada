@@ -143,9 +143,10 @@ export function productDisplayName(product: WaiterProduct): string {
 }
 
 /** Corpo do POST /orders de um pedido de mesa (sem pagamento: paga na conta). */
-export function tableOrderBody(input: { tableId: string; comandaId: string; cart: CartLine[]; notes: string }) {
+export function tableOrderBody(input: { id: string; tableId: string; comandaId: string; cart: CartLine[]; notes: string }) {
   const notes = input.notes.trim()
   return {
+    id: input.id,
     channel: 'manual' as const,
     type: 'table' as const,
     tableId: input.tableId,
@@ -246,4 +247,17 @@ export function isTableOrderReady(change: OrderStatusChangedPayload): boolean {
 export function readyNoticeLabel(notice: Pick<ReadyNotice, 'number' | 'tableNumber'>): string {
   const order = notice.number ? `Pedido #${notice.number}` : 'Pedido'
   return notice.tableNumber ? `Mesa ${notice.tableNumber} · ${order} pronto` : `${order} pronto`
+}
+
+/**
+ * UUID v4 gerado no aparelho. `crypto.randomUUID` só existe em HTTPS; no servidor da loja (HTTP na
+ * rede local) cai no `getRandomValues`, que funciona em qualquer página.
+ */
+export function newClientId(): string {
+  if (typeof crypto.randomUUID === 'function') return crypto.randomUUID()
+  const bytes = crypto.getRandomValues(new Uint8Array(16))
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80
+  const hex = Array.from(bytes, (byte) => byte.toString(16).padStart(2, '0')).join('')
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`
 }

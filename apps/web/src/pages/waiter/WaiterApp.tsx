@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
 import { Bell, BellRing, Check, LogOut, UtensilsCrossed, X } from 'lucide-react'
 import { useAuthStore, useCan } from '@/stores/authStore'
@@ -7,7 +7,17 @@ import { WaiterTablesPage } from './WaiterTablesPage'
 import { WaiterTablePage } from './WaiterTablePage'
 import { WaiterComandaPage } from './WaiterComandaPage'
 import { WaiterLaunchPage } from './WaiterLaunchPage'
+import { useQueryClient } from '@tanstack/react-query'
+import { CloudOff } from 'lucide-react'
 import { requestNotificationPermission, useWaiterAlerts, useWaiterAlertsStore } from './waiterAlerts'
+import {
+  clearWaiterDeviceData,
+  flushOutbox,
+  useIsOnline,
+  useOutboxSync,
+  useWaiterOutboxStore,
+  useWaiterPersistedCache,
+} from './waiterOffline'
 import { PANEL_MANIFEST_PATH, WAITER_MANIFEST_PATH, readyNoticeLabel, waiterPaths } from './waiterModel'
 
 /** Instalar pelo /garcom tem que levar o manifest do garçom, mesmo quando o app abriu pelo painel. */
@@ -60,11 +70,80 @@ function ReadyTray() {
   )
 }
 
+function formatClock(timestamp: number): string {
+  return new Date(timestamp).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' })
+}
+
+/**
+ * Faixa de conexão: sem rede mostra de quando são os dados na tela; com lançamentos guardados,
+ * quantos estão esperando e um botão para tentar agora.
+ */
+function ConnectionBar() {
+  const online = useIsOnline()
+  const queryClient = useQueryClient()
+  const entries = useWaiterOutboxStore((state) => state.entries)
+  const waiting = entries.filter((entry) => !entry.rejected).length
+  const rejected = entries.length - waiting
+  const tablesState = useSyncExternalStore(
+    (callback) => queryClient.getQueryCache().subscribe(callback),
+    () => queryClient.getQueryState(['tables'])
+  )
+  // Basta a primeira tentativa falhar: esperar as novas tentativas deixaria o garçom sem aviso.
+  const serverDown = online && (tablesState?.status === 'error' || (tablesState?.fetchFailureCount ?? 0) > 0)
+  const [retrying, setRetrying] = useState(false)
+
+  if (online && !serverDown && entries.length === 0) return null
+
+  async function retry() {
+    setRetrying(true)
+    await Promise.all([flushOutbox(queryClient), queryClient.invalidateQueries({ queryKey: ['tables'] })])
+    setRetrying(false)
+  }
+
+  const offline = !online || serverDown
+  return (
+    <div className={`flex items-center gap-2 px-3 py-2 text-sm ${offline ? 'bg-gray-900 text-white' : 'bg-sky-50 text-sky-900'}`} role="status">
+      <CloudOff className="h-4 w-4 shrink-0" />
+      <p className="min-w-0 flex-1 leading-tight">
+        {offline ? (
+          <>
+            <strong>{online ? 'Servidor fora do ar' : 'Sem conexão'}</strong>
+            {tablesState?.dataUpdatedAt ? ` · dados de ${formatClock(tablesState.dataUpdatedAt)}` : ''}
+          </>
+        ) : null}
+        {waiting > 0 && (
+          <span className="block text-xs opacity-90">
+            {waiting} {waiting === 1 ? 'lançamento aguardando' : 'lançamentos aguardando'} envio
+          </span>
+        )}
+        {rejected > 0 && <span className="block text-xs text-red-300">{rejected} recusado(s): veja na comanda</span>}
+      </p>
+      {(waiting > 0 || offline) && (
+        <button
+          onClick={() => void retry()}
+          disabled={retrying}
+          className="h-9 shrink-0 rounded-lg bg-white/15 px-3 text-xs font-semibold ring-1 ring-current/30 active:scale-95 disabled:opacity-50"
+        >
+          {retrying ? 'Tentando...' : 'Tentar agora'}
+        </button>
+      )}
+    </div>
+  )
+}
+
 function WaiterHeader() {
   const brand = useBrandingStore((state) => state.branding)
   const user = useAuthStore((state) => state.user)
   const logout = useAuthStore((state) => state.logout)
+  const clearNotices = useWaiterAlertsStore((state) => state.clear)
   const [permission, setPermission] = useState(notificationState)
+
+  async function signOut() {
+    // Celular pode ser de outro garçom no próximo turno: nada da sessão fica no aparelho.
+    clearWaiterDeviceData()
+    clearNotices()
+    await logout()
+  }
 
   async function enableNotifications() {
     setPermission(await requestNotificationPermission())
@@ -94,7 +173,7 @@ function WaiterHeader() {
           </button>
         )}
         <button
-          onClick={() => void logout()}
+          onClick={() => void signOut()}
           aria-label="Sair"
           className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 active:scale-95"
         >
@@ -128,13 +207,16 @@ function NoAccess() {
 export function WaiterApp() {
   const canLaunch = useCan({ resource: 'orders', action: 'write' })
   useWaiterManifest()
+  useWaiterPersistedCache()
   useWaiterAlerts()
+  useOutboxSync()
 
   if (!canLaunch) return <NoAccess />
 
   return (
     <div className="min-h-screen bg-gray-50 text-gray-900">
       <WaiterHeader />
+      <ConnectionBar />
       {/* Fora do cabeçalho fixo: a barra de busca do cardápio gruda logo abaixo dele. */}
       <ReadyTray />
       <main className="mx-auto max-w-2xl" style={{ paddingBottom: 'env(safe-area-inset-bottom)' }}>

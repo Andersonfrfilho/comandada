@@ -34,6 +34,11 @@ interface CreateOrderDeliveryInput {
 }
 
 interface CreateOrderInput {
+  /**
+   * Id gerado no aparelho (app do garçom): reenviar o mesmo pedido depois de uma queda de conexão
+   * devolve o que já foi gravado em vez de lançar de novo na cozinha.
+   */
+  id?: string | undefined
   establishmentId: string
   customerId?: string | undefined
   tableId?: string | undefined
@@ -81,6 +86,14 @@ export class CreateOrderUseCase {
       if (duplicate) return duplicate
     }
 
+    if (input.id) {
+      const existing = await this.db.query.orders.findFirst({ where: eq(schema.orders.id, input.id) })
+      if (existing) {
+        if (existing.establishmentId !== input.establishmentId) throw new ConflictError('Pedido já existe')
+        return existing
+      }
+    }
+
     if (input.items.length === 0) {
       throw new ConflictError('Order must have at least one item')
     }
@@ -120,6 +133,7 @@ export class CreateOrderUseCase {
     const [order] = await this.db
       .insert(schema.orders)
       .values({
+        ...(input.id ? { id: input.id } : {}),
         establishmentId: input.establishmentId,
         customerId: input.customerId ?? null,
         customerName: input.customerName?.trim() || null,

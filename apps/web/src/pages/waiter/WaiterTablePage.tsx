@@ -9,6 +9,7 @@ import { toast } from '@/stores/toastStore'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { Comanda, TableWithComanda } from '@/constants/tableLabels'
 import { elapsedLabel } from '@/pages/tables/elapsed'
+import { isRetryableError } from './waiterOffline'
 import { OpenComandaForm, type OpenComandaPayload } from './OpenComandaForm'
 import { waiterPaths } from './waiterModel'
 
@@ -35,7 +36,14 @@ export function WaiterTablePage() {
       toast.success(`Comanda ${comanda.code} aberta na mesa ${table?.number ?? ''}`)
       navigate(waiterPaths.launch(comanda.id), { replace: true })
     },
-    onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível abrir a comanda'),
+    onError: (error) =>
+      toast.error(
+        isRetryableError(error)
+          ? 'Sem conexão: abrir comanda precisa do servidor. Tente de novo quando a conexão voltar.'
+          : error instanceof Error
+            ? error.message
+            : 'Não foi possível abrir a comanda'
+      ),
   })
 
   if (isLoading) {
