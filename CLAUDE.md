@@ -304,15 +304,25 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 
 ## Marketplaces (iFood, 99Food)
 
-`apps/api/src/modules/marketplaces/` (detalhes em `docs/marketplaces-ifood-99food.md`). Porta comum
-`MarketplaceProvider`; iFood pela Merchant API, 99Food pelo padrão Open Delivery (`OpenDeliveryMarketplaceProvider`,
-serve para outras plataformas do padrão). Desligado por padrão: `IFOOD_ENABLED`/`FOOD99_ENABLED=true` + credenciais
-(faltando, o log avisa e a plataforma fica de fora). Polling a cada 30 s na fila `marketplace-polling` (ou webhook
-`POST /webhooks/marketplaces/:platform`); `marketplace_events` evita evento repetido e `marketplace_orders` liga o
-pedido da plataforma ao do painel. Pedido entra com o **preço da plataforma**, `channel` = `ifood`/`99food`,
-`orders.code` = número da plataforma (selo `MarketplaceBadge` no painel e na cozinha), aceite automático
-(`MARKETPLACE_AUTO_CONFIRM`). Entregador da plataforma: fora de Entregas e sem taxa no total. Mudança de status no
-painel volta para a plataforma pelo `onStatusChanged` do `UpdateOrderStatusUseCase`; cancelado lá cancela aqui sem eco.
+`apps/api/src/modules/marketplaces/` (detalhes em `docs/marketplaces-ifood-99food.md`; regras do iFood em
+`docs/integracoes/ifood.md`; 99Food em `docs/integracoes/99food.md`, com a base completa só nos arquivos privados do
+projeto porque a doc da 99Food é confidencial e este repositório é público: nada dela entra aqui). Porta comum
+`MarketplaceProvider`; iFood pela Merchant API (polling 30 s, até 100 lojas por chamada), 99Food pelo Open Delivery
+(`OpenDeliveryMarketplaceProvider`, serve para outras plataformas do padrão). Desligado por padrão: `IFOOD_ENABLED`/`FOOD99_ENABLED=true` + credenciais (faltando, o log avisa e a
+plataforma fica de fora). `marketplace_events` evita evento repetido, `marketplace_orders` liga o pedido da plataforma
+ao do painel. Pedido entra com o **preço da plataforma**, `channel` = `ifood`/`99food`, `orders.code` = número da
+plataforma (selo `MarketplaceBadge`), aceite automático (`MARKETPLACE_AUTO_CONFIRM`); 404 no pedido novo tenta de novo
+por 10 min. Observação traz cupons com quem paga, bandeira, troco, CPF e mesa. Entregador da
+plataforma: fora de Entregas e sem taxa no total. Status do painel volta pelo `onStatusChanged` (`actionsToSend`: aceite
+antes de tudo, "pronto" antes de "saiu"; retirada concluída = `pickedUp`); cancelado lá cancela aqui sem eco.
+**Cancelar na plataforma** (`POST /marketplaces/orders/:id/cancel`, motivos de `…/cancellation-reasons`): o pedido
+fica aberto até a plataforma confirmar; recusa (CARF) anota e toca alerta; o "Cancelar pedido" comum some nesses
+pedidos. **Negociações** (iFood HSD/HSS) em `marketplace_disputes`
+(migration `0060`), alerta `marketplace:dispute_opened`, quadro no detalhe do pedido (`MarketplaceOrderCard`) com
+prazo e Aceitar/Recusar/Fazer proposta (`POST /marketplaces/disputes/:id/respond`). **Financeiro → Marketplaces**
+(`GET /marketplaces/financial/sales|settlements`, `finance:read`; iFood Financial v3, períodos quebrados no
+máximo de cada plataforma, CSV). **Relatórios → Avaliações iFood** (Review v2, responder exige `reports:write`, 10 a
+300 caracteres, link da política do iFood na tela).
 
 ## Permissões (painel = API)
 

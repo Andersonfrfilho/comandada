@@ -9,6 +9,8 @@ type Environment = Record<string, string | undefined>
 export interface MarketplaceConnection {
   provider: MarketplaceProvider
   establishmentId: string
+  /** Lojas na plataforma (merchantId do iFood, id da loja nas outras), para financeiro e avaliações. */
+  merchantIds: string[]
 }
 
 export interface MarketplaceSetup {
@@ -53,6 +55,7 @@ export function readMarketplaceSetup(
     else
       connections.set('ifood', {
         establishmentId: environment['IFOOD_ESTABLISHMENT_ID']!.trim(),
+        merchantIds,
         provider: new IfoodMarketplaceProvider(
           {
             clientId: environment['IFOOD_CLIENT_ID']!.trim(),
@@ -73,6 +76,7 @@ export function readMarketplaceSetup(
     else
       connections.set('99food', {
         establishmentId: environment['FOOD99_ESTABLISHMENT_ID']!.trim(),
+        merchantIds,
         provider: new OpenDeliveryMarketplaceProvider(
           {
             platform: '99food',

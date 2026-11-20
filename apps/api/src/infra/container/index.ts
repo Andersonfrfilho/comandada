@@ -256,6 +256,7 @@ import type { QueueWorkerDependencies } from '@/infra/queue/startQueueWorkers'
 import { MarketplaceOrderService } from '@/modules/marketplaces/application/MarketplaceOrderService'
 import { readMarketplaceSetup } from '@/modules/marketplaces/infra/marketplaceConfig'
 import { MarketplaceWebhookController } from '@/modules/marketplaces/infra/http/MarketplaceWebhookController'
+import { MarketplacePanelController } from '@/modules/marketplaces/infra/http/MarketplacePanelController'
 
 export interface AppContainer {
   cache: RedisProvider
@@ -289,6 +290,7 @@ export interface AppContainer {
   whatsAppInboundController: WhatsAppInboundController
   paymentController: PaymentController
   marketplaceWebhookController: MarketplaceWebhookController
+  marketplacePanelController: MarketplacePanelController
   expireStaleCharges: ExpireStaleChargesUseCase
   previewInboundController: PreviewInboundController
   previewMediaController: PreviewMediaController
@@ -422,9 +424,11 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     marketplaceSetup.connections,
     createOrderUseCase,
     () => updateOrderStatusUseCase,
-    { autoConfirm: marketplaceSetup.autoConfirm }
+    { autoConfirm: marketplaceSetup.autoConfirm },
+    wsHub
   )
   const marketplaceWebhookController = new MarketplaceWebhookController(marketplaceOrders)
+  const marketplacePanelController = new MarketplacePanelController(marketplaceOrders)
   const updateOrderNotesUseCase = new UpdateOrderNotesUseCase(db)
   const getOrderUseCase = new GetOrderUseCase(db)
   const getOrderRouteUseCase = new GetOrderRouteUseCase(
@@ -848,6 +852,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     whatsAppInboundController,
     paymentController,
     marketplaceWebhookController,
+    marketplacePanelController,
     expireStaleCharges,
     previewInboundController,
     previewMediaController,

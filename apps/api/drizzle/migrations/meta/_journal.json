@@ -414,6 +414,13 @@
       "when": 1786038600000,
       "tag": "0059_marketplace_orders",
       "breakpoints": true
+    },
+    {
+      "idx": 59,
+      "version": "7",
+      "when": 1786039200000,
+      "tag": "0060_marketplace_disputes",
+      "breakpoints": true
     }
   ]
 }

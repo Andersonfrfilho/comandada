@@ -41,13 +41,15 @@ interface OrderStatusControlProps {
   orderId: string
   orderType: string
   status: OrderStatus
+  /** Pedido de iFood/99Food: o cancelamento sai pelo quadro da plataforma (com o motivo que ela aceita). */
+  platformCancelLabel?: string | null
 }
 
 /**
  * Avançar para o próximo passo com um toque; os outros status viram botões separados por tipo
  * (pular, voltar, reabrir, cancelar), com confirmação e motivo quando não é o caminho natural.
  */
-export function OrderStatusControl({ orderId, orderType, status }: OrderStatusControlProps) {
+export function OrderStatusControl({ orderId, orderType, status, platformCancelLabel }: OrderStatusControlProps) {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
   const [target, setTarget] = useState<OrderStatus | null>(null)
@@ -160,7 +162,12 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
         {renderGroup('skip', choices.skip)}
         {renderGroup('back', choices.back)}
         {renderGroup('reopen', choices.reopen)}
-        {choices.canCancel && (
+        {choices.canCancel && platformCancelLabel && (
+          <p className="border-t border-gray-200 pt-2.5 text-xs text-gray-500">
+            Para cancelar, use "Cancelar no {platformCancelLabel}" no quadro da plataforma: o pedido fecha quando ela confirmar.
+          </p>
+        )}
+        {choices.canCancel && !platformCancelLabel && (
           <div className="border-t border-gray-200 pt-2.5">
             <button
               type="button"

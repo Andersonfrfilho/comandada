@@ -8,12 +8,16 @@ import { Pool } from 'pg'
 import * as schema from '@/infra/database/schema'
 import { CreateOrderUseCase } from '@/modules/orders/application/use-cases/CreateOrderUseCase'
 import { UpdateOrderStatusUseCase } from '@/modules/orders/application/use-cases/UpdateOrderStatusUseCase'
-import type {
-  MarketplaceAction,
-  MarketplaceEvent,
-  MarketplaceOrder,
-  MarketplacePlatform,
-  MarketplaceProvider,
+import {
+  MarketplaceApiError,
+  type MarketplaceAction,
+  type MarketplaceDispute,
+  type MarketplaceDisputeResponse,
+  type MarketplaceEvent,
+  type MarketplaceOrder,
+  type MarketplaceOrderContext,
+  type MarketplacePlatform,
+  type MarketplaceProvider,
 } from '../domain/Marketplace'
 import type { MarketplaceConnection } from '../infra/marketplaceConfig'
 import { MarketplaceOrderService } from './MarketplaceOrderService'
@@ -25,11 +29,14 @@ const silentHub = { publishBroadcast: async () => undefined } as never
 class FakeProvider implements MarketplaceProvider {
   readonly platform: MarketplacePlatform = 'ifood'
   actions: Array<[string, MarketplaceAction]> = []
-  cancellations: Array<[string, string]> = []
+  cancellations: Array<[string, string, string | undefined]> = []
+  responses: Array<[string, MarketplaceDisputeResponse]> = []
+  contexts: MarketplaceOrderContext[] = []
   queue: MarketplaceEvent[] = []
   acknowledged: string[] = []
   orderFetches = 0
   failOrder = false
+  notFound = false
   constructor(private readonly order: MarketplaceOrder) {}
   async pollEvents() {
     const events = this.queue
@@ -42,13 +49,37 @@ class FakeProvider implements MarketplaceProvider {
   async getOrder() {
     this.orderFetches += 1
     if (this.failOrder) throw new Error('fora do ar')
+    if (this.notFound) throw new MarketplaceApiError('ifood', 'getOrder', 404, '')
     return this.order
   }
-  async sendAction(externalId: string, action: MarketplaceAction) {
+  async sendAction(externalId: string, action: MarketplaceAction, context?: MarketplaceOrderContext) {
     this.actions.push([externalId, action])
+    if (context) this.contexts.push(context)
   }
-  async requestCancellation(externalId: string, reason: string) {
-    this.cancellations.push([externalId, reason])
+  async cancellationReasons() {
+    return [{ code: '503', description: 'ITEM INDISPONIVEL' }]
+  }
+  async requestCancellation(externalId: string, cancellation: { code?: string | undefined; reason: string }) {
+    this.cancellations.push([externalId, cancellation.reason, cancellation.code])
+  }
+  parseDispute(event: MarketplaceEvent): MarketplaceDispute | null {
+    const disputeId = event.metadata?.['disputeId']
+    if (typeof disputeId !== 'string') return null
+    return {
+      externalId: disputeId,
+      orderExternalId: event.orderId,
+      kind: 'refund',
+      message: 'Veio frio',
+      expiresAt: new Date(Date.now() + 5 * 60_000).toISOString(),
+      alternatives: [{ id: 'alt-1', type: 'refund', maxAmount: 20 }],
+    }
+  }
+  parseDisputeSettlement(event: MarketplaceEvent) {
+    const disputeId = event.metadata?.['disputeId']
+    return typeof disputeId === 'string' ? { disputeExternalId: disputeId, status: 'accepted' } : null
+  }
+  async respondDispute(dispute: MarketplaceDispute, response: MarketplaceDisputeResponse) {
+    this.responses.push([dispute.externalId, response])
   }
   verifyWebhook() {
     return true
@@ -84,7 +115,7 @@ describe.skipIf(!DATABASE_URL)('Pedidos de marketplace (Postgres)', () => {
   let db: NodePgDatabase<typeof schema>
   let establishmentId: string
 
-  const build = (provider: FakeProvider, autoConfirm = true) => {
+  const build = (provider: FakeProvider, autoConfirm = true, now?: () => Date) => {
     const createOrder = new CreateOrderUseCase(db, silentHub)
     let service: MarketplaceOrderService | undefined
     const updateStatus = new UpdateOrderStatusUseCase(
@@ -98,9 +129,11 @@ describe.skipIf(!DATABASE_URL)('Pedidos de marketplace (Postgres)', () => {
       undefined,
       async (order, newStatus) => service?.onOrderStatusChanged(order, newStatus)
     )
-    const connections = new Map<MarketplacePlatform, MarketplaceConnection>([['ifood', { provider, establishmentId }]])
-    service = new MarketplaceOrderService(db, connections, createOrder, () => updateStatus, { autoConfirm })
-    return { service, updateStatus }
+    const connections = new Map<MarketplacePlatform, MarketplaceConnection>([['ifood', { provider, establishmentId, merchantIds: ['m1'] }]])
+    const alerts: Array<[string, unknown]> = []
+    const hub = { publishBroadcast: async (_establishment: string, type: string, payload?: unknown) => void alerts.push([type, payload]) }
+    service = new MarketplaceOrderService(db, connections, createOrder, () => updateStatus, { autoConfirm }, hub, now)
+    return { service, updateStatus, alerts }
   }
 
   // O aviso para a plataforma roda sem esperar a mudança de status.
@@ -191,7 +224,7 @@ describe.skipIf(!DATABASE_URL)('Pedidos de marketplace (Postgres)', () => {
     const orderId = await service.importOrder('ifood', 'ifood-order-1')
     await updateStatus.execute({ orderId, establishmentId, newStatus: 'cancelled', cancellationReason: 'Acabou o salmão' })
     await settle()
-    expect(provider.cancellations).toEqual([['ifood-order-1', 'Acabou o salmão']])
+    expect(provider.cancellations).toEqual([['ifood-order-1', 'Acabou o salmão', undefined]])
 
     // Segundo pedido: cancelado pelo cliente no iFood.
     const second = new FakeProvider(marketplaceOrder({ externalId: 'ifood-order-2', displayId: '9000' }))
@@ -203,5 +236,88 @@ describe.skipIf(!DATABASE_URL)('Pedidos de marketplace (Postgres)', () => {
     expect(cancelled!.status).toBe('cancelled')
     expect(cancelled!.cancellationReason).toBe('Cancelado no iFood')
     expect(second.cancellations).toEqual([])
+  })
+
+  it('entrega própria: "saiu" manda pronto antes, com o entregador', async () => {
+    const provider = new FakeProvider(marketplaceOrder({ deliveredBy: 'merchant' }))
+    const { service, updateStatus } = build(provider)
+    const orderId = await service.importOrder('ifood', 'ifood-order-1')
+    await updateStatus.execute({ orderId, establishmentId, newStatus: 'in_delivery', manual: true })
+    await settle()
+    expect(provider.actions.map(([, action]) => action)).toEqual(['confirm', 'readyForPickup', 'dispatch'])
+    expect(provider.contexts.at(-1)?.courier?.name).toBe('Yuyake')
+  })
+
+  it('pedido ainda não liberado (404) tenta de novo e desiste depois de 10 min', async () => {
+    const provider = new FakeProvider(marketplaceOrder())
+    provider.notFound = true
+    const recent = { ...placed('e1'), createdAt: new Date().toISOString() }
+    const { service } = build(provider)
+    expect(await service.handleEvents('ifood', [recent])).toEqual([])
+    const old = { ...placed('e2'), createdAt: new Date(Date.now() - 11 * 60_000).toISOString() }
+    expect((await service.handleEvents('ifood', [old])).map((event) => event.id)).toEqual(['e2'])
+    expect(await db.select().from(schema.orders)).toHaveLength(0)
+  })
+
+  it('cancelar pela plataforma com motivo: pedido segue aberto até ela confirmar; recusa avisa o painel', async () => {
+    const provider = new FakeProvider(marketplaceOrder())
+    const { service, alerts } = build(provider)
+    const orderId = await service.importOrder('ifood', 'ifood-order-1')
+    expect(await service.cancellationReasons(establishmentId, orderId)).toHaveLength(1)
+    await service.cancelOnPlatform(establishmentId, orderId, { code: '503', reason: 'Acabou o salmão' })
+    expect(provider.cancellations).toEqual([['ifood-order-1', 'Acabou o salmão', '503']])
+    let order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) })
+    expect(order!.status).not.toBe('cancelled')
+    expect((await service.orderView(establishmentId, orderId))!.platformStatus).toBe('cancellation_requested')
+
+    await service.handleEvents('ifood', [
+      { id: 'f1', code: 'CARF', kind: 'cancellation_failed', orderId: 'ifood-order-1', metadata: { reason: 'Pedido já saiu' } },
+    ])
+    order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) })
+    expect(order!.notes).toContain('recusou o cancelamento: Pedido já saiu')
+    expect(alerts.map(([type]) => type)).toContain('marketplace:cancellation_failed')
+    expect((await service.orderView(establishmentId, orderId))!.platformStatus).toBe('confirmed')
+
+    // Outro restaurante não vê nem cancela.
+    await expect(service.cancellationReasons('00000000-0000-0000-0000-000000000000', orderId)).rejects.toThrow()
+  })
+
+  it('negociação aberta fica no painel, é respondida uma vez e fecha com o evento da plataforma', async () => {
+    const provider = new FakeProvider(marketplaceOrder())
+    const { service, alerts } = build(provider)
+    const orderId = await service.importOrder('ifood', 'ifood-order-1')
+    const opened = { id: 'd1', code: 'HSD', kind: 'dispute_opened' as const, orderId: 'ifood-order-1', metadata: { disputeId: 'disp-1' } }
+    await service.handleEvents('ifood', [opened])
+    await service.handleEvents('ifood', [{ ...opened, id: 'd1-again' }])
+
+    const open = await service.listDisputes(establishmentId, { openOnly: true })
+    expect(open).toHaveLength(1)
+    expect(open[0]!.orderId).toBe(orderId)
+    expect(alerts.filter(([type]) => type === 'marketplace:dispute_opened')).toHaveLength(1)
+
+    await expect(
+      service.respondDispute(establishmentId, open[0]!.id, { decision: 'alternative', alternativeId: 'nao-existe' }, undefined)
+    ).rejects.toThrow()
+    const answered = await service.respondDispute(establishmentId, open[0]!.id, { decision: 'alternative', alternativeId: 'alt-1', amount: 10 }, undefined)
+    expect(answered.status).toBe('responded')
+    expect(provider.responses).toEqual([['disp-1', { decision: 'alternative', alternativeId: 'alt-1', amount: 10 }]])
+    await expect(service.respondDispute(establishmentId, open[0]!.id, { decision: 'accept' }, undefined)).rejects.toThrow()
+
+    await service.handleEvents('ifood', [{ id: 's1', code: 'HSS', kind: 'dispute_settled', orderId: 'ifood-order-1', metadata: { disputeId: 'disp-1' } }])
+    const [settled] = await service.listDisputes(establishmentId)
+    expect(settled!.status).toBe('accepted')
+    const order = await db.query.orders.findFirst({ where: eq(schema.orders.id, orderId) })
+    expect(order!.notes).toContain('cliente abriu negociação (reembolso)')
+    expect(order!.notes).toContain('encerrada: aceita')
+  })
+
+  it('negociação sem resposta depois do prazo aparece como vencida', async () => {
+    const provider = new FakeProvider(marketplaceOrder())
+    const later = () => new Date(Date.now() + 10 * 60_000)
+    const { service } = build(provider, true, later)
+    await service.importOrder('ifood', 'ifood-order-1')
+    await service.handleEvents('ifood', [{ id: 'd1', code: 'HSD', kind: 'dispute_opened', orderId: 'ifood-order-1', metadata: { disputeId: 'disp-1' } }])
+    expect(await service.listDisputes(establishmentId, { openOnly: true })).toEqual([])
+    expect((await service.listDisputes(establishmentId))[0]!.status).toBe('expired')
   })
 })

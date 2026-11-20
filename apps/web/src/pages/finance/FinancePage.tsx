@@ -12,6 +12,8 @@ import { Pagination } from '@/components/ui/Pagination'
 import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
 import { formatPercent, matchesSearch, paginateRows, sortRows, toggleSort, type SortDirection, type SortState } from '@/lib/listing'
 import { Banknote, Plus, ChevronLeft, ChevronRight, CheckCircle, XCircle, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react'
+import { MarketplaceFinanceTab } from './MarketplaceFinanceTab'
+import type { MarketplaceOverview } from '@/lib/marketplaces'
 
 interface MonthlyAccount {
   id: string
@@ -137,7 +139,7 @@ const MONTHS = [
   'Setembro', 'Outubro', 'Novembro', 'Dezembro',
 ]
 
-type Tab = 'fixed' | 'variable' | 'report'
+type Tab = 'fixed' | 'variable' | 'report' | 'marketplaces'
 
 const EXPENSES_PAGE_SIZE = 20
 
@@ -179,6 +181,14 @@ export function FinancePage() {
   const { upload, uploading: receiptUploading } = useUpload()
 
   const [activeTab, setActiveTab] = useState<Tab>('fixed')
+  // Aba das plataformas só aparece com iFood/99Food ligados e com API financeira.
+  const { data: marketplaceOverview } = useQuery({
+    queryKey: ['marketplaces-overview'],
+    queryFn: () => api.get<MarketplaceOverview>('/marketplaces', accessToken ?? undefined),
+    staleTime: 10 * 60_000,
+    retry: false,
+  })
+  const marketplaceFinancePlatforms = (marketplaceOverview?.platforms ?? []).filter((item) => item.financial).map((item) => item.platform)
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear())
 
@@ -554,7 +564,8 @@ export function FinancePage() {
           { key: 'fixed' as const, label: 'Contas Fixas', icon: Banknote },
           { key: 'variable' as const, label: 'Gastos Avulsos' },
           { key: 'report' as const, label: 'Parecer' },
-        ]).map((tab) => {
+          ...(marketplaceFinancePlatforms.length > 0 ? [{ key: 'marketplaces' as const, label: 'Marketplaces' }] : []),
+        ] as Array<{ key: Tab; label: string; icon?: typeof Banknote }>).map((tab) => {
           const Icon = tab.icon
           return (
             <button
@@ -573,6 +584,8 @@ export function FinancePage() {
           )
         })}
       </div>
+
+      {activeTab === 'marketplaces' && <MarketplaceFinanceTab platforms={marketplaceFinancePlatforms} />}
 
       {/* ===== CONTAS FIXAS TAB ===== */}
       {activeTab === 'fixed' && (

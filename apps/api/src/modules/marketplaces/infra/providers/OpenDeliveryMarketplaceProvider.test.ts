@@ -43,7 +43,7 @@ describe('OpenDeliveryMarketplaceProvider (99Food)', () => {
     const provider = new OpenDeliveryMarketplaceProvider({ ...config, tokenUrl: 'https://auth.99food.test/token' }, fetchFunction)
     await provider.sendAction('o1', 'startPreparation')
     await provider.sendAction('o1', 'delivered')
-    await provider.requestCancellation('o1', 'Item acabou')
+    await provider.requestCancellation('o1', { reason: 'Item acabou' })
     expect(calls[0]!.url).toBe('https://auth.99food.test/token')
     expect(calls.slice(1).map((call) => call.url.replace('https://api.99food.test/opendelivery', ''))).toEqual([
       '/v1/orders/o1/preparing',

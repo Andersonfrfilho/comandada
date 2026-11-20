@@ -150,7 +150,7 @@ export async function createServer() {
   registerBotRoutes(router, container.botController)
   registerReminderRoutes(router, container.reminderController)
   registerPaymentRoutes(router, container.paymentController)
-  registerMarketplaceRoutes(router, container.marketplaceWebhookController)
+  registerMarketplaceRoutes(router, container.marketplaceWebhookController, container.marketplacePanelController)
   registerOrderIssueRoutes(router, container.orderIssueController)
   registerAgendaRoutes(router, container.agendaController)
 

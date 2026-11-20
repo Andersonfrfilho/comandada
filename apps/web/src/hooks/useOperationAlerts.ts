@@ -79,6 +79,22 @@ export function useOperationAlerts(): void {
       return
     }
 
+    // iFood/99Food: cliente abriu negociação (prazo curto) ou a plataforma recusou o cancelamento.
+    if ((message.type === 'marketplace:dispute_opened' || message.type === 'marketplace:cancellation_failed') && watchesOrders) {
+      const platform = String(payloadField(message.payload, 'platform') ?? '')
+      const platformLabel = platform === 'ifood' ? 'iFood' : platform === '99food' ? '99Food' : 'Marketplace'
+      const displayId = payloadField(message.payload, 'displayId')
+      const order = displayId ? ` #${String(displayId)}` : ''
+      const label =
+        message.type === 'marketplace:dispute_opened'
+          ? `${platformLabel}${order}: cliente pediu resposta`
+          : `${platformLabel}${order}: cancelamento recusado`
+      playAlertSound()
+      toast.error(label)
+      notifyBrowser(label, 'Abra o pedido para responder.')
+      return
+    }
+
     if (message.type === 'conversation:handoff-requested' && watchesConversations) {
       const phone = String(payloadField(message.payload, 'whatsappNumber') ?? '')
       const label = 'Cliente pediu atendente'

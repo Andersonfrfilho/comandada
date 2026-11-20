@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from 'crypto'
 import type {
   MarketplaceAction,
+  MarketplaceCancellationReason,
   MarketplaceEvent,
   MarketplaceEventKind,
   MarketplaceOrder,
@@ -46,7 +47,7 @@ const PAYMENT_LABELS: Record<string, string> = {
   OTHER: 'Outro',
 }
 
-const ACTION_PATHS: Record<MarketplaceAction, string> = {
+const ACTION_PATHS: Partial<Record<MarketplaceAction, string>> = {
   confirm: 'confirm',
   startPreparation: 'preparing',
   readyForPickup: 'readyForPickup',
@@ -64,6 +65,17 @@ const CANCELLATION_CODES: Array<[RegExp, string]> = [
   [/card[aá]pio|pre[cç]o/i, 'OUTDATED_MENU'],
 ]
 const DEFAULT_CANCELLATION_CODE = 'INTERNAL_DIFFICULTIES_OF_THE_RESTAURANT'
+
+const CANCELLATION_REASONS: MarketplaceCancellationReason[] = [
+  { code: 'UNAVAILABLE_ITEM', description: 'Item indisponível' },
+  { code: 'OUTSIDE_DELIVERY_HOURS', description: 'Fora do horário de atendimento' },
+  { code: 'RESTAURANT_WITHOUT_DELIVERY_MAN', description: 'Sem entregador' },
+  { code: 'ORDER_OUTSIDE_THE_DELIVERY_AREA', description: 'Fora da área de entrega' },
+  { code: 'DUPLICATE_APPLICATION', description: 'Pedido em duplicidade' },
+  { code: 'OUTDATED_MENU', description: 'Cardápio desatualizado' },
+  { code: 'SYSTEMIC_ISSUES', description: 'Problemas de sistema' },
+  { code: 'INTERNAL_DIFFICULTIES_OF_THE_RESTAURANT', description: 'Dificuldades internas do restaurante' },
+]
 
 export function openDeliveryCancellationCode(reason: string): string {
   return CANCELLATION_CODES.find(([pattern]) => pattern.test(reason))?.[1] ?? DEFAULT_CANCELLATION_CODE
@@ -193,18 +205,36 @@ export class OpenDeliveryMarketplaceProvider implements MarketplaceProvider {
 
   async sendAction(externalId: string, action: MarketplaceAction): Promise<void> {
     const path = ACTION_PATHS[action]
+    if (!path) return
     const body = action === 'confirm' ? { createdAt: new Date().toISOString() } : {}
     const response = await this.postJson(`/v1/orders/${encodeURIComponent(externalId)}/${path}`, body)
     await ensureOk(response, this.platform, path)
   }
 
-  async requestCancellation(externalId: string, reason: string): Promise<void> {
+  async cancellationReasons(): Promise<MarketplaceCancellationReason[]> {
+    return CANCELLATION_REASONS
+  }
+
+  async requestCancellation(externalId: string, cancellation: { code?: string | undefined; reason: string }): Promise<void> {
     const response = await this.postJson(`/v1/orders/${encodeURIComponent(externalId)}/requestCancellation`, {
-      reason: reason.slice(0, 250),
-      code: openDeliveryCancellationCode(reason),
+      reason: cancellation.reason.slice(0, 250),
+      code: cancellation.code ?? openDeliveryCancellationCode(cancellation.reason),
       mode: 'MANUAL',
     })
     await ensureOk(response, this.platform, 'requestCancellation')
+  }
+
+  /** O padrão não tem negociação com contraproposta; pedidos de cancelamento do cliente ficam no log. */
+  parseDispute(): null {
+    return null
+  }
+
+  parseDisputeSettlement(): null {
+    return null
+  }
+
+  async respondDispute(): Promise<void> {
+    throw new Error('Negociação não disponível nesta plataforma')
   }
 
   /**
@@ -222,7 +252,7 @@ export class OpenDeliveryMarketplaceProvider implements MarketplaceProvider {
     })
   }
 
-  parseWebhook(body: unknown): MarketplaceEvent[] {
+  parseWebhook(_rawBody: Buffer, body: unknown): MarketplaceEvent[] {
     const list = Array.isArray(body) ? body : [body]
     return list.filter(isOpenDeliveryEvent).map(toEvent)
   }
