@@ -128,6 +128,73 @@ export function IngredientManager() {
 
   const isPending = createIngredient.isPending || updateIngredient.isPending
 
+  // A barra do catálogo tem 224 px: campos empilhados, cada um com `min-w-0` (input numérico tem
+  // largura mínima própria e estourava a coluna) e os botões numa linha só embaixo.
+  function renderForm(submitLabel: string) {
+    const fieldClass =
+      'w-full min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500'
+    return (
+      <div className="bg-gray-50 rounded-lg p-3 border border-brand-200 space-y-2">
+        <input
+          type="text"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+          placeholder="Nome do ingrediente"
+          aria-label="Nome do ingrediente"
+          className={fieldClass}
+        />
+        <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
+          <select
+            value={formUnit}
+            onChange={(e) => setFormUnit(e.target.value)}
+            aria-label="Unidade"
+            className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+          >
+            {Object.entries(UNIT_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
+          <input
+            type="number"
+            min="0"
+            step="0.0001"
+            value={formCost}
+            onChange={(e) => setFormCost(e.target.value)}
+            placeholder="Custo/un"
+            aria-label="Custo por unidade"
+            className={fieldClass}
+          />
+        </div>
+        <input
+          type="number"
+          min="0"
+          step="0.0001"
+          value={formMinStock}
+          onChange={(e) => setFormMinStock(e.target.value)}
+          placeholder="Estoque mínimo"
+          aria-label="Estoque mínimo"
+          className={fieldClass}
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={submit}
+            disabled={isPending}
+            className="flex-1 px-2 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+          >
+            {submitLabel}
+          </button>
+          <button
+            onClick={resetForm}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
+          >
+            Cancelar
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
+    )
+  }
+
   return (
     <div className="border-t border-gray-200 pt-4 mt-4">
       <div className="flex items-center justify-between mb-3">
@@ -150,66 +217,7 @@ export function IngredientManager() {
       <div className="space-y-2">
         {ingredients.map((ingredient) =>
           editingId === ingredient.id ? (
-            <div key={ingredient.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-2">
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Nome"
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <div className="flex gap-2">
-                    <select
-                      value={formUnit}
-                      onChange={(e) => setFormUnit(e.target.value)}
-                      className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    >
-                      <option value="un">Un</option>
-                      <option value="kg">Kg</option>
-                      <option value="g">g</option>
-                      <option value="l">L</option>
-                      <option value="ml">ml</option>
-                    </select>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      value={formCost}
-                      onChange={(e) => setFormCost(e.target.value)}
-                      placeholder="Custo/un"
-                      className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.0001"
-                      value={formMinStock}
-                      onChange={(e) => setFormMinStock(e.target.value)}
-                      placeholder="Est. mínimo"
-                      className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                    />
-                  </div>
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={submit}
-                    disabled={isPending}
-                    className="px-2 py-1 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
-                  >
-                    Salvar
-                  </button>
-                  <button
-                    onClick={resetForm}
-                    className="px-2 py-1 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-              {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-            </div>
+            <div key={ingredient.id}>{renderForm('Salvar')}</div>
           ) : (
             <div key={ingredient.id} className="bg-white rounded-lg border border-gray-200 group">
               <div className="px-3 py-2">
@@ -243,7 +251,7 @@ export function IngredientManager() {
                     </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2 mt-1 pl-5">
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-1 pl-5">
                   <span className="text-xs text-gray-500">
                     {formatUnitCost(toNumber(ingredient.costPerUnit), ingredient.unit)}
                   </span>
@@ -251,7 +259,7 @@ export function IngredientManager() {
                     {formatDecimal(toNumber(ingredient.stockQuantity), 2)}
                   </span>
                   {ingredient.minimumStock && (
-                    <span className="text-xs text-gray-400">mín. {formatDecimal(toNumber(ingredient.minimumStock), 2)}</span>
+                    <span className="text-xs text-gray-400 whitespace-nowrap">mín. {formatDecimal(toNumber(ingredient.minimumStock), 2)}</span>
                   )}
                 </div>
               </div>
@@ -268,68 +276,7 @@ export function IngredientManager() {
           )
         )}
 
-        {adding && (
-          <div className="bg-gray-50 rounded-lg p-3 border border-brand-200">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 space-y-2">
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Nome do ingrediente"
-                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-                <div className="flex gap-2">
-                  <select
-                    value={formUnit}
-                    onChange={(e) => setFormUnit(e.target.value)}
-                    className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  >
-                    <option value="un">Un</option>
-                    <option value="kg">Kg</option>
-                    <option value="g">g</option>
-                    <option value="l">L</option>
-                    <option value="ml">ml</option>
-                  </select>
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={formCost}
-                    onChange={(e) => setFormCost(e.target.value)}
-                    placeholder="Custo/un"
-                    className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <input
-                    type="number"
-                    min="0"
-                    step="0.0001"
-                    value={formMinStock}
-                    onChange={(e) => setFormMinStock(e.target.value)}
-                    placeholder="Est. mínimo"
-                    className="flex-1 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={submit}
-                  disabled={isPending}
-                  className="px-2 py-1 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
-                >
-                  Criar
-                </button>
-                <button
-                  onClick={resetForm}
-                  className="px-2 py-1 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-            {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-          </div>
-        )}
+        {adding && renderForm('Criar')}
       </div>
     </div>
   )

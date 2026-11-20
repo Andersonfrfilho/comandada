@@ -88,6 +88,47 @@ export function SectionManager() {
 
   const isPending = createSection.isPending || updateSection.isPending
 
+  // Mesma barra estreita do catálogo: campos empilhados e botões numa linha embaixo, sem nada
+  // disputando a largura com os campos.
+  function renderForm(submitLabel: string) {
+    return (
+      <div className="bg-gray-50 rounded-lg p-3 border border-brand-200 space-y-2">
+        <input
+          type="text"
+          value={formName}
+          onChange={(e) => setFormName(e.target.value)}
+          placeholder="Nome da seção"
+          aria-label="Nome da seção"
+          className="w-full min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <input
+          type="text"
+          value={formDescription}
+          onChange={(e) => setFormDescription(e.target.value)}
+          placeholder="Descrição (opcional)"
+          aria-label="Descrição da seção"
+          className="w-full min-w-0 border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
+        />
+        <div className="flex gap-2">
+          <button
+            onClick={submit}
+            disabled={isPending}
+            className="flex-1 px-2 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
+          >
+            {submitLabel}
+          </button>
+          <button
+            onClick={resetForm}
+            className="flex-1 px-2 py-1.5 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
+          >
+            Cancelar
+          </button>
+        </div>
+        {error && <p className="text-xs text-red-600">{error}</p>}
+      </div>
+    )
+  }
+
   return (
     <div className="border-t border-gray-200 pt-4 mt-4">
       <div className="flex items-center justify-between mb-3">
@@ -110,54 +151,19 @@ export function SectionManager() {
       <div className="space-y-2">
         {sections.map((section) =>
           editingId === section.id ? (
-            <div key={section.id} className="bg-gray-50 rounded-lg p-3 border border-gray-200">
-              <div className="flex gap-2 items-end">
-                <div className="flex-1 space-y-2">
-                  <input
-                    type="text"
-                    value={formName}
-                    onChange={(e) => setFormName(e.target.value)}
-                    placeholder="Nome da seção"
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                  <input
-                    type="text"
-                    value={formDescription}
-                    onChange={(e) => setFormDescription(e.target.value)}
-                    placeholder="Descrição (opcional)"
-                    className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-                  />
-                </div>
-                <div className="flex gap-1 flex-shrink-0">
-                  <button
-                    onClick={submit}
-                    disabled={isPending}
-                    className="px-2 py-1 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
-                  >
-                    Salvar
-                  </button>
-                  <button
-                    onClick={resetForm}
-                    className="px-2 py-1 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
-                  >
-                    Cancelar
-                  </button>
-                </div>
-              </div>
-              {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-            </div>
+            <div key={section.id}>{renderForm('Salvar')}</div>
           ) : (
             <div
               key={section.id}
               className="bg-white rounded-lg border border-gray-200 px-3 py-2 flex items-center justify-between group"
             >
               <div className="min-w-0">
-                <span className="text-sm font-medium text-gray-800">{section.name}</span>
+                <p className="text-sm font-medium text-gray-800 truncate">{section.name}</p>
                 {section.description && (
-                  <span className="ml-2 text-xs text-gray-400 truncate">{section.description}</span>
+                  <p className="text-xs text-gray-400 truncate">{section.description}</p>
                 )}
               </div>
-              <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+              <div className="flex gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
                 <button
                   onClick={() => startEdit(section)}
                   className="p-1 text-gray-400 hover:text-brand-600"
@@ -177,44 +183,7 @@ export function SectionManager() {
           )
         )}
 
-        {adding && (
-          <div className="bg-gray-50 rounded-lg p-3 border border-brand-200">
-            <div className="flex gap-2 items-end">
-              <div className="flex-1 space-y-2">
-                <input
-                  type="text"
-                  value={formName}
-                  onChange={(e) => setFormName(e.target.value)}
-                  placeholder="Nome da seção"
-                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-                <input
-                  type="text"
-                  value={formDescription}
-                  onChange={(e) => setFormDescription(e.target.value)}
-                  placeholder="Descrição (opcional)"
-                  className="w-full border border-gray-300 rounded-lg px-2 py-1 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-                />
-              </div>
-              <div className="flex gap-1 flex-shrink-0">
-                <button
-                  onClick={submit}
-                  disabled={isPending}
-                  className="px-2 py-1 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50"
-                >
-                  Criar
-                </button>
-                <button
-                  onClick={resetForm}
-                  className="px-2 py-1 text-xs font-medium text-gray-500 border border-gray-300 rounded-lg hover:bg-gray-100"
-                >
-                  Cancelar
-                </button>
-              </div>
-            </div>
-            {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
-          </div>
-        )}
+        {adding && renderForm('Criar')}
       </div>
     </div>
   )

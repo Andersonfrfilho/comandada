@@ -1,9 +1,10 @@
 import { useState, useRef, useCallback } from 'react'
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
+import { Link, useNavigate, useParams } from 'react-router-dom'
+import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
-import { Plus, Wand2 } from 'lucide-react'
+import { ChevronRight, Pencil, Plus, Trash2, Wand2 } from 'lucide-react'
 import {
   FISCAL_DEFAULTS,
   FISCAL_FIELD_HINTS,
@@ -20,16 +21,11 @@ import { productImagePath, productImageUrl } from '@/lib/productImage'
 import { ExpiringBatchBadge } from './components/StockBatchList'
 import {
   ProductForm,
-  ProductsProvider,
-  PRODUCT_OPTIONAL_FIELD,
   formatBarcode,
   formatMarginPercent,
   formatMoney,
-  type CreateProductInput,
-  type MoneyFormat,
   type ProductSuggestion,
 } from '@adatechnology/products-ui'
-import { productsApiAdapter } from '@/lib/productsApiAdapter'
 import { FilterSelect, SearchField, FilterField } from '@/components/ui/ListFilters'
 import {
   NO_SECTION,
@@ -39,61 +35,22 @@ import {
   type ProductSort,
   type ProductStatusFilter,
 } from './productListing'
-
-const MONEY_FORMAT: MoneyFormat = { currency: 'BRL', locale: 'pt-BR' }
-
-// Só os campos que existem no schema do Order Hub. `INVENTORY` e `SYNC_STATUS` ficam de fora:
-// estoque vive em `stock_batches` por ingrediente, não por produto, e não há sincronização externa.
-const PRODUCTS_FIELDS = [
-  PRODUCT_OPTIONAL_FIELD.COST_PRICE,
-  PRODUCT_OPTIONAL_FIELD.UNIT,
-  PRODUCT_OPTIONAL_FIELD.BARCODE,
-  PRODUCT_OPTIONAL_FIELD.SECTION,
-  PRODUCT_OPTIONAL_FIELD.PREPARATION_TIME,
-  PRODUCT_OPTIONAL_FIELD.PREPARATION_INSTRUCTIONS,
-  PRODUCT_OPTIONAL_FIELD.SORT_ORDER,
-] as const
-
-// A API valida a unidade com `z.enum` — qualquer opção extra do SDK viraria 400 no salvamento.
-const UNIT_OPTIONS = ['un', 'kg', 'g', 'l', 'ml'] as const
-
-// Margem sobre o preço de venda, que é a definição do SDK e a usada no varejo. Por isso o teto é
-// abaixo de 100%: uma margem de 100% sobre a venda implicaria custo zero.
-const MARGIN_SHORTCUT_PERCENTS = [30, 50, 60] as const
-
-interface Catalog {
-  id: string
-  name: string
-  slug: string
-  active: boolean
-  sortOrder: number
-  ncmCode?: string
-  cfopCode?: string
-  cstIcms?: string
-}
-
-interface Section {
-  id: string
-  name: string
-  description: string | null
-}
-
-interface Product {
-  id: string
-  name: string
-  description: string | null
-  price: string
-  costPrice: string | null
-  unit: string
-  barcode: string | null
-  catalogId: string | null
-  sectionId: string | null
-  preparationTimeMinutes: number | null
-  preparationInstructions: string | null
-  active: boolean
-  sortOrder: number
-  imageVersion: string | null
-}
+import {
+  CATALOG_PATH,
+  CatalogProductsProvider,
+  MONEY_FORMAT,
+  WITHOUT_CATALOG_SLUG,
+  catalogCategoryPath,
+  catalogProductPath,
+  invalidateCatalogQueries,
+  productFormValues,
+  productRequestBody,
+  toCents,
+  useCatalogData,
+  type Catalog,
+  type Product,
+  type ProductFormSubmit,
+} from './catalogShared'
 
 type CatalogFormData = {
   name: string
@@ -105,11 +62,8 @@ type CatalogFormData = {
 
 const EMPTY_CATALOG: CatalogFormData = { name: '', sortOrder: '0', ncmCode: '', cfopCode: '', cstIcms: '' }
 
-// A API guarda o preço como decimal em reais e o SDK formata centavo inteiro. A multiplicação
-// arredondada mora só aqui — ver `productsApiAdapter` para o mesmo contrato do lado das mutações.
-function toCents(value: string | number): number {
-  return Math.round(Number(value) * 100)
-}
+/** Seleção da barra: todos (`null`), sem catálogo ou um catálogo — vem da URL. */
+const WITHOUT_CATALOG = '__none__'
 
 function formatBRL(value: string | number) {
   return formatMoney(toCents(value), MONEY_FORMAT)
@@ -117,18 +71,9 @@ function formatBRL(value: string | number) {
 
 export function CatalogPage() {
   return (
-    <ProductsProvider
-      api={productsApiAdapter}
-      config={{
-        currency: MONEY_FORMAT.currency,
-        locale: MONEY_FORMAT.locale,
-        fields: PRODUCTS_FIELDS,
-        unitOptions: UNIT_OPTIONS,
-        marginShortcutPercents: MARGIN_SHORTCUT_PERCENTS,
-      }}
-    >
+    <CatalogProductsProvider>
       <CatalogPageContent />
-    </ProductsProvider>
+    </CatalogProductsProvider>
   )
 }
 
@@ -136,7 +81,11 @@ function CatalogPageContent() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
 
-  const [selectedCatId, setSelectedCatId] = useState<string | null>(null)
+  const navigate = useNavigate()
+  // A categoria é página: `/catalog/categoria/:catalogId` (ou `sem-catalogo`); `/catalog` é "Todos".
+  const { catalogId: catalogParam } = useParams<{ catalogId?: string }>()
+  const selectedCatId =
+    catalogParam === undefined ? null : catalogParam === WITHOUT_CATALOG_SLUG ? WITHOUT_CATALOG : catalogParam
 
   // Modal de catálogo
   const [catModal, setCatModal] = useState<'create' | 'edit' | 'delete' | null>(null)
@@ -157,27 +106,10 @@ function CatalogPageContent() {
   // componente com callbacks. O resolver guardado aqui é a ponte entre os dois modelos.
   const scanResolver = useRef<((suggestion: ProductSuggestion | null) => void) | null>(null)
 
-  const invalidate = () => {
-    void queryClient.invalidateQueries({ queryKey: ['catalog-catalogs'] })
-    void queryClient.invalidateQueries({ queryKey: ['catalog-products'] })
-    void queryClient.invalidateQueries({ queryKey: ['menu'] })
-    void queryClient.invalidateQueries({ queryKey: ['sections'] })
-  }
+  const invalidate = () => invalidateCatalogQueries(queryClient)
 
-  const { data: catalogs = [] } = useQuery({
-    queryKey: ['catalog-catalogs'],
-    queryFn: () => api.get<Catalog[]>('/catalog/catalogs', accessToken ?? undefined),
-  })
-
-  const { data: allProducts = [] } = useQuery({
-    queryKey: ['catalog-products'],
-    queryFn: () => api.get<Product[]>('/catalog/products', accessToken ?? undefined),
-  })
-
-  const { data: sections = [] } = useQuery({
-    queryKey: ['sections'],
-    queryFn: () => api.get('/sections', accessToken ?? undefined) as Promise<Section[]>,
-  })
+  const { catalogs, products: allProducts, sections } = useCatalogData()
+  const selectedCatalog = catalogs.find((catalog) => catalog.id === selectedCatId) ?? null
 
   const [productSearch, setProductSearch] = useState('')
   const [productStatus, setProductStatus] = useState<ProductStatusFilter | ''>('')
@@ -186,7 +118,7 @@ function CatalogPageContent() {
 
   const catalogProducts = selectedCatId === null
     ? allProducts
-    : selectedCatId === '__none__'
+    : selectedCatId === WITHOUT_CATALOG
     ? allProducts.filter((p) => p.catalogId === null)
     : allProducts.filter((p) => p.catalogId === selectedCatId)
 
@@ -212,7 +144,7 @@ function CatalogPageContent() {
   })
   const deleteCat = useMutation({
     mutationFn: (id: string) => api.delete(`/catalog/catalogs/${id}`, accessToken ?? undefined),
-    onSuccess: () => { invalidate(); closeCatModal(); setSelectedCatId(null) },
+    onSuccess: () => { invalidate(); closeCatModal(); navigate(CATALOG_PATH) },
     onError: (e: Error) => setCatError(e.message),
   })
 
@@ -321,24 +253,10 @@ function CatalogPageContent() {
     if (selectedProd) deleteProd.mutate(selectedProd.id)
   }
 
-  // O SDK entrega centavos; a API espera reais.
   const submitProduct = useCallback(
-    async (data: CreateProductInput & { active?: boolean; sortOrder?: number }) => {
+    async (data: ProductFormSubmit) => {
       setProdError(null)
-      const body = {
-        name: data.name,
-        description: data.description ?? undefined,
-        price: data.priceInCents / 100,
-        costPrice: data.costPriceInCents ? data.costPriceInCents / 100 : null,
-        unit: data.unit ?? 'un',
-        barcode: data.barcode ?? null,
-        catalogId: data.catalogId ?? null,
-        sectionId: data.sectionId ?? null,
-        preparationTimeMinutes: data.preparationTimeMinutes ?? null,
-        preparationInstructions: data.preparationInstructions ?? null,
-        sortOrder: data.sortOrder ?? 0,
-        active: data.active ?? true,
-      }
+      const body = productRequestBody(data)
       try {
         if (selectedProd) await updateProd.mutateAsync({ id: selectedProd.id, body })
         else await createProd.mutateAsync(body)
@@ -400,21 +318,7 @@ function CatalogPageContent() {
   const sdkSections = sections.map((section) => ({ id: section.id, name: section.name }))
 
   const sdkInitialProduct = selectedProd
-    ? {
-        id: selectedProd.id,
-        name: selectedProd.name,
-        description: selectedProd.description,
-        priceInCents: toCents(selectedProd.price),
-        costPriceInCents: selectedProd.costPrice === null ? null : toCents(selectedProd.costPrice),
-        unit: selectedProd.unit,
-        barcode: selectedProd.barcode,
-        catalogId: selectedProd.catalogId,
-        sectionId: selectedProd.sectionId,
-        preparationTimeMinutes: selectedProd.preparationTimeMinutes,
-        preparationInstructions: selectedProd.preparationInstructions,
-        sortOrder: selectedProd.sortOrder,
-        active: selectedProd.active,
-      }
+    ? productFormValues(selectedProd)
     : duplicateSource
     ? {
         name: `${duplicateSource.name} (cópia)`,
@@ -430,9 +334,10 @@ function CatalogPageContent() {
         preparationTimeMinutes: duplicateSource.preparationTimeMinutes,
         preparationInstructions: duplicateSource.preparationInstructions,
       }
-    : { catalogId: selectedCatId === '__none__' ? null : selectedCatId }
+    : { catalogId: selectedCatId === WITHOUT_CATALOG ? null : selectedCatId }
 
   const withoutCatalogCount = allProducts.filter((p) => p.catalogId === null).length
+  const inactiveCount = catalogProducts.filter((product) => !product.active).length
 
   const catModalTitle =
     catModal === 'create' ? 'Novo catálogo' : catModal === 'edit' ? `Editar · ${selectedCat?.name}` : 'Excluir catálogo'
@@ -461,65 +366,32 @@ function CatalogPageContent() {
         </div>
 
         <div className="flex-1 overflow-y-auto py-2">
-          <button
-            onClick={() => setSelectedCatId(null)}
-            className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-              selectedCatId === null
-                ? 'bg-brand-50 text-brand-700 font-medium'
-                : 'text-gray-700 hover:bg-gray-100'
-            }`}
-          >
-            <span>Todos</span>
-            <span className="float-right text-xs text-gray-400">{allProducts.length}</span>
-          </button>
+          <CatalogNavLink
+            to={CATALOG_PATH}
+            label="Todos"
+            count={allProducts.length}
+            selected={selectedCatId === null}
+          />
 
-          {catalogs.map((cat) => {
-            const count = allProducts.filter((p) => p.catalogId === cat.id).length
-            return (
-              <div key={cat.id} className="group relative">
-                <button
-                  onClick={() => setSelectedCatId(cat.id)}
-                  className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                    selectedCatId === cat.id
-                      ? 'bg-brand-50 text-brand-700 font-medium'
-                      : 'text-gray-700 hover:bg-gray-100'
-                  } ${!cat.active ? 'opacity-50' : ''}`}
-                >
-                  <span className="truncate block pr-8">{cat.name}</span>
-                  <span className="float-right text-xs text-gray-400">{count}</span>
-                </button>
-                <div className="absolute right-2 top-1/2 -translate-y-1/2 hidden group-hover:flex gap-1">
-                  <button
-                    onClick={() => openEditCat(cat)}
-                    className="p-1 text-gray-400 hover:text-brand-600"
-                    title="Editar"
-                  >
-                    ✎
-                  </button>
-                  <button
-                    onClick={() => openDeleteCat(cat)}
-                    className="p-1 text-gray-400 hover:text-red-500"
-                    title="Excluir"
-                  >
-                    ×
-                  </button>
-                </div>
-              </div>
-            )
-          })}
+          {catalogs.map((cat) => (
+            <CatalogNavLink
+              key={cat.id}
+              to={catalogCategoryPath(cat.id)}
+              label={cat.name}
+              count={allProducts.filter((p) => p.catalogId === cat.id).length}
+              selected={selectedCatId === cat.id}
+              inactive={!cat.active}
+            />
+          ))}
 
           {withoutCatalogCount > 0 && (
-            <button
-              onClick={() => setSelectedCatId('__none__')}
-              className={`w-full text-left px-4 py-2.5 text-sm transition-colors ${
-                selectedCatId === '__none__'
-                  ? 'bg-brand-50 text-brand-700 font-medium'
-                  : 'text-gray-500 hover:bg-gray-100'
-              }`}
-            >
-              <span className="italic">Sem catálogo</span>
-              <span className="float-right text-xs text-gray-400">{withoutCatalogCount}</span>
-            </button>
+            <CatalogNavLink
+              to={catalogCategoryPath(null)}
+              label="Sem catálogo"
+              count={withoutCatalogCount}
+              selected={selectedCatId === WITHOUT_CATALOG}
+              muted
+            />
           )}
 
           <div className="px-4">
@@ -533,17 +405,52 @@ function CatalogPageContent() {
       <div className="flex-1 flex flex-col min-w-0">
         <div className="flex flex-wrap items-center justify-between gap-3 px-4 md:px-6 py-4 border-b border-gray-200 flex-shrink-0">
           <div className="min-w-0">
-            <h1 className="text-lg font-bold text-gray-900">
-              {selectedCatId === null
-                ? 'Todos os produtos'
-                : selectedCatId === '__none__'
-                ? 'Sem catálogo'
-                : (catalogs.find((c) => c.id === selectedCatId)?.name ?? '')}
-            </h1>
+            {selectedCatId !== null && (
+              <nav aria-label="Caminho" className="flex items-center gap-1 text-xs text-gray-400 mb-0.5">
+                <Link to={CATALOG_PATH} className="hover:text-brand-600">Cardápio</Link>
+                <ChevronRight className="h-3 w-3" aria-hidden="true" />
+                <span>Categoria</span>
+              </nav>
+            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              <h1 className="text-lg font-bold text-gray-900">
+                {selectedCatId === null
+                  ? 'Todos os produtos'
+                  : selectedCatId === WITHOUT_CATALOG
+                  ? 'Sem catálogo'
+                  : (selectedCatalog?.name ?? 'Categoria não encontrada')}
+              </h1>
+              {selectedCatalog && !selectedCatalog.active && (
+                <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">Inativa</span>
+              )}
+              {selectedCatalog && (
+                <span className="flex items-center gap-1">
+                  <button
+                    type="button"
+                    onClick={() => openEditCat(selectedCatalog)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-brand-600 hover:bg-gray-100"
+                    title="Editar categoria"
+                    aria-label="Editar categoria"
+                  >
+                    <Pencil className="h-4 w-4" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => openDeleteCat(selectedCatalog)}
+                    className="p-1.5 rounded-lg text-gray-400 hover:text-red-600 hover:bg-gray-100"
+                    title="Excluir categoria"
+                    aria-label="Excluir categoria"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
+                </span>
+              )}
+            </div>
             <p className="text-sm text-gray-400">
               {hasProductFilters
                 ? `${visibleProducts.length} de ${catalogProducts.length} produto${catalogProducts.length !== 1 ? 's' : ''}`
                 : `${catalogProducts.length} produto${catalogProducts.length !== 1 ? 's' : ''}`}
+              {catalogProducts.length > 0 && inactiveCount > 0 && ` · ${inactiveCount} inativo${inactiveCount !== 1 ? 's' : ''}`}
             </p>
             <ExpiringBatchBadge className="mt-1" />
           </div>
@@ -615,21 +522,33 @@ function CatalogPageContent() {
                     className={`bg-white rounded-xl border border-gray-200 p-4 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4 ${!prod.active ? 'opacity-60' : ''}`}
                   >
                     {imageUrl && (
-                      <img
-                        src={imageUrl}
-                        alt=""
-                        loading="lazy"
-                        className="h-14 w-14 shrink-0 rounded-lg object-cover border border-gray-100"
-                      />
+                      <Link to={catalogProductPath(prod.id)} className="shrink-0" tabIndex={-1} aria-hidden="true">
+                        <img
+                          src={imageUrl}
+                          alt=""
+                          loading="lazy"
+                          className="h-14 w-14 rounded-lg object-cover border border-gray-100"
+                        />
+                      </Link>
                     )}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-semibold text-gray-900 break-words">{prod.name}</span>
+                        <Link
+                          to={catalogProductPath(prod.id)}
+                          className="font-semibold text-gray-900 break-words hover:text-brand-600 hover:underline"
+                        >
+                          {prod.name}
+                        </Link>
                         {!prod.active && (
                           <span className="text-xs px-2 py-0.5 bg-gray-100 text-gray-500 rounded-full">Inativo</span>
                         )}
-                        {cat && (
-                          <span className="text-xs px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full">{cat.name}</span>
+                        {cat && selectedCatId !== cat.id && (
+                          <Link
+                            to={catalogCategoryPath(cat.id)}
+                            className="text-xs px-2 py-0.5 bg-brand-50 text-brand-600 rounded-full hover:bg-brand-100"
+                          >
+                            {cat.name}
+                          </Link>
                         )}
                         {sec && (
                           <span className="text-xs px-2 py-0.5 bg-amber-50 text-amber-600 rounded-full">{sec.name}</span>
@@ -659,6 +578,12 @@ function CatalogPageContent() {
                       )}
                     </div>
                     <div className="flex flex-wrap items-center gap-1.5 flex-shrink-0">
+                      <Link
+                        to={catalogProductPath(prod.id)}
+                        className="px-3 py-1.5 text-xs font-medium text-brand-600 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
+                      >
+                        Detalhes
+                      </Link>
                       <button
                         onClick={() => openEditProd(prod)}
                         className="px-3 py-1.5 text-xs font-medium text-gray-600 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors"
@@ -848,5 +773,30 @@ function CatalogPageContent() {
         />
       )}
     </div>
+  )
+}
+
+interface CatalogNavLinkProps {
+  to: string
+  label: string
+  count: number
+  selected: boolean
+  inactive?: boolean
+  muted?: boolean
+}
+
+/** Item da barra: nome e contador na mesma linha (o nome encurta com "…", o número não cai). */
+function CatalogNavLink({ to, label, count, selected, inactive = false, muted = false }: CatalogNavLinkProps) {
+  return (
+    <Link
+      to={to}
+      aria-current={selected ? 'page' : undefined}
+      className={`flex items-center justify-between gap-2 px-4 py-2.5 text-sm transition-colors ${
+        selected ? 'bg-brand-50 text-brand-700 font-medium' : muted ? 'text-gray-500 hover:bg-gray-100' : 'text-gray-700 hover:bg-gray-100'
+      } ${inactive ? 'opacity-50' : ''}`}
+    >
+      <span className={`truncate min-w-0 ${muted ? 'italic' : ''}`}>{label}</span>
+      <span className="shrink-0 text-xs text-gray-400 tabular-nums">{count}</span>
+    </Link>
   )
 }
