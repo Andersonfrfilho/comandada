@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Plus, Trash2 } from 'lucide-react'
+import { Select } from '@/components/ui/Select'
 
 interface Ingredient {
   id: string
@@ -36,6 +37,14 @@ interface ProductIngredient {
 interface RecipeManagerProps {
   productId: string
 }
+
+const RECIPE_UNIT_OPTIONS = [
+  { value: 'un', label: 'Un' },
+  { value: 'kg', label: 'Kg' },
+  { value: 'g', label: 'g' },
+  { value: 'l', label: 'L' },
+  { value: 'ml', label: 'ml' },
+]
 
 const UNIT_LABELS: Record<string, string> = {
   un: 'Un',
@@ -214,26 +223,24 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
 
       <div className="bg-gray-50 rounded-lg p-3 border border-gray-200">
         <p className="text-xs text-gray-500 mb-2 font-medium">Adicionar ingrediente</p>
-        <div className="flex gap-2 items-end">
-          <div className="flex-1">
-            <select
-              value={newIngredientId}
-              onChange={(e) => {
-                setNewIngredientId(e.target.value)
-                if (e.target.value) {
-                  const ingredient = ingredients.find((i) => i.id === e.target.value)
-                  if (ingredient) setNewUnit(ingredient.unit)
-                }
+        <div className="flex flex-wrap gap-2 items-end">
+          <div className="basis-full sm:basis-0 flex-1 min-w-0">
+            <Select
+              size="sm"
+              value={newIngredientId || null}
+              onChange={(value) => {
+                setNewIngredientId(value)
+                const ingredient = ingredients.find((candidate) => candidate.id === value)
+                if (ingredient) setNewUnit(ingredient.unit)
               }}
-              className="w-full border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="">Selecionar ingrediente...</option>
-              {ingredients.map((ing) => (
-                <option key={ing.id} value={ing.id}>
-                  {ing.name} ({formatUnitCost(toNumber(ing.costPerUnit), ing.unit)})
-                </option>
-              ))}
-            </select>
+              placeholder="Selecionar ingrediente..."
+              ariaLabel="Ingrediente"
+              options={ingredients.map((ingredient) => ({
+                value: ingredient.id,
+                label: ingredient.name,
+                hint: formatUnitCost(toNumber(ingredient.costPerUnit), ingredient.unit),
+              }))}
+            />
           </div>
           <input
             type="number"
@@ -244,17 +251,14 @@ export function RecipeManager({ productId }: RecipeManagerProps) {
             placeholder="Qtd"
             className="w-20 border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
           />
-          <select
+          <Select
+            size="sm"
+            className="w-24"
             value={newUnit}
-            onChange={(e) => setNewUnit(e.target.value)}
-            className="border border-gray-300 rounded-lg px-2 py-1.5 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            <option value="un">Un</option>
-            <option value="kg">Kg</option>
-            <option value="g">g</option>
-            <option value="l">L</option>
-            <option value="ml">ml</option>
-          </select>
+            onChange={setNewUnit}
+            ariaLabel="Unidade"
+            options={RECIPE_UNIT_OPTIONS}
+          />
           <button
             type="button"
             onClick={handleAdd}

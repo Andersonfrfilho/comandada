@@ -327,21 +327,19 @@ export function OrdersPage() {
         </div>
         <div className="w-40">
           <label className="block text-xs font-medium text-gray-500 mb-1">Ordenar por</label>
-          <select
+          <Select
+            size="sm"
             value={sortValue}
-            onChange={(e) => {
-              const [field, direction] = e.target.value.split(':')
+            onChange={(value) => {
+              const [field, direction] = value.split(':')
               updateFilters({
                 sortBy: field === 'receivedAt' ? null : field ?? null,
                 sortDirection: direction === 'desc' ? null : direction ?? null,
               })
             }}
-            className="w-full text-sm border border-gray-300 rounded-lg px-2 py-2 bg-white focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {SORT_OPTIONS.map((option) => (
-              <option key={option.value} value={option.value}>{option.label}</option>
-            ))}
-          </select>
+            ariaLabel="Ordenar por"
+            options={SORT_OPTIONS}
+          />
         </div>
         <div>
           <label className="block text-xs font-medium text-gray-500 mb-1">De</label>

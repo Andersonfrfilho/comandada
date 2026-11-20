@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { ChevronDown, ChevronRight, Plus, Trash2, Edit3 } from 'lucide-react'
+import { Select } from '@/components/ui/Select'
 
 interface FeeRule {
   id: number
@@ -293,15 +294,13 @@ export function DeliveryFeeManager() {
           <div className="grid grid-cols-2 gap-3 mb-3">
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Modo</label>
-              <select
+              <Select
+                size="sm"
                 value={ruleForm.mode}
-                onChange={(e) => setRuleForm((p) => ({ ...p, mode: e.target.value }))}
-                className="w-full border border-gray-300 rounded-lg px-3 py-1.5 text-xs focus:outline-none focus:ring-2 focus:ring-brand-500"
-              >
-                {MODE_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>{opt.label}</option>
-                ))}
-              </select>
+                onChange={(value) => setRuleForm((p) => ({ ...p, mode: value }))}
+                ariaLabel="Modo"
+                options={MODE_OPTIONS}
+              />
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-600 mb-1">Taxa base (R$)</label>
@@ -474,15 +473,13 @@ export function DeliveryFeeManager() {
                         <div className="grid grid-cols-2 gap-2 mb-2">
                           <div>
                             <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Tipo</label>
-                            <select
+                            <Select
+                              size="sm"
                               value={zoneForm.zoneType}
-                              onChange={(e) => setZoneForm((p) => ({ ...p, zoneType: e.target.value }))}
-                              className="w-full border border-gray-300 rounded-lg px-2 py-1 text-[11px] focus:outline-none focus:ring-2 focus:ring-brand-500"
-                            >
-                              {ZONE_TYPE_OPTIONS.map((opt) => (
-                                <option key={opt.value} value={opt.value}>{opt.label}</option>
-                              ))}
-                            </select>
+                              onChange={(value) => setZoneForm((p) => ({ ...p, zoneType: value }))}
+                              ariaLabel="Tipo da zona"
+                              options={ZONE_TYPE_OPTIONS}
+                            />
                           </div>
                           <div>
                             <label className="block text-[10px] font-medium text-gray-500 mb-0.5">Taxa (R$)</label>

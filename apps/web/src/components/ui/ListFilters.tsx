@@ -1,4 +1,5 @@
-import type { ReactNode } from 'react'
+import { useMemo, type ReactNode } from 'react'
+import { Select, type SelectOption } from './Select'
 import { Search, X } from 'lucide-react'
 
 export function FilterBar({ children, onClear, hasActiveFilters }: {
@@ -58,25 +59,17 @@ export function SearchField({ value, onChange, placeholder, label = 'Buscar' }: 
   )
 }
 
-// Select nativo: acessível, leve e bom no celular para filtros de uma escolha.
-export function FilterSelect<TValue extends string>({ value, onChange, options, allLabel = 'Todos' }: {
+// Filtro de uma escolha com "Todos" no topo; usa o Select do painel (folha no celular).
+export function FilterSelect<TValue extends string>({ value, onChange, options, allLabel = 'Todos', ariaLabel }: {
   readonly value: TValue | ''
   readonly onChange: (value: TValue | '') => void
   readonly options: ReadonlyArray<{ readonly value: TValue; readonly label: string }>
   readonly allLabel?: string
+  readonly ariaLabel?: string
 }): JSX.Element {
-  return (
-    <select
-      value={value}
-      onChange={(event) => onChange(event.target.value as TValue | '')}
-      className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-    >
-      <option value="">{allLabel}</option>
-      {options.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+  const allOptions = useMemo<SelectOption<TValue | ''>[]>(
+    () => [{ value: '', label: allLabel }, ...options],
+    [options, allLabel],
   )
+  return <Select size="sm" value={value} onChange={onChange} options={allOptions} ariaLabel={ariaLabel} />
 }

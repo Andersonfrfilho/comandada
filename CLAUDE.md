@@ -339,6 +339,9 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - Status de entrega e de nota em `constants/statusLabels.ts` (pedido em `orderLabels.ts`): mesmo nome e cor em toda tela.
 - Números e datas em pt-BR com `formatBRL`/`formatDecimal`/`formatPercent`/`formatMinutes`/`formatUnitCost` (`lib/listing.ts`);
   nada de `toFixed` na tela. Endereço da entrega por `formatDeliveryAddress` (aceita o formato antigo rua/número).
+- Escolha numa lista sempre com `components/ui/Select.tsx` (`FilterSelect` para filtro com "Todos"), nunca `<select>` nativo:
+  lista presa ao botão num portal no computador (modal não corta, Esc não fecha o modal) e folha de baixo no celular,
+  com o nome do campo de título; busca liga sozinha com mais de 8 opções.
 - Confirmação com `confirmDialog` (`stores/confirmStore.ts`, desenhado pelo `ConfirmHost`), erro com `toast`; nunca
   `window.confirm`/`prompt`/`alert`. Botão novo usa `components/ui/Button.tsx`.
 - Configurações: nome e WhatsApp do restaurante gravam em `establishments` (`ESTABLISHMENT_PROFILE_KEYS`); pedido mínimo

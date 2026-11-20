@@ -7,6 +7,7 @@ import { Pencil, Trash2, Plus, ChevronDown, ChevronRight } from 'lucide-react'
 import { StockBatchList } from './StockBatchList'
 import { StockMovementHistory } from './StockMovementHistory'
 import { StockAdjustmentForm } from './StockAdjustmentForm'
+import { Select } from '@/components/ui/Select'
 
 interface Ingredient {
   id: string
@@ -144,16 +145,14 @@ export function IngredientManager() {
           className={fieldClass}
         />
         <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-2">
-          <select
+          <Select
+            size="sm"
+            className="w-24"
             value={formUnit}
-            onChange={(e) => setFormUnit(e.target.value)}
-            aria-label="Unidade"
-            className="border border-gray-300 rounded-lg px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-          >
-            {Object.entries(UNIT_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
+            onChange={setFormUnit}
+            ariaLabel="Unidade"
+            options={Object.entries(UNIT_LABELS).map(([value, label]) => ({ value, label }))}
+          />
           <input
             type="number"
             min="0"
