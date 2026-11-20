@@ -41,6 +41,8 @@ const feeQuoteSchema = z.object({
 })
 
 const createOrderSchema = z.object({
+  // Id gerado no aparelho: reenvio do mesmo pedido (fila do app do garçom) não duplica.
+  id: z.string().uuid().optional(),
   customerId: z.string().uuid().optional(),
   tableId: z.string().uuid().optional(),
   comandaId: z.string().uuid().optional(),

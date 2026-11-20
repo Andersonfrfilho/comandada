@@ -9,7 +9,9 @@ import { orderNumberLabel } from '@/lib/orderLabel'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/stores/toastStore'
 import { Skeleton } from '@/components/ui/Skeleton'
+import { sendOrQueue } from './waiterOffline'
 import {
+  newClientId,
   addToCart,
   cartCount,
   cartTotal,
@@ -66,6 +68,7 @@ export function WaiterLaunchPage() {
   const { data: bill } = useQuery({
     queryKey: ['comanda-bill', comandaId],
     queryFn: () => api.get<WaiterBill>(`/comandas/${comandaId}/bill`, accessToken),
+    refetchInterval: 15_000,
   })
   const { data: menu, isLoading } = useQuery({
     queryKey: ['menu'],
@@ -99,16 +102,29 @@ export function WaiterLaunchPage() {
   }, [cart])
 
   const sendOrder = useMutation({
-    mutationFn: () => {
+    // Sem rede o React Query pausaria a ação; aqui ela roda e cai na fila do aparelho.
+    networkMode: 'always',
+    mutationFn: async () => {
       if (!bill) throw new Error('Comanda não carregada')
-      return api.post<{ id: string; number?: number | null }>(
-        '/orders',
-        tableOrderBody({ tableId: bill.comanda.tableId, comandaId, cart, notes: orderNotes }),
-        accessToken
-      )
+      const id = newClientId()
+      const outcome = await sendOrQueue({
+        id,
+        kind: 'order',
+        path: '/orders',
+        body: tableOrderBody({ id, tableId: bill.comanda.tableId, comandaId, cart, notes: orderNotes }),
+        comandaId,
+        label: `${cartCount(cart)} ${cartCount(cart) === 1 ? 'item' : 'itens'} · ${formatBRL(cartTotal(cart))}`,
+        total: cartTotal(cart),
+      })
+      return outcome
     },
-    onSuccess: (order) => {
-      toast.success(`Pedido ${orderNumberLabel(order)} enviado para a cozinha`)
+    onSuccess: (outcome) => {
+      if (outcome.queued) {
+        toast.info('Sem conexão: o pedido ficou guardado e vai para a cozinha assim que a conexão voltar')
+      } else {
+        const order = outcome.result as { id: string; number?: number | null }
+        toast.success(`Pedido ${orderNumberLabel(order)} enviado para a cozinha`)
+      }
       setCart([])
       saveDraft(comandaId, [])
       void queryClient.invalidateQueries({ queryKey: ['comanda-bill', comandaId] })

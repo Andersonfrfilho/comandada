@@ -360,6 +360,10 @@ painel volta para a plataforma pelo `onStatusChanged` do `UpdateOrderStatusUseCa
 - Pedido pronto: `order:status_changed` traz `number`, `type`, `tableId`, `comandaId`; pedido de mesa pronto toca o bipe,
   vibra, notifica pelo service worker (`public/sw-notifications.js` abre a comanda) e fica em "Prontos para levar"
   (no aparelho) até o garçom tocar em "Levei". Com o app fechado não chega aviso (sem Web Push).
+- Sem conexão (`pages/waiter/waiterOffline.ts`): mesas, cardápio e contas ficam no aparelho (`waiter-cache:<restaurante>:<usuário>`,
+  até 12 h) e abrem na hora, atualizando por trás. Lançar pedido e pedir a conta vão para a fila (`waiter-outbox`) quando o
+  servidor não responde e saem sozinhos quando volta; o pedido leva `id` gerado no aparelho e `POST /orders` com `id` já
+  gravado devolve o mesmo pedido (não duplica). Abrir comanda precisa do servidor. Sair apaga cache, carrinhos e fila.
 
 ## Painel: base comum
 

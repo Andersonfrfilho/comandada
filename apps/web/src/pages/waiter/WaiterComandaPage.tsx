@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { Link, useNavigate, useParams } from 'react-router-dom'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ChevronLeft, Phone, Plus, ReceiptText, Users, Wallet } from 'lucide-react'
+import { ChevronLeft, CloudOff, Phone, Plus, ReceiptText, Users, Wallet } from 'lucide-react'
 import { api } from '@/lib/api'
 import { formatBRL } from '@/lib/listing'
 import { useAuthStore, useCan } from '@/stores/authStore'
@@ -11,7 +11,8 @@ import type { TableWithComanda } from '@/constants/tableLabels'
 import { ComandaBillModal } from '@/pages/tables/ComandaBillModal'
 import { elapsedLabel } from '@/pages/tables/elapsed'
 import { useWaiterAlertsStore } from './waiterAlerts'
-import { ITEM_STAGE_LABELS, formatPhoneInput, itemStage, waiterPaths, type ItemStage, type WaiterBill } from './waiterModel'
+import { sendOrQueue, useWaiterOutboxStore } from './waiterOffline'
+import { ITEM_STAGE_LABELS, newClientId, formatPhoneInput, itemStage, waiterPaths, type ItemStage, type WaiterBill } from './waiterModel'
 
 const STAGE_TONE: Record<ItemStage, string> = {
   waiting: 'bg-gray-100 text-gray-700',
@@ -31,6 +32,10 @@ export function WaiterComandaPage() {
   const [receiving, setReceiving] = useState(false)
   const dismissNotice = useWaiterAlertsStore((state) => state.dismiss)
   const pendingNotices = useWaiterAlertsStore((state) => state.notices)
+  const allOutbox = useWaiterOutboxStore((state) => state.entries)
+  const discardOutbox = useWaiterOutboxStore((state) => state.remove)
+  const queued = allOutbox.filter((entry) => entry.comandaId === comandaId)
+  const queuedTotal = queued.filter((entry) => entry.kind === 'order' && !entry.rejected).reduce((sum, entry) => sum + entry.total, 0)
 
   const { data: bill, isLoading } = useQuery({
     queryKey: ['comanda-bill', comandaId],
@@ -44,11 +49,22 @@ export function WaiterComandaPage() {
   })
 
   const requestBill = useMutation({
-    mutationFn: (requested: boolean) => api.post(`/comandas/${comandaId}/request-bill`, { requested }, accessToken),
-    onSuccess: (_, requested) => {
+    networkMode: 'always',
+    mutationFn: (requested: boolean) =>
+      sendOrQueue({
+        id: newClientId(),
+        kind: 'request-bill',
+        path: `/comandas/${comandaId}/request-bill`,
+        body: { requested },
+        comandaId,
+        label: requested ? 'Pedir a conta' : 'Desfazer pedido de conta',
+        total: 0,
+      }),
+    onSuccess: (outcome, requested) => {
       void queryClient.invalidateQueries({ queryKey: ['comanda-bill', comandaId] })
       void queryClient.invalidateQueries({ queryKey: ['tables'] })
-      toast.success(requested ? 'Conta pedida: o caixa já foi avisado' : 'Pedido de conta desfeito')
+      if (outcome.queued) toast.info('Sem conexão: o pedido de conta sai assim que a conexão voltar')
+      else toast.success(requested ? 'Conta pedida: o caixa já foi avisado' : 'Pedido de conta desfeito')
     },
     onError: (error) => toast.error(error instanceof Error ? error.message : 'Não foi possível pedir a conta'),
   })
@@ -112,7 +128,36 @@ export function WaiterComandaPage() {
           </div>
         )}
 
-        {activeOrders.length === 0 && (
+        {queued.length > 0 && (
+          <ul className="mb-3 space-y-2" aria-label="Aguardando conexão">
+            {queued.map((entry) => (
+              <li
+                key={entry.id}
+                className={`flex items-center gap-3 rounded-2xl px-3 py-2.5 ring-1 ${
+                  entry.rejected ? 'bg-red-50 ring-red-200' : 'bg-sky-50 ring-sky-200'
+                }`}
+              >
+                <CloudOff className={`h-5 w-5 shrink-0 ${entry.rejected ? 'text-red-600' : 'text-sky-700'}`} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-semibold">{entry.kind === 'order' ? `Pedido · ${entry.label}` : entry.label}</p>
+                  <p className={`text-xs ${entry.rejected ? 'text-red-700' : 'text-sky-800'}`}>
+                    {entry.rejected ?? 'Aguardando conexão, envia sozinho'}
+                  </p>
+                </div>
+                {entry.rejected && (
+                  <button
+                    onClick={() => discardOutbox(entry.id)}
+                    className="h-9 rounded-lg px-3 text-xs font-semibold text-red-700 ring-1 ring-red-300 active:scale-95"
+                  >
+                    Descartar
+                  </button>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
+
+        {activeOrders.length === 0 && queued.length === 0 && (
           <p className="rounded-2xl bg-white p-6 text-center text-sm text-gray-500 ring-1 ring-gray-300">
             Nada pedido ainda. Toque em <strong>Lançar itens</strong>.
           </p>
@@ -165,6 +210,7 @@ export function WaiterComandaPage() {
           <div className="mb-2 flex items-baseline justify-between">
             <span className="text-sm text-gray-600">
               Total{bill.paidAmount > 0 ? ` · pago ${formatBRL(bill.paidAmount)}` : ''}
+              {queuedTotal > 0 ? ` · + ${formatBRL(queuedTotal)} na fila` : ''}
             </span>
             <span className="text-2xl font-black tabular-nums">{formatBRL(bill.totalAmount)}</span>
           </div>

@@ -58,8 +58,8 @@ describe('carrinho do garçom', () => {
 
   it('monta o pedido de mesa sem pagamento, ligado à comanda', () => {
     const cart = addToCart(addToCart([], temaki, 'bem passado'), grande)
-    const body = tableOrderBody({ tableId: 't1', comandaId: 'c1', cart, notes: '  ' })
-    expect(body).toMatchObject({ type: 'table', tableId: 't1', comandaId: 'c1', payments: [], channel: 'manual' })
+    const body = tableOrderBody({ id: 'o-1', tableId: 't1', comandaId: 'c1', cart, notes: '  ' })
+    expect(body).toMatchObject({ id: 'o-1', type: 'table', tableId: 't1', comandaId: 'c1', payments: [], channel: 'manual' })
     expect(body.items[0]).toEqual({ productId: 'p1', productName: 'Temaki', unitPrice: 29.9, quantity: 1, notes: 'bem passado' })
     expect('notes' in body).toBe(false)
   })
