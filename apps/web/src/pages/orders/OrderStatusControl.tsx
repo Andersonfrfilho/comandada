@@ -1,12 +1,19 @@
 import { useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight } from 'lucide-react'
+import { ArrowRight, ChevronsRight, RotateCcw, Undo2, XCircle, type LucideIcon } from 'lucide-react'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, type OrderStatus } from '@/constants/orderLabels'
 import { resolveSteps } from './OrderProgressBar'
-import { classifyStatusMove, nextStatus, requiresManualFlag, type StatusMoveKind } from './orderStatusMoves'
+import {
+  classifyStatusMove,
+  nextStatus,
+  requiresManualFlag,
+  statusChoices,
+  type StatusChoiceGroup,
+  type StatusMoveKind,
+} from './orderStatusMoves'
 import { REFUND_COPY, type OrderPaymentSummary } from '@/constants/onlinePayments'
 import { orderPaymentsQueryKey, refundErrorMessage } from './OrderPaymentCard'
 import { formatBrl } from './orderDetailFormat'
@@ -18,13 +25,28 @@ const MOVE_WARNINGS: Record<Exclude<StatusMoveKind, 'forward'>, string> = {
   reopen: 'O pedido cancelado volta a valer e reaparece nas filas.',
 }
 
+const GROUP_LABELS: Record<StatusChoiceGroup, string> = {
+  skip: 'Pular para',
+  back: 'Voltar para',
+  reopen: 'Reabrir como',
+}
+
+const GROUP_ICONS: Record<StatusChoiceGroup, LucideIcon> = {
+  skip: ChevronsRight,
+  back: Undo2,
+  reopen: RotateCcw,
+}
+
 interface OrderStatusControlProps {
   orderId: string
   orderType: string
   status: OrderStatus
 }
 
-/** Avançar para o próximo passo com um toque; qualquer outro status com confirmação e motivo. */
+/**
+ * Avançar para o próximo passo com um toque; os outros status viram botões separados por tipo
+ * (pular, voltar, reabrir, cancelar), com confirmação e motivo quando não é o caminho natural.
+ */
 export function OrderStatusControl({ orderId, orderType, status }: OrderStatusControlProps) {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
@@ -42,7 +64,7 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
   const canRefundOnCancel = refundable > 0 && paymentSummary?.refundMode !== 'none'
 
   const steps = resolveSteps(orderType)
-  const options: OrderStatus[] = [...steps, 'cancelled']
+  const choices = statusChoices(steps, status)
   const next = nextStatus(steps, status)
   const moveKind = target ? classifyStatusMove(steps, status, target) : null
 
@@ -88,39 +110,69 @@ export function OrderStatusControl({ orderId, orderType, status }: OrderStatusCo
     setTarget(to)
   }
 
+  const rowClass = 'flex flex-col gap-1.5 sm:flex-row sm:items-center sm:gap-3'
+  const rowLabelClass = 'text-xs font-medium text-gray-500 sm:w-24 sm:flex-shrink-0'
+
+  function renderChip(option: OrderStatus, group: StatusChoiceGroup) {
+    const Icon = GROUP_ICONS[group]
+    return (
+      <button
+        key={option}
+        type="button"
+        disabled={move.isPending}
+        onClick={() => choose(option)}
+        aria-label={`${GROUP_LABELS[group]} ${ORDER_STATUS_LABELS[option]}`}
+        className={`inline-flex min-h-[36px] items-center gap-1.5 rounded-full px-3 py-1.5 text-sm font-semibold ring-1 ring-inset ring-black/5 transition hover:ring-2 hover:ring-black/20 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 ${ORDER_STATUS_COLORS[option]}`}
+      >
+        <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+        {ORDER_STATUS_LABELS[option]}
+      </button>
+    )
+  }
+
+  function renderGroup(group: StatusChoiceGroup, items: OrderStatus[]) {
+    if (items.length === 0) return null
+    return (
+      <div className={rowClass}>
+        <span className={rowLabelClass}>{GROUP_LABELS[group]}</span>
+        <div className="flex flex-wrap gap-2">{items.map((option) => renderChip(option, group))}</div>
+      </div>
+    )
+  }
+
   return (
-    <div className="mt-4 border-t border-gray-100 pt-4">
-      <div className="flex flex-wrap items-center gap-2">
-        {next && (
-          <button
-            type="button"
-            disabled={move.isPending}
-            onClick={() => choose(next)}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-brand-600 px-3 py-2 text-sm font-medium text-white hover:bg-brand-700 disabled:bg-gray-300"
-          >
-            Avançar para {ORDER_STATUS_LABELS[next]}
-            <ArrowRight className="h-4 w-4" />
-          </button>
+    <div className="mt-4 space-y-3 border-t border-gray-100 pt-4">
+      {next && (
+        <button
+          type="button"
+          disabled={move.isPending}
+          onClick={() => choose(next)}
+          className="inline-flex w-full items-center justify-center gap-2 rounded-lg bg-brand-600 px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-brand-700 active:scale-[0.98] disabled:bg-gray-300 sm:w-auto"
+        >
+          {move.isPending ? 'Salvando...' : `Avançar para ${ORDER_STATUS_LABELS[next]}`}
+          {!move.isPending && <ArrowRight className="h-4 w-4" aria-hidden="true" />}
+        </button>
+      )}
+      <div className="space-y-2.5 rounded-lg bg-gray-50 p-3">
+        <p className="text-xs font-semibold uppercase tracking-wide text-gray-500">
+          {next ? 'Ou corrija o status' : 'Mudar o status'}
+        </p>
+        {renderGroup('skip', choices.skip)}
+        {renderGroup('back', choices.back)}
+        {renderGroup('reopen', choices.reopen)}
+        {choices.canCancel && (
+          <div className="border-t border-gray-200 pt-2.5">
+            <button
+              type="button"
+              disabled={move.isPending}
+              onClick={() => choose('cancelled')}
+              className="inline-flex min-h-[36px] w-full items-center justify-center gap-1.5 rounded-lg border border-red-200 bg-white px-3 py-1.5 text-sm font-medium text-red-700 transition hover:bg-red-50 active:scale-95 disabled:cursor-not-allowed disabled:opacity-50 sm:w-auto"
+            >
+              <XCircle className="h-4 w-4" aria-hidden="true" />
+              Cancelar pedido
+            </button>
+          </div>
         )}
-        <label className="inline-flex items-center gap-2 text-sm text-gray-600">
-          <span>Mudar para</span>
-          <select
-            value=""
-            disabled={move.isPending}
-            onChange={(event) => choose(event.target.value as OrderStatus)}
-            className="rounded-lg border border-gray-300 bg-white px-2 py-2 text-sm text-gray-800"
-          >
-            <option value="" disabled>
-              escolha o status…
-            </option>
-            {options.map((option) => (
-              <option key={option} value={option} disabled={option === status}>
-                {ORDER_STATUS_LABELS[option]}
-                {option === status ? ' (atual)' : ''}
-              </option>
-            ))}
-          </select>
-        </label>
       </div>
       {refundFailure && !target && <p className="mt-2 rounded bg-amber-50 px-3 py-2 text-sm text-amber-800">{refundFailure}</p>}
       {move.isError && !target && (

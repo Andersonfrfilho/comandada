@@ -1,10 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { ArrowRight, Hourglass, PackageX, RotateCcw, Send } from 'lucide-react'
-import { useAuthStore } from '@/stores/authStore'
+import { ArrowRight, Check, CheckCheck, Hourglass, PackageX, RotateCcw, Send } from 'lucide-react'
+import { useAuthStore, useCan } from '@/stores/authStore'
+import { toast } from '@/stores/toastStore'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
-import { PARTIAL_CONFIRMATION_LABELS as LABELS } from '@/constants/partialConfirmation'
+import { ITEM_READY_LABELS, PARTIAL_CONFIRMATION_LABELS as LABELS } from '@/constants/partialConfirmation'
+import type { OrderStatus } from '@/constants/orderLabels'
 import { formatBrl, totalAfterShortage } from './orderDetailFormat'
 
 export interface OrderItemsCardItem {
@@ -14,6 +16,17 @@ export interface OrderItemsCardItem {
   readonly quantity: number
   readonly totalPrice: string
   readonly notes: string | null
+  /** Hora em que a cozinha (ou alguém no painel) marcou o item como pronto. */
+  readonly readyAt?: string | null
+}
+
+/** A API só aceita marcar item pronto enquanto o pedido está na fila da cozinha. */
+const ITEM_READY_STATUSES: readonly OrderStatus[] = ['received', 'in_production']
+
+interface MarkItemReadyResponse {
+  readonly itemId: string
+  readonly readyAt: string
+  readonly orderReady: boolean
 }
 
 interface PartialSubstituteProduct {
@@ -46,6 +59,7 @@ interface OrderItemsCardProps {
   readonly canNegotiate: boolean
   readonly customerWhatsappNumber: string | undefined
   readonly partialConfirmation: OrderPartialConfirmationState | null | undefined
+  readonly orderStatus: OrderStatus
 }
 
 /**
@@ -66,12 +80,19 @@ export function OrderItemsCard({
   canNegotiate,
   customerWhatsappNumber,
   partialConfirmation,
+  orderStatus,
 }: OrderItemsCardProps): JSX.Element {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
   const [shortage, setShortage] = useState<Shortage>(new Map())
   const [confirmOpen, setConfirmOpen] = useState(false)
   const [resending, setResending] = useState(false)
+
+  const [readyBusyIds, setReadyBusyIds] = useState<ReadonlySet<string>>(new Set())
+  const canWriteKitchen = useCan({ resource: 'kitchen', action: 'write' })
+  const tracksReady = canWriteKitchen && ITEM_READY_STATUSES.includes(orderStatus) && items.length > 0
+  const readyCount = items.filter((item) => item.readyAt).length
+  const readyPercent = items.length > 0 ? Math.round((readyCount / items.length) * 100) : 0
 
   const waiting = partialConfirmation?.status === 'pending' && !resending
   const canMark = canNegotiate && Boolean(customerWhatsappNumber) && !waiting
@@ -125,6 +146,33 @@ export function OrderItemsCard({
     },
   })
 
+  // Mesma rota da Cozinha: grava a hora do item (relatório de preparo) e, no último, o pedido vai para Pronto.
+  async function markReady(itemIds: readonly string[]): Promise<void> {
+    if (itemIds.length === 0) return
+    setReadyBusyIds((current) => new Set([...current, ...itemIds]))
+    try {
+      // Um por vez: o último é quem muda o status do pedido, e duas chamadas juntas disputariam essa mudança.
+      for (const itemId of itemIds) {
+        const result = await api.patch<MarkItemReadyResponse>(
+          `/kitchen/orders/${orderId}/items/${itemId}/ready`,
+          {},
+          accessToken ?? undefined
+        )
+        if (result?.orderReady) toast.success(ITEM_READY_LABELS.orderReady)
+      }
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : ITEM_READY_LABELS.failure)
+    } finally {
+      setReadyBusyIds((current) => {
+        const next = new Set(current)
+        for (const itemId of itemIds) next.delete(itemId)
+        return next
+      })
+      void queryClient.invalidateQueries({ queryKey: ['order', orderId] })
+      void queryClient.invalidateQueries({ queryKey: ['orders'] })
+    }
+  }
+
   function toggleItem(itemId: string): void {
     setShortage((current) => {
       const next = new Map(current)
@@ -159,7 +207,28 @@ export function OrderItemsCard({
   return (
     <section className="bg-white rounded-xl shadow-sm p-4 mb-4">
       <div className="flex items-center justify-between gap-2 mb-3">
-        <h2 className="text-sm font-semibold text-gray-900">{LABELS.itemsTitle}</h2>
+        <div className="min-w-0">
+          <h2 className="text-sm font-semibold text-gray-900">{LABELS.itemsTitle}</h2>
+          {tracksReady && (
+            <p className="text-xs text-gray-500">
+              <span className="font-semibold tabular-nums text-gray-800">
+                {ITEM_READY_LABELS.progress(readyCount, items.length)}
+              </span>{' '}
+              · {readyPercent}%{readyCount === items.length && ` · ${ITEM_READY_LABELS.allReady}`}
+            </p>
+          )}
+        </div>
+        {tracksReady && readyCount < items.length && !waiting && (
+          <button
+            type="button"
+            disabled={readyBusyIds.size > 0}
+            onClick={() => void markReady(items.filter((item) => !item.readyAt && !shortage.has(item.id)).map((item) => item.id))}
+            className="inline-flex flex-shrink-0 items-center gap-1 rounded-lg border border-gray-300 px-2.5 py-1.5 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-50 active:scale-95 disabled:opacity-50"
+          >
+            <CheckCheck className="h-3.5 w-3.5" aria-hidden="true" />
+            {ITEM_READY_LABELS.markAll}
+          </button>
+        )}
         {waiting && (
           <span className="inline-flex items-center gap-1 rounded-full bg-amber-100 px-2 py-0.5 text-xs font-semibold text-amber-800">
             <Hourglass className="h-3 w-3" />
@@ -167,6 +236,15 @@ export function OrderItemsCard({
           </span>
         )}
       </div>
+
+      {tracksReady && (
+        <progress
+          value={readyCount}
+          max={items.length}
+          aria-label={ITEM_READY_LABELS.progress(readyCount, items.length)}
+          className="mb-3 h-1.5 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-green-500 [&::-webkit-progress-bar]:bg-gray-100 [&::-webkit-progress-value]:bg-green-500 [&::-webkit-progress-value]:transition-all"
+        />
+      )}
 
       {waiting && partialConfirmation && (
         <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-900">
@@ -202,31 +280,53 @@ export function OrderItemsCard({
           const isWaiting = waitingIds.has(item.id)
           const suggested = isWaiting ? waitingSubstitutes.get(item.id) : undefined
           const substitutes = substitutesByItem.get(item.id) ?? []
+          const isReady = Boolean(item.readyAt)
+          const readyCheckable = tracksReady && !isReady && !marked && !isWaiting && !readyBusyIds.has(item.id)
           return (
             <div key={item.id} className={`py-2 first:pt-0 ${marked ? '-mx-2 rounded-lg bg-red-50 px-2' : ''}`}>
               <div className="flex items-start justify-between gap-3 text-sm">
-                <div className="min-w-0">
-                  <p className={marked || isWaiting ? 'text-gray-500 line-through' : 'text-gray-800'}>
-                    <span className="font-semibold">{item.quantity}×</span> {item.productName}
-                  </p>
-                  {item.quantity > 1 && <p className="text-xs text-gray-400">{formatBrl(item.unitPrice)} cada</p>}
-                  {item.notes && <p className="text-xs text-gray-400 italic">{item.notes}</p>}
-                  {isWaiting && (
-                    <p className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-amber-800">
-                      <PackageX className="h-3 w-3" />
-                      {LABELS.unavailableBadge}
-                      {suggested && (
-                        <>
-                          <ArrowRight className="h-3 w-3" />
-                          {LABELS.waitingSuggested(suggested.productName)}
-                        </>
-                      )}
-                    </p>
+                {/* O rótulo cobre só o "pronto": o botão "Não tem" fica fora, senão marcar falta marcaria pronto. */}
+                <label className={`flex min-w-0 flex-1 items-start gap-3 ${readyCheckable ? 'cursor-pointer' : ''}`}>
+                  {tracksReady && (
+                    <input
+                      type="checkbox"
+                      checked={isReady}
+                      disabled={!readyCheckable}
+                      onChange={() => void markReady([item.id])}
+                      aria-label={ITEM_READY_LABELS.markItem(item.productName)}
+                      title={isReady ? ITEM_READY_LABELS.alreadyReady : undefined}
+                      className="mt-0.5 h-6 w-6 flex-shrink-0 cursor-pointer rounded accent-green-600 disabled:cursor-default"
+                    />
                   )}
-                </div>
+                  <span className="min-w-0">
+                    <span className={`block ${marked || isWaiting || (tracksReady && isReady) ? 'text-gray-500 line-through' : 'text-gray-800'}`}>
+                      <span className="font-semibold">{item.quantity}×</span> {item.productName}
+                    </span>
+                    {tracksReady && isReady && item.readyAt && (
+                      <span className="mt-0.5 inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
+                        <Check className="h-3 w-3" aria-hidden="true" />
+                        {ITEM_READY_LABELS.readyAt(formatTime(item.readyAt))}
+                      </span>
+                    )}
+                    {item.quantity > 1 && <span className="block text-xs text-gray-400">{formatBrl(item.unitPrice)} cada</span>}
+                    {item.notes && <span className="block text-xs text-gray-400 italic">{item.notes}</span>}
+                    {isWaiting && (
+                      <span className="mt-0.5 inline-flex items-center gap-1 text-xs font-medium text-amber-800">
+                        <PackageX className="h-3 w-3" />
+                        {LABELS.unavailableBadge}
+                        {suggested && (
+                          <>
+                            <ArrowRight className="h-3 w-3" />
+                            {LABELS.waitingSuggested(suggested.productName)}
+                          </>
+                        )}
+                      </span>
+                    )}
+                  </span>
+                </label>
                 <div className="flex flex-shrink-0 items-center gap-2">
                   <span className="text-gray-600 whitespace-nowrap">{formatBrl(item.totalPrice)}</span>
-                  {canMark && (
+                  {canMark && !(tracksReady && isReady) && (
                     <button
                       type="button"
                       onClick={() => toggleItem(item.id)}

@@ -34,6 +34,7 @@ interface OrderItem {
   quantity: number
   totalPrice: string
   notes: string | null
+  readyAt: string | null
 }
 
 interface OrderPayment {
@@ -256,6 +257,7 @@ export function OrderDetailPage() {
             canNegotiate={order.items.length > 0 && !CLOSED_ORDER_STATUSES.includes(order.status)}
             customerWhatsappNumber={order.customer?.whatsappNumber}
             partialConfirmation={order.partialConfirmation}
+            orderStatus={order.status}
           />
 
           <OrderPaymentCard

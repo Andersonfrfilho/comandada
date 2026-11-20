@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 
-import { classifyStatusMove, nextStatus, requiresManualFlag } from './orderStatusMoves'
+import { classifyStatusMove, nextStatus, requiresManualFlag, statusChoices } from './orderStatusMoves'
 import type { OrderStatus } from '@/constants/orderLabels'
 
 const delivery: OrderStatus[] = ['received', 'in_production', 'ready', 'in_delivery', 'completed']
@@ -50,5 +50,30 @@ describe('requiresManualFlag', () => {
     expect(requiresManualFlag('completed', 'cancelled')).toBe(true)
     expect(requiresManualFlag('ready', 'cancelled')).toBe(true)
     expect(requiresManualFlag('picked_up', 'cancelled')).toBe(true)
+  })
+})
+
+describe('statusChoices', () => {
+  it('em preparo: próximo fica no botão principal, o resto separado em pular e voltar', () => {
+    expect(statusChoices(delivery, 'in_production')).toEqual({
+      skip: ['in_delivery', 'completed'],
+      back: ['received'],
+      reopen: [],
+      canCancel: true,
+    })
+  })
+
+  it('voltar lista da etapa mais próxima para a mais antiga', () => {
+    expect(statusChoices(pickup, 'completed').back).toEqual(['picked_up', 'ready', 'in_production', 'received'])
+    expect(statusChoices(pickup, 'completed').skip).toEqual([])
+  })
+
+  it('cancelado só oferece reabrir', () => {
+    expect(statusChoices(pickup, 'cancelled')).toEqual({
+      skip: [],
+      back: [],
+      reopen: pickup,
+      canCancel: false,
+    })
   })
 })
