@@ -13,6 +13,8 @@ export interface Comanda {
   /** Consumo da comanda aberta (pedidos não cancelados), vindo da lista de mesas. */
   totalAmount?: number
   ordersCount?: number
+  /** Pessoas na comanda: cadeiras ocupadas no desenho da mesa. Nulo = não informado. */
+  guestsCount?: number | null
 }
 
 export interface TableWithComanda {
@@ -52,8 +54,9 @@ export const TABLE_STATUS_COLORS: Record<TableStatus, string> = {
   reserved: 'bg-yellow-100 text-yellow-800 border-yellow-200',
 }
 
+// Card da mesa: livre fica neutro para a mesa ocupada (na cor do restaurante) saltar aos olhos.
 export const TABLE_STATUS_CARD: Record<TableStatus, string> = {
-  available: 'border-green-200 bg-green-50',
-  occupied: 'border-red-200 bg-red-50',
-  reserved: 'border-yellow-200 bg-yellow-50',
+  available: 'border-gray-200 bg-white',
+  occupied: 'border-brand-300 bg-brand-50',
+  reserved: 'border-amber-300 bg-amber-50',
 }

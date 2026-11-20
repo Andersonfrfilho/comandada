@@ -16,7 +16,7 @@ import type { ComandaRepository } from '../../domain/repositories/ComandaReposit
 import type { GetComandaBillUseCase } from '../../application/use-cases/GetComandaBillUseCase'
 import type { SettleComandaUseCase } from '../../application/use-cases/SettleComandaUseCase'
 import type { TransferComandaUseCase } from '../../application/use-cases/TransferComandaUseCase'
-import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
+import { NotFoundError, UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 
 const createTableSchema = z.object({
   number: z.number().int().positive(),
@@ -53,6 +53,13 @@ const settleComandaSchema = z.object({
 const transferComandaSchema = z.object({
   tableId: z.string().uuid(),
 })
+
+// Pessoas na comanda: cadeiras ocupadas no desenho da mesa. Nulo apaga a informação.
+const guestsCountSchema = z.number().int().min(1).max(50).nullable()
+
+const openComandaSchema = z.object({ guestsCount: guestsCountSchema.optional() })
+
+const updateGuestsSchema = z.object({ guestsCount: guestsCountSchema })
 
 const confirmComandaSchema = z.object({
   customerName: z.string().min(2).max(255),
@@ -179,11 +186,27 @@ export class TableController {
 
   openComanda: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
+    const parsed = openComandaSchema.safeParse(request.body ?? {})
+    if (!parsed.success) throw new ValidationError('Pessoas na mesa: de 1 a 50', parsed.error.flatten().fieldErrors)
     const comanda = await this.openComandaUseCase.execute(
       request.params['id']!,
-      request.user.establishmentId
+      request.user.establishmentId,
+      parsed.data.guestsCount ?? null
     )
     response.json(comanda, 201)
+  }
+
+  updateComandaGuests: RouteHandler = async (request, response) => {
+    if (!request.user) throw new UnauthorizedError()
+    const parsed = updateGuestsSchema.safeParse(request.body)
+    if (!parsed.success) throw new ValidationError('Pessoas na mesa: de 1 a 50', parsed.error.flatten().fieldErrors)
+    const comanda = await this.comandaRepository.updateGuestsCount(
+      request.params['comandaId']!,
+      request.user.establishmentId,
+      parsed.data.guestsCount
+    )
+    if (!comanda) throw new NotFoundError('Comanda aberta')
+    response.json(comanda)
   }
 
   closeComanda: RouteHandler = async (request, response) => {

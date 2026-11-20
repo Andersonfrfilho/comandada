@@ -18,7 +18,7 @@ export class OpenComandaUseCase {
     private readonly comandaRepository: ComandaRepository
   ) {}
 
-  async execute(tableId: string, establishmentId: string): Promise<Comanda> {
+  async execute(tableId: string, establishmentId: string, guestsCount: number | null = null): Promise<Comanda> {
     const table = await this.tableRepository.findById(tableId, establishmentId)
     if (!table) throw new NotFoundError('Mesa')
 
@@ -31,7 +31,7 @@ export class OpenComandaUseCase {
       if (attempts > 20) throw new Error('Não foi possível gerar um código único — tente novamente')
     } while (await this.comandaRepository.isCodeActiveInEstablishment(code, establishmentId))
 
-    const comanda = await this.comandaRepository.create({ establishmentId, tableId, code })
+    const comanda = await this.comandaRepository.create({ establishmentId, tableId, code, guestsCount })
 
     await this.tableRepository.updateStatus(tableId, establishmentId, 'occupied')
 

@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { GripVertical } from 'lucide-react'
 import type { TableStatus, TableWithComanda } from '@/constants/tableLabels'
+import { TableSeats } from './TableSeats'
+import { guestsAtTable, seatsLabel } from './seatLayout'
 
 interface TableFloorMapProps {
   tables: TableWithComanda[]
@@ -17,10 +19,10 @@ interface TableFloorMapProps {
 
 const GRID_SIZE = 20
 const CARD_WIDTH = 152
-const CARD_HEIGHT = 128
+const CARD_HEIGHT = 196
 const FALLBACK_COLS = 6
 const FALLBACK_SPACING_X = 176
-const FALLBACK_SPACING_Y = 152
+const FALLBACK_SPACING_Y = 216
 const CANVAS_PADDING = 32
 
 function snapToGrid(value: number): number {
@@ -153,6 +155,19 @@ export function TableFloorMap({
           const isDragging = draggingId === table.id
           const isSelected = selectedIds.has(table.id)
           const isGrouped = !!table.groupId
+          const guests = guestsAtTable(table.comandas)
+          const drawing = (
+            <>
+              <TableSeats
+                number={table.number}
+                capacity={table.capacity}
+                guests={guests}
+                status={table.status}
+                className="block mx-auto h-20 w-full"
+              />
+              <p className="text-[11px] text-gray-500 text-center mt-1">{seatsLabel(table.capacity, guests)}</p>
+            </>
+          )
           return (
             <div
               key={table.id}
@@ -190,9 +205,8 @@ export function TableFloorMap({
               )}
               {selectionMode && !isGrouped ? (
                 <button type="button" onClick={() => onToggleSelect(table.id)} className="w-full text-left">
-                  <p className="text-xl font-bold text-gray-900 leading-tight">{table.number}</p>
-                  <p className="text-xs text-gray-500">{table.capacity} lugares</p>
-                  <p className={`text-[10px] font-medium mt-1 ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
+                  {drawing}
+                  <p className={`text-[10px] font-medium mt-1 text-center ${isSelected ? 'text-indigo-600' : 'text-gray-400'}`}>
                     {isSelected ? 'Selecionada' : 'Toque para selecionar'}
                   </p>
                 </button>
@@ -203,10 +217,9 @@ export function TableFloorMap({
                   className="w-full text-left disabled:cursor-not-allowed disabled:opacity-70"
                   disabled={selectionMode}
                 >
-                  <p className="text-xl font-bold text-gray-900 leading-tight">{table.number}</p>
-                  <p className="text-xs text-gray-500">{table.capacity} lugares</p>
+                  {drawing}
                   {table.comanda && (
-                    <span className="inline-block mt-1.5 text-[10px] font-mono font-bold text-gray-800 bg-white/80 px-1.5 py-0.5 rounded border">
+                    <span className="block w-fit mx-auto mt-1.5 text-[10px] font-mono font-bold text-gray-800 bg-white/80 px-1.5 py-0.5 rounded border">
                       {table.comanda.code}
                     </span>
                   )}
