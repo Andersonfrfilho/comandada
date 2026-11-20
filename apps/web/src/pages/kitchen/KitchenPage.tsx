@@ -17,6 +17,7 @@ import {
   type KitchenUrgency,
 } from '@/constants/kitchenPriority'
 import { orderNumberLabel, orderPartyLabel } from '@/lib/orderLabel'
+import { ITEM_READY_LABELS } from '@/constants/partialConfirmation'
 
 interface OrderItem {
   id: string
@@ -97,6 +98,8 @@ function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardPro
   const { priority } = order
   const { slack, urgency } = liveUrgency(priority.startBy, now)
   const doNow = priority.doNow || (order.status === 'received' && (urgency === 'late' || urgency === 'now'))
+  const readyCount = order.items.filter((item) => item.readyAt).length
+  const readyPercent = order.items.length > 0 ? Math.round((readyCount / order.items.length) * 100) : 0
 
   return (
     <div className={`bg-white rounded-xl shadow-sm border-l-4 ${KITCHEN_URGENCY_BORDER[urgency]} p-4 flex flex-col gap-3`}>
@@ -162,37 +165,60 @@ function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardPro
         </p>
       )}
 
-      <ul className="space-y-1">
-        {order.items.map((item) => (
-          <li key={item.id} className="flex items-center justify-between gap-2 text-base text-gray-900">
-            <span className={item.readyAt ? 'line-through text-gray-400' : undefined}>
-              <span className="font-bold text-lg mr-2">{item.quantity}×</span>
-              {item.productName}
-              {item.notes && (
-                <span className="mt-0.5 block rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">
-                  {item.notes}
-                </span>
-              )}
-            </span>
-            {item.readyAt ? (
-              <span className="shrink-0 inline-flex items-center gap-1 text-xs text-green-600">
-                <Check aria-hidden="true" className="h-3.5 w-3.5" />
-                Pronto
-              </span>
-            ) : (
-              <button
-                type="button"
-                onClick={() => onItemReady(order.id, item.id)}
-                disabled={busyIds.has(item.id)}
-                className="shrink-0 disabled:opacity-50 inline-flex items-center gap-1 rounded-md border border-green-600 px-2 py-1 text-xs font-medium text-green-700 transition-colors hover:bg-green-50 active:scale-95"
-              >
-                <Check aria-hidden="true" className="h-3.5 w-3.5" />
-                Pronto
-              </button>
-            )}
-          </li>
-        ))}
-      </ul>
+      {/* Mesma marcação do detalhe do pedido: caixa grande por item, "x/y prontos" e barra. */}
+      <div>
+        <div className="mb-1.5 flex items-center justify-between text-xs text-gray-500">
+          <span>
+            <span className="font-semibold tabular-nums text-gray-800">{ITEM_READY_LABELS.progress(readyCount, order.items.length)}</span>
+            {' · '}
+            {readyPercent}%
+          </span>
+        </div>
+        <progress
+          value={readyCount}
+          max={Math.max(order.items.length, 1)}
+          aria-label={ITEM_READY_LABELS.progress(readyCount, order.items.length)}
+          className="mb-2 h-1.5 w-full overflow-hidden rounded-full [&::-moz-progress-bar]:bg-green-500 [&::-webkit-progress-bar]:bg-gray-100 [&::-webkit-progress-value]:bg-green-500 [&::-webkit-progress-value]:transition-all"
+        />
+        <ul className="divide-y divide-gray-100">
+          {order.items.map((item) => {
+            const isReady = Boolean(item.readyAt)
+            const checkable = !isReady && !busyIds.has(item.id)
+            return (
+              <li key={item.id}>
+                <label className={`flex items-center gap-3 py-2 ${checkable ? 'cursor-pointer' : ''}`}>
+                  <input
+                    type="checkbox"
+                    checked={isReady}
+                    disabled={!checkable}
+                    onChange={() => onItemReady(order.id, item.id)}
+                    aria-label={ITEM_READY_LABELS.markItem(item.productName)}
+                    title={isReady ? ITEM_READY_LABELS.alreadyReady : undefined}
+                    className="h-7 w-7 flex-shrink-0 cursor-pointer rounded accent-green-600 disabled:cursor-default"
+                  />
+                  <span className="min-w-0 flex-1 text-base text-gray-900">
+                    <span className={`block ${isReady ? 'text-gray-400 line-through' : ''}`}>
+                      <span className="mr-2 text-lg font-bold">{item.quantity}×</span>
+                      {item.productName}
+                    </span>
+                    {item.notes && (
+                      <span className="mt-0.5 block rounded bg-amber-100 px-1.5 py-0.5 text-sm font-semibold text-amber-900">
+                        {item.notes}
+                      </span>
+                    )}
+                  </span>
+                  {isReady && item.readyAt && (
+                    <span className="inline-flex flex-shrink-0 items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-xs font-semibold text-green-800">
+                      <Check aria-hidden="true" className="h-3 w-3" />
+                      {ITEM_READY_LABELS.readyAt(formatClock(item.readyAt))}
+                    </span>
+                  )}
+                </label>
+              </li>
+            )
+          })}
+        </ul>
+      </div>
 
       {order.notes && (
         <p className="rounded-md bg-amber-50 border border-amber-200 px-2 py-1.5 text-sm font-medium text-amber-900">{order.notes}</p>
