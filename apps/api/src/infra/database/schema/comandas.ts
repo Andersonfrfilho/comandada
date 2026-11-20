@@ -18,9 +18,9 @@ export const comandas = pgTable('comandas', {
   customerName: varchar('customer_name', { length: 255 }),
   customerPhone: varchar('customer_phone', { length: 20 }),
   customerDocument: varchar('customer_document', { length: 20 }),
-  // Quantas pessoas sentaram (informado pelo garçom ao abrir a comanda).
+  /** Pessoas na comanda (cadeiras ocupadas no desenho da mesa; o garçom informa ao abrir); nulo = não informado. */
   guestsCount: smallint('guests_count'),
-  // Garçom pediu a conta: o caixa vê na mesa e é avisado. Volta a nulo quando a conta é recebida.
+  // Garçom pediu a conta: o caixa vê na mesa e é avisado.
   billRequestedAt: timestamp('bill_requested_at', { withTimezone: true }),
   openedAt: timestamp('opened_at', { withTimezone: true }).defaultNow().notNull(),
   closedAt: timestamp('closed_at', { withTimezone: true }),

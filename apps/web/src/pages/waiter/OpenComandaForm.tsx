@@ -116,7 +116,7 @@ export function OpenComandaForm({ tableNumber, capacity, submitting, onSubmit, o
           </button>
           <span className="w-12 text-center text-3xl font-black tabular-nums">{guests}</span>
           <button
-            onClick={() => setGuests((value) => Math.min(99, value + 1))}
+            onClick={() => setGuests((value) => Math.min(50, value + 1))}
             aria-label="Mais uma pessoa"
             className="flex h-12 w-12 items-center justify-center rounded-xl bg-white ring-1 ring-gray-300 active:scale-95"
           >

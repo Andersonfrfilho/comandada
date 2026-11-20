@@ -12,6 +12,7 @@ import { ORDER_STATUS_COLORS, ORDER_STATUS_LABELS, type OrderStatus } from '@/co
 import { COMANDA_STATUS_LABELS, type ComandaStatus } from '@/constants/tableLabels'
 import { PaymentStep, type PaymentLeg } from '../orders/PaymentStep'
 import { elapsedLabel } from './elapsed'
+import { Select } from '@/components/ui/Select'
 
 interface BillItem {
   productName: string
@@ -245,19 +246,15 @@ export function ComandaBillModal({ comandaId, tables, onClose }: ComandaBillModa
                 Passar a comanda para a mesa
               </label>
               <div className="flex gap-2">
-                <select
+                <Select
                   id="transfer-table"
-                  value={transferTo}
-                  onChange={(event) => setTransferTo(event.target.value)}
-                  className="flex-1 border border-gray-300 rounded-lg px-3 py-2 text-sm"
-                >
-                  <option value="">Escolha a mesa</option>
-                  {otherTables.map((table) => (
-                    <option key={table.id} value={table.id}>
-                      Mesa {table.number}
-                    </option>
-                  ))}
-                </select>
+                  className="flex-1"
+                  value={transferTo || null}
+                  onChange={setTransferTo}
+                  placeholder="Escolha a mesa"
+                  title="Passar para a mesa"
+                  options={otherTables.map((table) => ({ value: table.id, label: `Mesa ${table.number}` }))}
+                />
                 <button
                   onClick={() => transferTo && transfer.mutate(transferTo)}
                   disabled={!transferTo || busy}

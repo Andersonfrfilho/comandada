@@ -8,6 +8,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { Skeleton } from '@/components/ui/Skeleton'
 import type { TableWithComanda } from '@/constants/tableLabels'
 import { elapsedLabel } from '@/pages/tables/elapsed'
+import { TableSeats } from '@/pages/tables/TableSeats'
 import { useWaiterAlertsStore } from './waiterAlerts'
 import { waiterPaths } from './waiterModel'
 
@@ -139,6 +140,14 @@ export function WaiterTablesPage() {
                       {occupied && summary.guests > 0 ? `${summary.guests}/${table.capacity}` : table.capacity}
                     </span>
                   </div>
+                  {/* Mesma mesa com cadeiras do painel: as cheias são as pessoas na comanda. */}
+                  <TableSeats
+                    number={table.number}
+                    capacity={table.capacity}
+                    guests={occupied && summary.guests > 0 ? summary.guests : null}
+                    status={table.status}
+                    className="pointer-events-none mx-auto my-1 block h-16 w-full max-w-[8rem]"
+                  />
                   {occupied ? (
                     <div className="mt-auto pt-2">
                       <p className="text-lg font-bold tabular-nums text-gray-900">{formatBRL(summary.total)}</p>

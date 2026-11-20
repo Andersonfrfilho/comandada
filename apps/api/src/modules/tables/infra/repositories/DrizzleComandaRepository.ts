@@ -137,6 +137,21 @@ export class DrizzleComandaRepository implements ComandaRepository {
     return comanda!
   }
 
+  async updateGuestsCount(id: string, establishmentId: string, guestsCount: number | null): Promise<Comanda | null> {
+    const [comanda] = await this.db
+      .update(schema.comandas)
+      .set({ guestsCount })
+      .where(
+        and(
+          eq(schema.comandas.id, id),
+          eq(schema.comandas.establishmentId, establishmentId),
+          eq(schema.comandas.status, 'open')
+        )
+      )
+      .returning()
+    return comanda ?? null
+  }
+
   async setBillRequested(id: string, establishmentId: string, requestedAt: Date | null): Promise<Comanda | null> {
     const [comanda] = await this.db
       .update(schema.comandas)

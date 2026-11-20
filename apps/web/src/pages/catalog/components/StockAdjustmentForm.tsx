@@ -4,6 +4,7 @@ import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { SlidersHorizontal } from 'lucide-react'
+import { Select, type SelectOption } from '@/components/ui/Select'
 
 interface StockAdjustmentFormProps {
   ingredientId: string
@@ -12,6 +13,16 @@ interface StockAdjustmentFormProps {
 
 type MovementType = 'adjustment' | 'loss'
 type Direction = 'increase' | 'decrease'
+
+const MOVEMENT_TYPE_OPTIONS: SelectOption<MovementType>[] = [
+  { value: 'adjustment', label: 'Ajuste (contagem)' },
+  { value: 'loss', label: 'Perda' },
+]
+
+const DIRECTION_OPTIONS: SelectOption<Direction>[] = [
+  { value: 'increase', label: 'Aumentar' },
+  { value: 'decrease', label: 'Diminuir' },
+]
 
 export function StockAdjustmentForm({ ingredientId, ingredientName }: StockAdjustmentFormProps) {
   const accessToken = useAuthStore((state) => state.accessToken)
@@ -72,26 +83,22 @@ export function StockAdjustmentForm({ ingredientId, ingredientName }: StockAdjus
         <div className="p-5 space-y-4">
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1">Tipo</label>
-            <select
+            <Select
               value={movementType}
-              onChange={(e) => setMovementType(e.target.value as MovementType)}
-              className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              <option value="adjustment">Ajuste (contagem)</option>
-              <option value="loss">Perda</option>
-            </select>
+              onChange={setMovementType}
+              ariaLabel="Tipo"
+              options={MOVEMENT_TYPE_OPTIONS}
+            />
           </div>
           {movementType === 'adjustment' && (
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Direção</label>
-              <select
+              <Select
                 value={direction}
-                onChange={(e) => setDirection(e.target.value as Direction)}
-                className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              >
-                <option value="increase">Aumentar</option>
-                <option value="decrease">Diminuir</option>
-              </select>
+                onChange={setDirection}
+                ariaLabel="Direção"
+                options={DIRECTION_OPTIONS}
+              />
             </div>
           )}
           <div>

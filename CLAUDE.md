@@ -342,7 +342,7 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - Mesas → comanda → lançar itens (`POST /orders`, tipo mesa, sem pagamento) → pedir a conta.
 - Abrir comanda: `POST /tables/:id/comanda` aceita `{ customerId?, customerName?, customerPhone?, guestsCount? }`
   (corpo vazio continua valendo). Telefone acha o cliente com e sem o nono dígito; com nome e sem cadastro, cadastra.
-  `comandas.guests_count` e `comandas.bill_requested_at` (migration `0056`).
+  `comandas.guests_count` e `comandas.bill_requested_at` (migrations `0056` e `0057`).
 - Pedir a conta: `POST /comandas/:id/request-bill` (`{ requested }`) → evento `comanda:bill_requested`; o painel avisa
   quem tem `cashier:write` e a mesa mostra "Conta pedida". Quem tem caixa também recebe pelo app (`ComandaBillModal`).
 - Pedido pronto: `order:status_changed` traz `number`, `type`, `tableId`, `comandaId`; pedido de mesa pronto toca o bipe,
@@ -354,6 +354,9 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - Status de entrega e de nota em `constants/statusLabels.ts` (pedido em `orderLabels.ts`): mesmo nome e cor em toda tela.
 - Números e datas em pt-BR com `formatBRL`/`formatDecimal`/`formatPercent`/`formatMinutes`/`formatUnitCost` (`lib/listing.ts`);
   nada de `toFixed` na tela. Endereço da entrega por `formatDeliveryAddress` (aceita o formato antigo rua/número).
+- Escolha numa lista sempre com `components/ui/Select.tsx` (`FilterSelect` para filtro com "Todos"), nunca `<select>` nativo:
+  lista presa ao botão num portal no computador (modal não corta, Esc não fecha o modal) e folha de baixo no celular,
+  com o nome do campo de título; busca liga sozinha com mais de 8 opções.
 - Confirmação com `confirmDialog` (`stores/confirmStore.ts`, desenhado pelo `ConfirmHost`), erro com `toast`; nunca
   `window.confirm`/`prompt`/`alert`. Botão novo usa `components/ui/Button.tsx`.
 - Configurações: nome e WhatsApp do restaurante gravam em `establishments` (`ESTABLISHMENT_PROFILE_KEYS`); pedido mínimo

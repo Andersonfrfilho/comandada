@@ -33,6 +33,7 @@ import {
   type MapPoint,
 } from '@/pages/orders/orderDetailFormat'
 import { deliveryDeadline, deliveryGroup, sinceLabel, telUrl, whatsappUrl, type DeadlineTone } from './deliveryQueue'
+import { Select } from '@/components/ui/Select'
 
 export interface DeliveryOrder {
   id: string
@@ -448,19 +449,16 @@ export function DeliveryCard({
         {!onRoute && couriers.length > 0 && (
           <label className="flex flex-col gap-1 text-xs font-medium text-gray-500">
             {DELIVERY_CARD_LABELS.courier}
-            <select
+            <Select
               value={delivery.deliverer?.id ?? ''}
               disabled={busy}
-              onChange={(event) => onAssign(event.target.value || null)}
-              className="w-full min-w-0 rounded-xl border border-gray-300 bg-white px-3 py-2.5 text-sm text-gray-800"
-            >
-              <option value="">{DELIVERY_CARD_LABELS.noCourier}</option>
-              {couriers.map((courier) => (
-                <option key={courier.id} value={courier.id}>
-                  {courier.name}
-                </option>
-              ))}
-            </select>
+              onChange={(value) => onAssign(value || null)}
+              ariaLabel={DELIVERY_CARD_LABELS.courier}
+              options={[
+                { value: '', label: DELIVERY_CARD_LABELS.noCourier },
+                ...couriers.map((courier) => ({ value: courier.id, label: courier.name })),
+              ]}
+            />
           </label>
         )}
 

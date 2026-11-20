@@ -12,7 +12,7 @@ export interface CreateComandaInput {
   customerId?: string
   customerName?: string
   customerPhone?: string
-  guestsCount?: number
+  guestsCount?: number | null
 }
 
 export interface ComandaConsumption {
@@ -30,6 +30,8 @@ export interface ComandaRepository {
   listByTable(tableId: string, establishmentId: string): Promise<Comanda[]>
   listOpenByEstablishment(establishmentId: string): Promise<ComandaWithTable[]>
   create(input: CreateComandaInput): Promise<Comanda>
+  /** Muda quantas pessoas estão na comanda aberta; null quando a comanda não existe ou não está aberta. */
+  updateGuestsCount(id: string, establishmentId: string, guestsCount: number | null): Promise<Comanda | null>
   /** Garçom pediu a conta (ou desfez: `null`). */
   setBillRequested(id: string, establishmentId: string, requestedAt: Date | null): Promise<Comanda | null>
   confirm(id: string, input: { customerId?: string; customerName: string; customerPhone: string; customerDocument?: string }): Promise<Comanda>

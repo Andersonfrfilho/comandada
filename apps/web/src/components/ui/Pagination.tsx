@@ -1,4 +1,5 @@
 import { ChevronLeft, ChevronRight } from 'lucide-react'
+import { Select } from './Select'
 import { PAGE_SIZE_OPTIONS, clampPage, describePageRange, pageButtons, totalPagesFor } from '@/lib/listing'
 
 export interface PaginationProps {
@@ -35,21 +36,18 @@ export function Pagination({
       <div className="flex items-center gap-3 text-sm text-gray-500">
         <span>{describePageRange(currentPage, pageSize, total)}</span>
         {onPageSizeChange && (
-          <label className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1.5">
             <span className="hidden sm:inline">Por página</span>
-            <select
-              value={pageSize}
-              onChange={(event) => onPageSizeChange(Number(event.target.value))}
-              className="rounded-lg border border-gray-300 bg-white px-2 py-1 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              aria-label="Itens por página"
-            >
-              {pageSizeOptions.map((option) => (
-                <option key={option} value={option}>
-                  {option}
-                </option>
-              ))}
-            </select>
-          </label>
+            <Select
+              size="sm"
+              className="w-[76px]"
+              value={String(pageSize)}
+              onChange={(value) => onPageSizeChange(Number(value))}
+              options={pageSizeOptions.map((option) => ({ value: String(option), label: String(option) }))}
+              ariaLabel="Itens por página"
+              searchable={false}
+            />
+          </div>
         )}
       </div>
 

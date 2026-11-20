@@ -19,7 +19,7 @@ export interface OpenComandaCustomerInput {
   customerId?: string | undefined
   customerName?: string | undefined
   customerPhone?: string | undefined
-  guestsCount?: number | undefined
+  guestsCount?: number | null | undefined
 }
 
 interface ResolvedCustomer {
