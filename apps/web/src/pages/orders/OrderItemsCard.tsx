@@ -284,9 +284,9 @@ export function OrderItemsCard({
           const readyCheckable = tracksReady && !isReady && !marked && !isWaiting && !readyBusyIds.has(item.id)
           return (
             <div key={item.id} className={`py-2 first:pt-0 ${marked ? '-mx-2 rounded-lg bg-red-50 px-2' : ''}`}>
-              <div className="flex items-start justify-between gap-3 text-sm">
+              <div className="flex items-center justify-between gap-3 text-sm">
                 {/* O rótulo cobre só o "pronto": o botão "Não tem" fica fora, senão marcar falta marcaria pronto. */}
-                <label className={`flex min-w-0 flex-1 items-start gap-3 ${readyCheckable ? 'cursor-pointer' : ''}`}>
+                <label className={`flex min-w-0 flex-1 items-center gap-3 ${readyCheckable ? 'cursor-pointer' : ''}`}>
                   {tracksReady && (
                     <input
                       type="checkbox"
@@ -295,7 +295,7 @@ export function OrderItemsCard({
                       onChange={() => void markReady([item.id])}
                       aria-label={ITEM_READY_LABELS.markItem(item.productName)}
                       title={isReady ? ITEM_READY_LABELS.alreadyReady : undefined}
-                      className="mt-0.5 h-6 w-6 flex-shrink-0 cursor-pointer rounded accent-green-600 disabled:cursor-default"
+                      className="h-6 w-6 flex-shrink-0 cursor-pointer rounded accent-green-600 disabled:cursor-default"
                     />
                   )}
                   <span className="min-w-0">
