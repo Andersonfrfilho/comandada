@@ -1,88 +1,67 @@
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, type ReactNode } from 'react'
+import { useSearchParams } from 'react-router-dom'
 import { BRANDING_SETTING_KEYS, BRAND_LOGO_MAX_SIZE, DEFAULT_BRANDING } from '@/constants/branding'
 import { extractBrandColor, isHexColor, resizeImageToDataUrl } from '@/lib/branding'
 import { useBrandingStore } from '@/stores/brandingStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
+import { Button } from '@/components/ui/Button'
 import { FiscalSettingsPage } from './FiscalSettingsPage'
 import { DeliveryFeeManager } from './components/DeliveryFeeManager'
 import { OnlinePaymentSettings } from './components/OnlinePaymentSettings'
-import { Upload, Image, X } from 'lucide-react'
-import { API_URL } from '@/lib/apiEndpoints'
-
-interface SettingDef {
-  key: string
-  label: string
-  type: 'text' | 'number' | 'boolean' | 'color'
-  description?: string
-  section: 'marca' | 'estabelecimento' | 'operacao' | 'estoque' | 'impressao' | 'funcionalidades' | 'gerais'
-}
-
-const KNOWN_SETTINGS: SettingDef[] = [
-  { key: BRANDING_SETTING_KEYS.name, label: 'Nome exibido no painel', type: 'text', description: 'Aparece no login, no menu, na aba do navegador e no rodapé', section: 'marca' },
-  { key: BRANDING_SETTING_KEYS.primaryColor, label: 'Cor principal', type: 'color', description: 'Botões, destaques e menu ativo usam esta cor', section: 'marca' },
-  { key: BRANDING_SETTING_KEYS.domains, label: 'Domínios do painel', type: 'text', description: 'Separados por vírgula. Quem abrir o painel por um destes endereços já vê a sua marca no login', section: 'marca' },
-  { key: 'establishment_name', label: 'Nome do estabelecimento', type: 'text', section: 'estabelecimento' },
-  { key: 'whatsapp_number', label: 'Número WhatsApp', type: 'text', description: 'Com DDI e DDD, só números: 5511999999999', section: 'estabelecimento' },
-  { key: 'establishment_address', label: 'Endereço completo', type: 'text', description: 'Rua, número e bairro. Aparece na saudação do WhatsApp com o pin no mapa', section: 'estabelecimento' },
-  { key: 'establishment_city', label: 'Cidade', type: 'text', description: 'Ex.: Franca - SP. Ajuda a achar o ponto certo no mapa', section: 'estabelecimento' },
-  { key: 'establishment_lat', label: 'Latitude (opcional)', type: 'text', description: 'Só se o pin calculado pelo endereço sair no lugar errado. Ex.: -20.5386', section: 'estabelecimento' },
-  { key: 'establishment_lng', label: 'Longitude (opcional)', type: 'text', description: 'Ex.: -47.4008', section: 'estabelecimento' },
-  { key: 'establishment_instagram', label: 'Instagram', type: 'text', description: '@ do restaurante. Vira link na saudação do WhatsApp', section: 'estabelecimento' },
-  { key: 'establishment_website', label: 'Site ou cardápio online', type: 'text', description: 'Endereço do site. Vira link na saudação do WhatsApp', section: 'estabelecimento' },
-
-  { key: 'opening_time', label: 'Abre às', type: 'text', description: 'Formato HH:MM, ex.: 18:00', section: 'operacao' },
-  { key: 'closing_time', label: 'Fecha às', type: 'text', description: 'Formato HH:MM, ex.: 23:00', section: 'operacao' },
-  { key: 'working_days', label: 'Dias de funcionamento', type: 'text', description: 'Separados por vírgula: seg,ter,qua,qui,sex,sab,dom', section: 'operacao' },
-  { key: 'ignore_hours', label: 'Bot atende fora do horário', type: 'boolean', description: 'Ligado, o bot atende a qualquer hora (útil para testes)', section: 'funcionalidades' },
-  { key: 'default_preparation_time', label: 'Tempo de preparo padrão (min)', type: 'number', section: 'operacao' },
-  { key: 'min_order_value', label: 'Pedido mínimo (R$)', type: 'number', description: 'O bot não fecha pedido abaixo deste valor. Vazio ou 0: sem mínimo', section: 'operacao' },
-  { key: 'currency', label: 'Moeda', type: 'text', section: 'operacao' },
-  { key: 'timezone', label: 'Fuso horário', type: 'text', section: 'operacao' },
-
-  { key: 'expiry_alert_days', label: 'Dias de alerta de validade', type: 'number', section: 'estoque' },
-
-  { key: 'default_printer', label: 'Impressora padrão', type: 'text', section: 'impressao' },
-
-  { key: 'estimated_delivery_time', label: 'Tempo estimado de entrega (min)', type: 'number', section: 'gerais' },
-  { key: 'estimated_pickup_time', label: 'Tempo estimado de retirada (min)', type: 'number', section: 'gerais' },
-
-  { key: 'accept_orders', label: 'Aceitar pedidos', type: 'boolean', section: 'funcionalidades' },
-  { key: 'accept_delivery', label: 'Aceitar entregas', type: 'boolean', section: 'funcionalidades' },
-  { key: 'accept_pickup', label: 'Aceitar retirada', type: 'boolean', section: 'funcionalidades' },
-  { key: 'accept_table', label: 'Aceitar pedidos na mesa', type: 'boolean', section: 'funcionalidades' },
-]
-
-interface SectionConfig {
-  key: string
-  title: string
-}
-
-const SECTIONS: SectionConfig[] = [
-  { key: 'marca', title: 'Marca' },
-  { key: 'estabelecimento', title: 'Estabelecimento' },
-  { key: 'operacao', title: 'Operação' },
-  { key: 'estoque', title: 'Estoque' },
-  { key: 'impressao', title: 'Impressão' },
-  { key: 'gerais', title: 'Informações gerais' },
-  { key: 'funcionalidades', title: 'Funcionalidades' },
-]
-
-function toString(value: unknown): string {
-  if (value === null || value === undefined) return ''
-  return String(value)
-}
+import {
+  SETTING_FIELDS,
+  SETTING_SECTIONS,
+  WEEK_DAYS,
+  parseSettingValue,
+  parseWorkingDays,
+  settingToString,
+  toggleWorkingDay,
+  type SettingField,
+  type SettingSection,
+} from './settingsFields'
+import { Upload, Image, X, Store, Receipt, Bike, CreditCard, ChevronDown, KeyRound, ChevronRight } from 'lucide-react'
 
 type Tab = 'gerais' | 'fiscal' | 'delivery-fee' | 'payments'
+
+const TABS: { key: Tab; label: string; icon: typeof Store }[] = [
+  { key: 'gerais', label: 'Gerais', icon: Store },
+  { key: 'fiscal', label: 'Fiscal', icon: Receipt },
+  { key: 'delivery-fee', label: 'Entregas', icon: Bike },
+  { key: 'payments', label: 'Pagamentos', icon: CreditCard },
+]
+
+const TAB_KEYS = new Set<string>(TABS.map((tab) => tab.key))
+
+const INPUT_CLASS =
+  'w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-500 focus:border-brand-500'
+
+function Card({ title, description, children }: { title: string; description?: string; children: ReactNode }) {
+  return (
+    <section className="bg-white rounded-2xl shadow-sm p-5 md:p-6 mb-4">
+      <h2 className="text-base font-semibold text-gray-900">{title}</h2>
+      {description && <p className="text-sm text-gray-500 mt-0.5">{description}</p>}
+      <div className="mt-5">{children}</div>
+    </section>
+  )
+}
 
 export function SettingsPage() {
   const accessToken = useAuthStore((state) => state.accessToken)
   const queryClient = useQueryClient()
   const loadBrandingForEstablishment = useBrandingStore((state) => state.loadForEstablishment)
 
-  const [tab, setTab] = useState<Tab>('gerais')
+  // A aba fica no endereço (?aba=payments): dá para mandar o link direto e o voltar do navegador funciona.
+  const [searchParams, setSearchParams] = useSearchParams()
+  const tabParam = searchParams.get('aba') ?? 'gerais'
+  const tab: Tab = TAB_KEYS.has(tabParam) ? (tabParam as Tab) : 'gerais'
+  function selectTab(next: Tab) {
+    setSearchParams(next === 'gerais' ? {} : { aba: next }, { replace: true })
+  }
+
   const [values, setValues] = useState<Record<string, string>>({})
+  const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -102,7 +81,7 @@ export function SettingsPage() {
     if (keys.length > 0) {
       const map: Record<string, string> = {}
       for (const key of keys) {
-        map[key] = toString(settings[key])
+        map[key] = settingToString(settings[key])
       }
       setValues(map)
     }
@@ -111,34 +90,57 @@ export function SettingsPage() {
   const saveMutation = useMutation({
     mutationFn: ({ key, value }: { key: string; value: unknown }) =>
       api.put('/settings', { key, value }, accessToken ?? undefined),
-    onSuccess: () => {
-      void queryClient.invalidateQueries({ queryKey: ['settings'] })
-    },
-    onError: (e: Error) => setError(e.message),
   })
+
+  function savedValue(field: SettingField): string {
+    if (field.key in settings) return settingToString(settings[field.key])
+    return field.type === 'boolean' ? 'false' : ''
+  }
+
+  function getValue(field: SettingField): string {
+    return values[field.key] ?? savedValue(field)
+  }
+
+  // Só vai para a API o que mudou: menos chamadas e nenhum campo regravado sem querer.
+  const changedFields = SETTING_FIELDS.filter((field) => {
+    const current = values[field.key]
+    return current !== undefined && current !== savedValue(field)
+  })
+  const hasChanges = changedFields.length > 0
+
+  useEffect(() => {
+    if (!hasChanges) return
+    const warn = (event: BeforeUnloadEvent) => event.preventDefault()
+    window.addEventListener('beforeunload', warn)
+    return () => window.removeEventListener('beforeunload', warn)
+  }, [hasChanges])
 
   async function handleSave() {
     setError(null)
     setSaved(false)
-    const promises = KNOWN_SETTINGS.map((def) => {
-      const raw = values[def.key]
-      if (raw === undefined) return Promise.resolve()
-      let parsed: unknown = raw
-      if (def.type === 'number') parsed = raw === '' ? null : Number(raw)
-      if (def.type === 'boolean') parsed = raw === 'true'
-      return saveMutation.mutateAsync({ key: def.key, value: parsed })
-    })
-    await Promise.all(promises)
-    if (accessToken) void loadBrandingForEstablishment(accessToken)
-    setSaved(true)
-    setTimeout(() => setSaved(false), 3000)
+    setSaving(true)
+    try {
+      await Promise.all(
+        changedFields.map((field) =>
+          saveMutation.mutateAsync({ key: field.key, value: parseSettingValue(field, values[field.key] ?? '') })
+        )
+      )
+      await queryClient.invalidateQueries({ queryKey: ['settings'] })
+      if (accessToken) void loadBrandingForEstablishment(accessToken)
+      setSaved(true)
+      setTimeout(() => setSaved(false), 3000)
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Não consegui salvar. Tente de novo.')
+    } finally {
+      setSaving(false)
+    }
   }
 
-  function getValue(key: string, type: SettingDef['type']): string {
-    const v = values[key]
-    if (v !== undefined) return v
-    if (key in settings) return toString(settings[key])
-    return type === 'boolean' ? 'false' : ''
+  function handleDiscard() {
+    const map: Record<string, string> = {}
+    for (const key of Object.keys(settings)) map[key] = settingToString(settings[key])
+    setValues(map)
+    setError(null)
   }
 
   function setValue(key: string, val: string) {
@@ -175,6 +177,7 @@ export function SettingsPage() {
     }
     setValue(BRANDING_SETTING_KEYS.primaryColor, color)
     await saveMutation.mutateAsync({ key: BRANDING_SETTING_KEYS.primaryColor, value: color })
+    void queryClient.invalidateQueries({ queryKey: ['settings'] })
     if (accessToken) void loadBrandingForEstablishment(accessToken)
     setLogoColorNote(`Cor principal ajustada para ${color.toUpperCase()}, tirada do logo. Pode trocar abaixo.`)
   }
@@ -184,62 +187,130 @@ export function SettingsPage() {
     void saveMutation
       .mutateAsync({ key: BRANDING_SETTING_KEYS.logo, value: '' })
       .then(() => {
+        void queryClient.invalidateQueries({ queryKey: ['settings'] })
         if (accessToken) void loadBrandingForEstablishment(accessToken)
       })
   }
 
-  const logoUrl = getValue(BRANDING_SETTING_KEYS.logo, 'text')
+  const logoUrl = values[BRANDING_SETTING_KEYS.logo] ?? settingToString(settings[BRANDING_SETTING_KEYS.logo])
 
-  const fieldsBySection = new Map<string, SettingDef[]>()
-  for (const def of KNOWN_SETTINGS) {
-    const list = fieldsBySection.get(def.section) ?? []
-    list.push(def)
-    fieldsBySection.set(def.section, list)
+  function fieldInput(field: SettingField) {
+    const value = getValue(field)
+    const inputId = `setting-${field.key}`
+
+    if (field.type === 'color') {
+      const color = isHexColor(value) ? value : DEFAULT_BRANDING.primaryColor
+      return (
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex items-center gap-2 flex-1 min-w-[12rem]">
+            <input
+              type="color"
+              aria-label={`${field.label} (seletor)`}
+              value={color}
+              onChange={(e) => setValue(field.key, e.target.value)}
+              className="h-10 w-12 shrink-0 rounded-lg border border-gray-300 cursor-pointer p-0.5 bg-white"
+            />
+            <input
+              id={inputId}
+              type="text"
+              value={value}
+              placeholder={DEFAULT_BRANDING.primaryColor}
+              onChange={(e) => setValue(field.key, e.target.value)}
+              className={`${INPUT_CLASS} font-mono uppercase max-w-[10rem]`}
+            />
+          </div>
+          {logoUrl && (
+            <Button variant="secondary" onClick={() => void applyColorFromLogo(logoUrl)}>
+              Usar a cor do logo
+            </Button>
+          )}
+        </div>
+      )
+    }
+
+    if (field.type === 'days') {
+      const chosen = new Set(parseWorkingDays(value))
+      return (
+        <div className="flex flex-wrap gap-2" role="group" aria-labelledby={`${inputId}-label`}>
+          {WEEK_DAYS.map((day) => {
+            const isOn = chosen.has(day.key)
+            return (
+              <button
+                key={day.key}
+                type="button"
+                aria-pressed={isOn}
+                onClick={() => setValue(field.key, toggleWorkingDay(value, day.key))}
+                className={`min-w-[3.25rem] px-3 py-2 rounded-xl text-sm font-medium border transition-colors ${
+                  isOn
+                    ? 'bg-brand-600 border-brand-600 text-white hover:bg-brand-700'
+                    : 'bg-white border-gray-300 text-gray-500 hover:bg-gray-50'
+                }`}
+              >
+                {day.label}
+              </button>
+            )
+          })}
+        </div>
+      )
+    }
+
+    const htmlType = field.type === 'number' ? 'number' : field.type === 'time' ? 'time' : field.type === 'tel' ? 'tel' : field.type === 'url' ? 'url' : 'text'
+    return (
+      <div className="relative">
+        {field.prefix && (
+          <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">{field.prefix}</span>
+        )}
+        <input
+          id={inputId}
+          type={htmlType}
+          value={value}
+          placeholder={field.placeholder}
+          onChange={(e) => setValue(field.key, e.target.value)}
+          step={field.step}
+          min={field.type === 'number' ? '0' : undefined}
+          inputMode={field.type === 'number' ? (field.step === '1' ? 'numeric' : 'decimal') : field.type === 'tel' ? 'numeric' : undefined}
+          className={`${INPUT_CLASS} ${field.prefix ? 'pl-10' : ''} ${field.suffix ? 'pr-12' : ''}`}
+        />
+        {field.suffix && (
+          <span className="pointer-events-none absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">{field.suffix}</span>
+        )}
+      </div>
+    )
   }
 
-  const renderTextField = (def: SettingDef) => (
-    <div key={def.key}>
-      <label className="block text-sm font-medium text-gray-700 mb-1">{def.label}</label>
-      {def.type === 'color' && (
-        <input
-          type="color"
-          aria-label={def.label}
-          value={isHexColor(getValue(def.key, def.type)) ? getValue(def.key, def.type) : DEFAULT_BRANDING.primaryColor}
-          onChange={(e) => setValue(def.key, e.target.value)}
-          className="h-10 w-16 mb-2 rounded-lg border border-gray-300 cursor-pointer"
-        />
-      )}
-      {def.type === 'color' && logoUrl && (
-        <button
-          type="button"
-          onClick={() => void applyColorFromLogo(logoUrl)}
-          className="ml-3 mb-2 align-top px-3 py-2 text-xs font-medium text-brand-700 border border-brand-200 rounded-lg hover:bg-brand-50 transition-colors"
-        >
-          Usar a cor do logo
-        </button>
-      )}
-      <input
-        type={def.type === 'number' ? 'number' : 'text'}
-        value={getValue(def.key, def.type)}
-        onChange={(e) => setValue(def.key, e.target.value)}
-        step={def.type === 'number' ? '0.01' : undefined}
-        min={def.type === 'number' ? '0' : undefined}
-        className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-      />
-      {def.description && (
-        <p className="text-xs text-gray-400 mt-1">{def.description}</p>
-      )}
-    </div>
-  )
-
-  const renderBoolField = (def: SettingDef) => {
-    const isOn = getValue(def.key, 'boolean') === 'true'
+  function renderField(field: SettingField) {
+    const inputId = `setting-${field.key}`
     return (
-      <div key={def.key} className="flex items-center justify-between py-1">
-        <span className="text-sm text-gray-700">{def.label}</span>
+      <div key={field.key} className={field.wide ? 'col-span-2' : field.compact ? 'col-span-1' : 'col-span-2 sm:col-span-1'}>
+        <label id={`${inputId}-label`} htmlFor={inputId} className="block text-sm font-medium text-gray-700 mb-1.5">
+          {field.label}
+        </label>
+        {fieldInput(field)}
+        {field.description && <p className="text-xs text-gray-500 mt-1.5">{field.description}</p>}
+      </div>
+    )
+  }
+
+  function renderSwitch(field: SettingField) {
+    const isOn = getValue(field) === 'true'
+    const inputId = `setting-${field.key}`
+    return (
+      <div key={field.key} className="flex items-center justify-between gap-4 py-3 first:pt-0 last:pb-0">
+        <div className="min-w-0">
+          <label htmlFor={inputId} className="text-sm font-medium text-gray-800 cursor-pointer">
+            {field.label}
+          </label>
+          {field.description && <p className="text-xs text-gray-500 mt-0.5">{field.description}</p>}
+        </div>
         <button
-          onClick={() => setValue(def.key, isOn ? 'false' : 'true')}
-          className={`relative w-11 h-6 rounded-full transition-colors ${isOn ? 'bg-brand-600' : 'bg-gray-200'}`}
+          id={inputId}
+          type="button"
+          role="switch"
+          aria-checked={isOn}
+          onClick={() => setValue(field.key, isOn ? 'false' : 'true')}
+          className={`relative shrink-0 w-11 h-6 rounded-full transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand-500 focus-visible:ring-offset-2 ${
+            isOn ? 'bg-brand-600' : 'bg-gray-300'
+          }`}
         >
           <span
             className={`absolute top-0.5 left-0.5 w-5 h-5 bg-white rounded-full shadow transition-transform ${isOn ? 'translate-x-5' : 'translate-x-0'}`}
@@ -249,170 +320,184 @@ export function SettingsPage() {
     )
   }
 
-  return (
-    <div className="p-4 md:p-6 max-w-2xl mx-auto">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-xl font-bold text-gray-900">Configurações</h1>
-        {tab === 'gerais' && (
-          <button
-            onClick={() => void handleSave()}
-            disabled={saveMutation.isPending}
-            className="px-5 py-2 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 disabled:opacity-50 transition-colors active:scale-95"
-          >
-            {saveMutation.isPending ? 'Salvando...' : saved ? '✓ Salvo' : 'Salvar'}
-          </button>
+  function renderLogo() {
+    return (
+      <div className="flex items-start gap-4 pb-5 mb-5 border-b border-gray-100">
+        <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
+          {logoUrl ? (
+            <img src={logoUrl} alt="Logo do estabelecimento" className="w-full h-full object-contain" />
+          ) : (
+            <Image className="h-8 w-8 text-gray-300" />
+          )}
+        </div>
+        <div className="flex-1 min-w-0">
+          <p className="text-sm font-medium text-gray-700 mb-2">Logo do restaurante</p>
+          <div className="flex flex-wrap items-center gap-2 mb-2">
+            <Button
+              size="sm"
+              onClick={() => logoInputRef.current?.click()}
+              loading={uploadLoading}
+              loadingLabel="Enviando..."
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {logoUrl ? 'Trocar logo' : 'Enviar logo'}
+            </Button>
+            {logoUrl && (
+              <Button size="sm" variant="secondary" onClick={handleLogoRemove} className="text-red-600">
+                <X className="h-3.5 w-3.5" />
+                Remover
+              </Button>
+            )}
+          </div>
+          <p className="text-xs text-gray-500">
+            PNG, JPG ou GIF. O fundo liso (preto, branco...) sai sozinho. Aparece no login, no menu, na aba e na figurinha do WhatsApp.
+          </p>
+          {logoColorNote && <p className="mt-1 text-xs text-gray-600">{logoColorNote}</p>}
+          {uploadError && <p className="mt-1 text-xs text-red-600">{uploadError}</p>}
+          <input
+            ref={logoInputRef}
+            type="file"
+            accept="image/png,image/jpeg,image/gif"
+            onChange={(e) => {
+              const file = e.target.files?.[0]
+              if (!file) return
+              void handleLogoUpload(file)
+              if (logoInputRef.current) logoInputRef.current.value = ''
+            }}
+            className="hidden"
+          />
+        </div>
+      </div>
+    )
+  }
+
+  function renderSection(section: SettingSection) {
+    const fields = SETTING_FIELDS.filter((field) => field.section === section.key)
+    if (section.key === 'funcionalidades') {
+      return (
+        <Card key={section.key} title={section.title} description={section.description}>
+          <div className="divide-y divide-gray-100">{fields.map(renderSwitch)}</div>
+        </Card>
+      )
+    }
+    const mainFields = fields.filter((field) => !field.advanced)
+    const advancedFields = fields.filter((field) => field.advanced)
+    const advancedFilled = advancedFields.some((field) => getValue(field) !== '')
+    return (
+      <Card key={section.key} title={section.title} description={section.description}>
+        {section.key === 'marca' && renderLogo()}
+        <div className="grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-5">{mainFields.map(renderField)}</div>
+        {advancedFields.length > 0 && (
+          <details className="group mt-5 rounded-xl border border-gray-200" open={advancedFilled || undefined}>
+            <summary className="flex cursor-pointer list-none items-center justify-between px-4 py-3 text-sm font-medium text-gray-700 [&::-webkit-details-marker]:hidden">
+              Ajuste fino do pin no mapa
+              <ChevronDown className="h-4 w-4 text-gray-400 transition-transform group-open:rotate-180" />
+            </summary>
+            <div className="grid grid-cols-2 gap-x-3 sm:gap-x-4 gap-y-5 px-4 pb-4">{advancedFields.map(renderField)}</div>
+          </details>
         )}
+      </Card>
+    )
+  }
+
+  return (
+    <div className={`p-4 md:p-6 max-w-3xl mx-auto ${tab === 'gerais' && hasChanges ? 'pb-28' : ''}`}>
+      <div className="flex items-center justify-between gap-3 mb-5">
+        <div>
+          <h1 className="text-xl font-bold text-gray-900">Configurações</h1>
+          <p className="text-sm text-gray-500">Dados do restaurante, horário, entregas, notas e pagamentos.</p>
+        </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex gap-1 mb-4 bg-gray-100 rounded-xl p-1">
-        {([
-          { key: 'gerais', label: 'Gerais' },
-          { key: 'fiscal', label: 'Fiscal' },
-          { key: 'delivery-fee', label: 'Entregas' },
-          { key: 'payments', label: 'Pagamentos' },
-        ] as const).map((t) => (
-          <button
-            key={t.key}
-            onClick={() => setTab(t.key)}
-            className={`flex-1 px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
-              tab === t.key
-                ? 'bg-white text-gray-900 shadow-sm'
-                : 'text-gray-500 hover:text-gray-700'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="mb-5 -mx-4 px-4 md:mx-0 md:px-0 overflow-x-auto">
+        <div role="tablist" aria-label="Seções das configurações" className="flex gap-1 bg-gray-100 rounded-xl p-1 min-w-max md:min-w-0">
+          {TABS.map((item) => {
+            const Icon = item.icon
+            const isActive = tab === item.key
+            return (
+              <button
+                key={item.key}
+                role="tab"
+                aria-selected={isActive}
+                onClick={() => selectTab(item.key)}
+                className={`flex flex-1 items-center justify-center gap-2 whitespace-nowrap px-3 sm:px-4 py-2 text-sm font-medium rounded-lg transition-colors ${
+                  isActive ? 'bg-white text-gray-900 shadow-sm' : 'text-gray-500 hover:text-gray-700'
+                }`}
+              >
+                <Icon className={`hidden sm:block h-4 w-4 ${isActive ? 'text-brand-600' : ''}`} />
+                {item.label}
+              </button>
+            )
+          })}
+        </div>
       </div>
-
-      {error && (
-        <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
-      )}
 
       {tab === 'gerais' && (
         <>
+          {error && (
+            <div className="mb-4 px-4 py-3 bg-red-50 border border-red-200 rounded-xl text-sm text-red-700">{error}</div>
+          )}
+          {saved && !hasChanges && (
+            <div role="status" className="mb-4 px-4 py-3 bg-green-50 border border-green-200 rounded-xl text-sm text-green-800">
+              Configurações salvas.
+            </div>
+          )}
           {isLoading ? (
             <p className="text-gray-400 text-center py-16">Carregando...</p>
           ) : (
             <>
-              {/* Logo upload section (T8.1) */}
-              <div className="bg-white rounded-2xl shadow-sm p-5 mb-4">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-4">Logo do restaurante</h2>
-                <div className="flex items-start gap-4">
-                  <div className="w-24 h-24 rounded-xl border-2 border-dashed border-gray-300 bg-gray-50 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    {logoUrl ? (
-                      <div className="relative w-full h-full group">
-                        <img
-                          src={logoUrl}
-                          alt="Logo do estabelecimento"
-                          className="w-full h-full object-contain bg-gray-100"
-                          onError={(e) => {
-                            (e.currentTarget as HTMLImageElement).style.display = 'none'
-                            ;(e.currentTarget.nextElementSibling as HTMLElement).style.display = 'flex'
-                          }}
-                        />
-                        <div className="hidden absolute inset-0 bg-black/50 group-hover:flex items-center justify-center" />
-                      </div>
-                    ) : (
-                      <Image className="h-8 w-8 text-gray-300" />
-                    )}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-2">
-                      <button
-                        onClick={() => logoInputRef.current?.click()}
-                        disabled={uploadLoading}
-                        className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                        {uploadLoading ? 'Enviando...' : 'Fazer upload'}
-                      </button>
-                      {logoUrl && (
-                        <button
-                          onClick={handleLogoRemove}
-                          className="flex items-center gap-1 px-2.5 py-1.5 text-xs font-medium text-red-600 border border-red-200 rounded-lg hover:bg-red-50 transition-colors"
-                        >
-                          <X className="h-3.5 w-3.5" />
-                          Remover
-                        </button>
-                      )}
-                    </div>
-                    <p className="text-xs text-gray-400">
-                      PNG, JPG ou GIF. O fundo liso (preto, branco...) sai sozinho. Aparece no login, no menu, na aba e na figurinha do WhatsApp.
-                    </p>
-                    {logoColorNote && (
-                      <p className="mt-1 text-xs text-gray-500">{logoColorNote}</p>
-                    )}
-                    {uploadError && (
-                      <p className="mt-1 text-xs text-red-500">{uploadError}</p>
-                    )}
-                    <input
-                      ref={logoInputRef}
-                      type="file"
-                      accept="image/png,image/jpeg,image/gif"
-                      onChange={(e) => {
-                        const file = e.target.files?.[0]
-                        if (!file) return
-                        void handleLogoUpload(file)
-                        if (logoInputRef.current) logoInputRef.current.value = ''
-                      }}
-                      className="hidden"
-                    />
-                  </div>
+              {SETTING_SECTIONS.map(renderSection)}
+
+              <a
+                href="/change-password"
+                className="flex items-center justify-between bg-white rounded-2xl shadow-sm p-5 md:px-6 hover:bg-gray-50 transition-colors"
+              >
+                <span className="flex items-center gap-3">
+                  <KeyRound className="h-5 w-5 text-gray-400" />
+                  <span>
+                    <span className="block text-base font-semibold text-gray-900">Segurança</span>
+                    <span className="block text-sm text-gray-500">Alterar minha senha</span>
+                  </span>
+                </span>
+                <ChevronRight className="h-5 w-5 text-gray-400" />
+              </a>
+            </>
+          )}
+
+          {hasChanges && (
+            <div className="fixed inset-x-0 bottom-0 z-30 md:left-56 border-t border-gray-200 bg-white/95 backdrop-blur shadow-[0_-4px_16px_rgba(0,0,0,0.06)]">
+              <div className="max-w-3xl mx-auto flex items-center justify-between gap-3 px-4 md:px-6 py-3">
+                <p className="text-sm text-gray-700">
+                  {changedFields.length === 1 ? '1 alteração não salva' : `${changedFields.length} alterações não salvas`}
+                </p>
+                <div className="flex gap-2">
+                  <Button variant="ghost" onClick={handleDiscard} disabled={saving}>
+                    Descartar
+                  </Button>
+                  <Button onClick={() => void handleSave()} loading={saving} loadingLabel="Salvando...">
+                    Salvar
+                  </Button>
                 </div>
               </div>
-
-              {/* Sections with text/number fields */}
-              {SECTIONS.filter((s) => s.key !== 'funcionalidades').map((section) => {
-                const fields = fieldsBySection.get(section.key) ?? []
-                if (fields.length === 0) return null
-                const nonBoolFields = fields.filter((f) => f.type !== 'boolean')
-                if (nonBoolFields.length === 0) return null
-
-                return (
-                  <div key={section.key} className="bg-white rounded-2xl shadow-sm p-5 mb-4 space-y-4">
-                    <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider">{section.title}</h2>
-                    {nonBoolFields.map(renderTextField)}
-                  </div>
-                )
-              })}
-
-              {/* Boolean toggles */}
-              <div className="bg-white rounded-2xl shadow-sm p-5 space-y-3">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-1">Funcionalidades</h2>
-                {(fieldsBySection.get('funcionalidades') ?? []).map(renderBoolField)}
-              </div>
-
-              {/* Change password link */}
-              <div className="mt-4 bg-white rounded-2xl shadow-sm p-5">
-                <h2 className="text-sm font-semibold text-gray-500 uppercase tracking-wider mb-3">Segurança</h2>
-                <a
-                  href="/change-password"
-                  className="text-sm text-brand-600 hover:text-brand-700 font-medium"
-                >
-                  Alterar minha senha →
-                </a>
-              </div>
-            </>
+            </div>
           )}
         </>
       )}
 
       {tab === 'fiscal' && (
-        <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="bg-white rounded-2xl shadow-sm p-5 md:p-6">
           <FiscalSettingsPage />
         </div>
       )}
 
       {tab === 'delivery-fee' && (
-        <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="bg-white rounded-2xl shadow-sm p-5 md:p-6">
           <DeliveryFeeManager />
         </div>
       )}
 
       {tab === 'payments' && (
-        <div className="bg-white rounded-2xl shadow-sm p-5">
+        <div className="bg-white rounded-2xl shadow-sm p-5 md:p-6">
           <OnlinePaymentSettings />
         </div>
       )}
