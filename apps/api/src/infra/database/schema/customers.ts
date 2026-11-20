@@ -9,6 +9,9 @@ export const customers = pgTable('customers', {
   name: varchar('name', { length: 255 }).notNull(),
   whatsappNumber: varchar('whatsapp_number', { length: 20 }).notNull(),
   phone: varchar('phone', { length: 20 }),
+  // Nome do perfil do WhatsApp (contacts[].profile.name do webhook da Meta), como o cliente escreveu.
+  // Atualizado a cada mensagem; `name` só herda dele enquanto ainda é o número.
+  whatsappProfileName: varchar('whatsapp_profile_name', { length: 255 }),
   email: varchar('email', { length: 255 }),
   document: varchar('document', { length: 20 }),
   birthDate: date('birth_date'),

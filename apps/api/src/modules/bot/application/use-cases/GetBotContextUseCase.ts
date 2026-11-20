@@ -26,6 +26,8 @@ type Database = NodePgDatabase<typeof schema>
 export interface GetBotContextParams {
   whatsappNumber: string
   instance?: string | undefined
+  /** `contacts[].profile.name` da mensagem que chegou; grava o nome do contato. */
+  profileName?: string | undefined
 }
 
 interface BotOrderSummary {
@@ -104,7 +106,7 @@ export class GetBotContextUseCase {
     const { establishment, config, products, paymentTypes, orderTypes, tables, deliveryFeeRule, coordinates } =
       await this.loadSharedContext(params.instance)
     const establishmentId = establishment.id
-    const customer = await this.customerService.findByNumber({ establishmentId, whatsappNumber: params.whatsappNumber })
+    const customer = await this.findCustomer(establishmentId, params)
 
     // O que é do cliente (sessão, pedidos, conversa) e a agenda mudam a cada mensagem: sempre do banco.
     const [session, recentOrders, scheduleSlots, conversation, partialConfirmation, lastDeliveryAddress] = await Promise.all([
@@ -283,6 +285,18 @@ export class GetBotContextUseCase {
       total_without: roundCents(remainingTotal + deliveryFee),
       items_kept: items.filter((item) => !unavailableIds.includes(item.id)).length,
       substitutions,
+    }
+  }
+
+  // Gravar o nome do perfil é extra: se falhar, o bot responde do mesmo jeito.
+  private async findCustomer(establishmentId: string, params: GetBotContextParams): Promise<schema.Customer | undefined | null> {
+    const lookup = { establishmentId, whatsappNumber: params.whatsappNumber }
+    if (!params.profileName) return this.customerService.findByNumber(lookup)
+    try {
+      return await this.customerService.recordProfileName({ ...lookup, profileName: params.profileName })
+    } catch (error: unknown) {
+      console.error('[Bot] profile name not saved:', error instanceof Error ? error.message : error)
+      return this.customerService.findByNumber(lookup)
     }
   }
 

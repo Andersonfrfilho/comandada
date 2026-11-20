@@ -379,6 +379,13 @@
       "when": 1785606600000,
       "tag": "0054_yuyake_brand_name",
       "breakpoints": true
+    },
+    {
+      "idx": 54,
+      "version": "7",
+      "when": 1785693000000,
+      "tag": "0055_customer_whatsapp_profile_name",
+      "breakpoints": true
     }
   ]
 }

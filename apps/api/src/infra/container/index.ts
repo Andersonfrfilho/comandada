@@ -219,6 +219,7 @@ import { isStorageEnabled } from '@/infra/config/storageEnvironment'
 import { ConversationController } from '@/modules/conversations/infra/http/ConversationController'
 import { DrizzleConversationHistoryReader } from '@/modules/conversations/application/services/ConversationHistoryReader'
 import { DrizzleConversationPanelContextReader } from '@/modules/conversations/application/services/ConversationPanelContext'
+import { DrizzleConversationContactNamesReader } from '@/modules/conversations/application/services/ConversationContactNames'
 import { WhatsAppTemplateProvider } from '@adatechnology/meta-whatsapp-provider'
 import { WhatsAppSettingsController } from '@/modules/conversations/infra/http/WhatsAppSettingsController'
 
@@ -702,6 +703,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     {
       history: new DrizzleConversationHistoryReader(db),
       panelContext: new DrizzleConversationPanelContextReader(db, botConfigRepository),
+      contactNames: new DrizzleConversationContactNamesReader(db),
     },
     objectStorage?.forModule
   )
