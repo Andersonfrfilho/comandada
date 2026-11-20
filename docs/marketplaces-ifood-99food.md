@@ -10,7 +10,8 @@ Regras de cada plataforma: [iFood](integracoes/ifood.md) e [99Food](integracoes/
 ## Como funciona
 
 ```
-iFood / 99Food ──polling 30 s (ou webhook)──▶ worker ──▶ MarketplaceOrderService ──▶ CreateOrderUseCase
+iFood ──polling 30 s (ou webhook)──▶ worker ──▶ MarketplaceOrderService ──▶ CreateOrderUseCase
+99Food ──webhook assinado──────────▶ API ───┘
                                                                 │                       (painel, cozinha)
 painel muda status ──▶ UpdateOrderStatusUseCase ──onStatusChanged──┘──▶ ação na plataforma
 ```
@@ -21,7 +22,8 @@ Os conectores ficam no SDK `adatechnology-packages`, para outros projetos usarem
 |---|---|
 | `@adatechnology/marketplace-contracts` | Tipos comuns (pedido, evento, ação), porta `MarketplaceProvider`, regra de status e utilitários HTTP |
 | `@adatechnology/ifood-marketplace-provider` | iFood Merchant API, Financial v3 e Review v2 (`IfoodMarketplaceProvider`) |
-| `@adatechnology/opendelivery-marketplace-provider` | Padrão Open Delivery (Abrasel), usado pela 99Food e outras plataformas |
+| `@adatechnology/food99-marketplace-provider` | 99Food, protocolo nativo (padrão) e financeiro |
+| `@adatechnology/opendelivery-marketplace-provider` | Padrão Open Delivery (Abrasel): 99Food com `FOOD99_PROTOCOL=opendelivery` e outras plataformas |
 
 Mudança no conector é feita no SDK (com changeset), publicada e só então a versão sobe aqui.
 
@@ -59,13 +61,13 @@ com o mesmo `OpenDeliveryMarketplaceProvider`. Plataforma com API própria imple
 
 ### Status do painel → plataforma
 
-| Painel | iFood | Open Delivery (99Food) |
-|---|---|---|
-| Em preparo | `startPreparation` | `preparing` |
-| Pronto | `readyToPickup` | `readyForPickup` |
-| Em entrega (só entrega própria) | `dispatch` | `dispatch` |
-| Concluído, entrega própria | — (o iFood conclui) | `delivered` |
-| Concluído, retirada | — (o iFood conclui) | `pickedUp` |
+| Painel | iFood | 99Food (nativo) | Open Delivery |
+|---|---|---|---|
+| Em preparo | `startPreparation` | — (o aceite já marca) | `preparing` |
+| Pronto | `readyToPickup` | `ready` | `readyForPickup` |
+| Em entrega (só entrega própria) | `dispatch` | `selfdelivery/dispatch` com o entregador | `dispatch` |
+| Concluído, entrega própria | — (o iFood conclui) | `selfdelivery/delivered` | `delivered` |
+| Concluído, retirada | — (o iFood conclui) | `finish` | `pickedUp` |
 
 Passo pulado no painel sai antes, na ordem: o aceite vem primeiro e o
 "pronto" sai antes do "saiu para entrega" (exigência do iFood). Falha ao avisar a plataforma vai para o log e
@@ -104,14 +106,15 @@ Ver `apps/api/.env.example`. Resumo:
 | `IFOOD_ENABLED`, `FOOD99_ENABLED` | `true` liga a plataforma (e a fila de polling) |
 | `IFOOD_CLIENT_ID`, `IFOOD_CLIENT_SECRET` | Credenciais do app no Portal do Desenvolvedor iFood |
 | `IFOOD_MERCHANT_IDS` | Lojas no iFood (vírgula); aceita o antigo `IFOOD_MERCHANT_ID` |
-| `FOOD99_API_BASE_URL`, `FOOD99_TOKEN_URL` | Endereços da API Open Delivery que a 99Food informa |
-| `FOOD99_CLIENT_ID`, `FOOD99_CLIENT_SECRET`, `FOOD99_MERCHANT_IDS` | Credenciais e lojas na 99Food |
+| `FOOD99_APP_ID`, `FOOD99_APP_SECRET`, `FOOD99_SHOP_IDS` | App e lojas (`app_shop_id`) na 99Food; aceita os nomes antigos `FOOD99_CLIENT_ID`, `FOOD99_CLIENT_SECRET`, `FOOD99_MERCHANT_IDS` |
+| `FOOD99_PROTOCOL`, `FOOD99_API_BASE_URL`, `FOOD99_TOKEN_URL` | `opendelivery` usa o Open Delivery (aí URL da API e do token são obrigatórias) |
 | `IFOOD_ESTABLISHMENT_ID`, `FOOD99_ESTABLISHMENT_ID` | Restaurante do ComandAdA que recebe os pedidos |
 | `MARKETPLACE_AUTO_CONFIRM` | `false` deixa o aceite para o painel |
 
-O polling roda onde as filas rodam (serviço worker, ou a API sem `API_QUEUE_WORKERS=false`). O webhook é
-opcional: URL `https://<API_PUBLIC_URL>/webhooks/marketplaces/ifood` (assinatura `X-IFood-Signature`) ou
-`/webhooks/marketplaces/99food` (`X-App-Signature`), HMAC-SHA256 do corpo com o client secret.
+O polling do iFood roda onde as filas rodam (serviço worker, ou a API sem `API_QUEUE_WORKERS=false`); o webhook
+do iFood é opcional: `https://<API_PUBLIC_URL>/webhooks/marketplaces/ifood` (`X-IFood-Signature`, HMAC-SHA256 do
+corpo com o client secret). A 99Food só funciona por webhook: `https://<API_PUBLIC_URL>/webhooks/marketplaces/99food`
+(assinatura `didi-header-sign`), que a API precisa receber de fora em HTTPS.
 
 ## Passo a passo do cadastro (resumo)
 
@@ -128,9 +131,10 @@ opcional: URL `https://<API_PUBLIC_URL>/webhooks/marketplaces/ifood` (assinatura
 ### 99Food
 1. A loja precisa estar ativa na 99Food (Portal: merchant.99app.com).
 2. Cadastro no portal de desenvolvedor da 99Food (developer-food.99app.com, com aceite de confidencialidade):
-   criar o app e pegar as credenciais de teste.
+   criar o app, pegar App ID e secret de teste, cadastrar a URL do webhook e vincular a loja de teste com o
+   nosso `app_shop_id`.
 3. Ligar no staging com `FOOD99_*`, simular pedidos e conferir o checklist do arquivo privado
-   `marketplaces/99food-conhecimento.md`.
+   `marketplaces/99food-conhecimento.md` (valores em centavos, dinheiro com entregador, cupons).
 4. Preencher o código do PDV dos itens no Portal 99Food. Depois de integrado, a loja não aceita pedido à mão
    no app da 99.
 

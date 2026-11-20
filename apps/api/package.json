@@ -18,6 +18,7 @@
     "@adatechnology/fiscal-provider": "0.4.0",
     "@adatechnology/mercadopago-payment-provider": "0.2.0",
     "@adatechnology/marketplace-contracts": "0.1.0",
+    "@adatechnology/food99-marketplace-provider": "0.1.0",
     "@adatechnology/ifood-marketplace-provider": "0.1.0",
     "@adatechnology/opendelivery-marketplace-provider": "0.1.0",
     "@adatechnology/meta-whatsapp-contracts": "0.6.0",

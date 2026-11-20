@@ -633,7 +633,7 @@ export class MarketplaceOrderService {
     }
   }
 
-  /** Entregador do restaurante para a plataforma: quem está na entrega, senão o próprio restaurante. */
+  /** Entregador do restaurante para a 99Food: quem está na entrega, senão o próprio restaurante. */
   private async courierFor(order: schema.Order): Promise<MarketplaceOrderContext['courier']> {
     const [delivery] = await this.db
       .select({ name: schema.users.name })
