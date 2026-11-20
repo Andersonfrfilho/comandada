@@ -28,7 +28,12 @@ function buildDatabase() {
   }
 }
 
-function buildUseCase(cacheValues: Map<string, string>, ttlSeconds: number, audioOrdersEnabled = false) {
+function buildUseCase(
+  cacheValues: Map<string, string>,
+  ttlSeconds: number,
+  audioOrdersEnabled = false,
+  customerService: Partial<BotCustomerService> = { findByNumber: async () => undefined }
+) {
   const reads: string[] = []
   const cache = {
     get: async (key: string) => {
@@ -42,7 +47,7 @@ function buildUseCase(cacheValues: Map<string, string>, ttlSeconds: number, audi
   const useCase = new GetBotContextUseCase(
     buildDatabase() as never,
     {} as BotConfigRepository,
-    { findByNumber: async () => null } as unknown as BotCustomerService,
+    customerService as unknown as BotCustomerService,
     { execute: async () => [] },
     undefined,
     undefined,
@@ -74,6 +79,36 @@ describe('GetBotContextUseCase — cache do contexto compartilhado', () => {
     const context = await useCase.execute({ whatsappNumber: '5511988887777', instance: '5511999999999' })
 
     expect((context.config as Record<string, string>)['feature_audio_orders']).toBe('true')
+  })
+
+  it('grava o nome do perfil do WhatsApp antes de montar o contexto', async () => {
+    const values = new Map([[`${BOT_SHARED_CONTEXT_CACHE_PREFIX}5511999999999`, JSON.stringify(SHARED)]])
+    const recorded: unknown[] = []
+    const { useCase } = buildUseCase(values, 30, false, {
+      findByNumber: async () => undefined,
+      recordProfileName: async (params) => {
+        recorded.push(params)
+        return undefined
+      },
+    })
+
+    await useCase.execute({ whatsappNumber: '5511988887777', instance: '5511999999999', profileName: 'ana' })
+
+    expect(recorded).toEqual([{ establishmentId: ESTABLISHMENT_ID, whatsappNumber: '5511988887777', profileName: 'ana' }])
+  })
+
+  it('falha ao gravar o nome do perfil não derruba o contexto', async () => {
+    const values = new Map([[`${BOT_SHARED_CONTEXT_CACHE_PREFIX}5511999999999`, JSON.stringify(SHARED)]])
+    const { useCase } = buildUseCase(values, 30, false, {
+      findByNumber: async () => undefined,
+      recordProfileName: async () => {
+        throw new Error('db down')
+      },
+    })
+
+    const context = await useCase.execute({ whatsappNumber: '5511988887777', instance: '5511999999999', profileName: 'ana' })
+
+    expect(context.customer_name).toBeNull()
   })
 
   it('com TTL 0 nem olha o Redis', async () => {

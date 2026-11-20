@@ -16,6 +16,7 @@ import { ValidationError, UnauthorizedError, NotFoundError } from '@/shared/erro
 import type { MetaWhatsAppModuleRegistry } from '../whatsapp/metaWhatsAppModule'
 import type { ConversationHistoryReader } from '../../application/services/ConversationHistoryReader'
 import type { ConversationPanelContextReader } from '../../application/services/ConversationPanelContext'
+import type { ConversationContactNamesReader } from '../../application/services/ConversationContactNames'
 import {
   CONVERSATION_AGENT_SENDER as AGENT_SENDER,
   CONVERSATION_START_STATE as START_STATE,
@@ -92,6 +93,7 @@ export class ConversationController {
     private readonly readers: {
       readonly history: ConversationHistoryReader
       readonly panelContext: ConversationPanelContextReader
+      readonly contactNames?: ConversationContactNamesReader | undefined
     },
     private readonly objectStorage?: ObjectStorageInterface | undefined
   ) {}
@@ -127,10 +129,29 @@ export class ConversationController {
     })
 
     const hasNextPage = rows.length > limit
-    const data = hasNextPage ? rows.slice(0, limit) : rows
+    const pageRows = hasNextPage ? rows.slice(0, limit) : rows
+    const data = await this.withContactNames(companyId, pageRows)
     const consumed = (currentPage - 1) * limit + data.length
 
     response.json({ data, total: hasNextPage ? consumed + 1 : consumed, hasNextPage })
+  }
+
+  // Sem nome a lista mostra o telefone, como antes: falha aqui não derruba a inbox.
+  private async withContactNames<Row extends { whatsappNumber: string; clientName?: string }>(
+    companyId: string,
+    rows: Row[]
+  ): Promise<Row[]> {
+    if (!this.readers.contactNames || rows.length === 0) return rows
+    const names = await this.readers.contactNames
+      .namesFor(companyId, rows.map((row) => row.whatsappNumber))
+      .catch((error: unknown) => {
+        console.error('[Conversations] contact names unavailable:', error instanceof Error ? error.message : error)
+        return new Map<string, string>()
+      })
+    return rows.map((row) => {
+      const clientName = row.clientName ?? names.get(row.whatsappNumber)
+      return clientName ? { ...row, clientName } : row
+    })
   }
 
   history: RouteHandler = async (request, response) => {

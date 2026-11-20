@@ -20,7 +20,11 @@ const partialAnswerSchema = z.object({
   replacements: z.record(z.string().uuid(), z.string().uuid().nullable()).optional(),
 })
 
-const contextQuerySchema = z.object({ instance: z.string().max(40).optional() })
+const contextQuerySchema = z.object({
+  instance: z.string().max(40).optional(),
+  // Nome do perfil do WhatsApp; fora do formato não derruba o contexto, só não é gravado.
+  profileName: z.string().max(1000).optional().catch(undefined),
+})
 
 const sessionSchema = z.object({
   establishmentId: z.string().uuid(),
@@ -116,8 +120,8 @@ export class BotController {
 
   context: RouteHandler = async (request, response) => {
     const whatsappNumber = parseOrThrow(whatsappNumberSchema, request.params['whatsapp'])
-    const { instance } = parseOrThrow(contextQuerySchema, request.query)
-    response.json(await this.getContextUseCase.execute({ whatsappNumber, instance }))
+    const { instance, profileName } = parseOrThrow(contextQuerySchema, request.query)
+    response.json(await this.getContextUseCase.execute({ whatsappNumber, instance, profileName }))
   }
 
   saveSession: RouteHandler = async (request, response) => {
