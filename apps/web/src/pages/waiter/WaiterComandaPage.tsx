@@ -113,14 +113,14 @@ export function WaiterComandaPage() {
         )}
 
         {activeOrders.length === 0 && (
-          <p className="rounded-2xl bg-white p-6 text-center text-sm text-gray-500 ring-1 ring-gray-200">
+          <p className="rounded-2xl bg-white p-6 text-center text-sm text-gray-500 ring-1 ring-gray-300">
             Nada pedido ainda. Toque em <strong>Lançar itens</strong>.
           </p>
         )}
 
         <ul className="space-y-3">
           {bill.orders.map((order) => (
-            <li key={order.id} className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-200">
+            <li key={order.id} className="rounded-2xl bg-white p-3 shadow-sm ring-1 ring-gray-300">
               <div className="mb-2 flex items-center justify-between text-xs text-gray-500">
                 <span className="font-semibold text-gray-700">{order.displayCode}</span>
                 <span>

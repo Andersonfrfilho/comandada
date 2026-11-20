@@ -81,7 +81,7 @@ export function WaiterTablePage() {
             <li key={comanda.id}>
               <button
                 onClick={() => navigate(waiterPaths.comanda(comanda.id))}
-                className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-gray-200 active:scale-[0.98]"
+                className="flex w-full items-center gap-3 rounded-2xl bg-white p-3 text-left shadow-sm ring-1 ring-gray-300 active:scale-[0.98]"
               >
                 <div className="min-w-0 flex-1">
                   <p className="truncate text-base font-bold text-gray-900">{comanda.customerName ?? 'Sem nome'}</p>
@@ -105,7 +105,7 @@ export function WaiterTablePage() {
       )}
 
       {showForm ? (
-        <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-200">
+        <section className="rounded-2xl bg-white p-4 shadow-sm ring-1 ring-gray-300">
           <h2 className="mb-3 text-base font-bold">{comandas.length > 0 ? 'Nova comanda nesta mesa' : 'Abrir comanda'}</h2>
           <OpenComandaForm
             tableNumber={table.number}
@@ -118,7 +118,7 @@ export function WaiterTablePage() {
       ) : (
         <button
           onClick={() => setOpening(true)}
-          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-gray-700 ring-1 ring-dashed ring-gray-300 active:scale-[0.98]"
+          className="flex h-12 w-full items-center justify-center gap-2 rounded-xl text-sm font-semibold text-gray-700 ring-1 ring-gray-300 active:scale-[0.98]"
         >
           <Plus className="h-4 w-4" />
           Nova comanda (outro cliente na mesma mesa)

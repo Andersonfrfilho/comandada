@@ -57,7 +57,7 @@ function tileTone(summary: TableSummary): string {
   if (summary.billRequested) return 'bg-amber-50 ring-amber-300'
   if (summary.table.comandas.length > 0) return 'bg-brand-50 ring-brand-300'
   if (summary.table.status === 'reserved') return 'bg-yellow-50 ring-yellow-200'
-  return 'bg-white ring-gray-200'
+  return 'bg-white ring-gray-300'
 }
 
 /** Salão na mão do garçom: uma tela de mesas grandes para tocar, com consumo, pessoas e tempo. */
@@ -94,7 +94,7 @@ export function WaiterTablesPage() {
 
   return (
     <div className="px-3 pb-6 pt-3">
-      <div className="-mx-3 mb-3 flex gap-2 overflow-x-auto px-3 pb-1" role="tablist">
+      <div className="-mx-3 mb-2 flex gap-2 overflow-x-auto px-3 py-1" role="tablist">
         {(Object.keys(FILTER_LABELS) as TableFilter[]).map((key) => (
           <button
             key={key}
@@ -102,7 +102,7 @@ export function WaiterTablesPage() {
             aria-selected={filter === key}
             onClick={() => setFilter(key)}
             className={`flex h-10 shrink-0 items-center gap-1.5 rounded-full px-4 text-sm font-semibold transition-colors ${
-              filter === key ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-200'
+              filter === key ? 'bg-gray-900 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
             }`}
           >
             {FILTER_LABELS[key]}
