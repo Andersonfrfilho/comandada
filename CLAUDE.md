@@ -334,6 +334,21 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - `PATCH /comandas/:id/close` só encerra sem nada a receber; comanda encerrada não reabre. `PATCH /comandas/:id/transfer`
   troca de mesa (comanda + pedidos). Card da mesa mostra consumo e tempo; Mesas aparece para o caixa (`notHome`).
 
+## App do garçom (`/garcom`)
+
+- PWA de celular separado do painel (`apps/web/src/pages/waiter/`), instalável com o próprio manifest
+  (`public/garcom.webmanifest`, escopo `/garcom`; o `index.html` e o `WaiterApp` trocam o `<link rel="manifest">`).
+  Entra quem tem `orders:write` (cargo **Garçom** no seed: pedidos + clientes); login com `?next=/garcom` volta ao app.
+- Mesas → comanda → lançar itens (`POST /orders`, tipo mesa, sem pagamento) → pedir a conta.
+- Abrir comanda: `POST /tables/:id/comanda` aceita `{ customerId?, customerName?, customerPhone?, guestsCount? }`
+  (corpo vazio continua valendo). Telefone acha o cliente com e sem o nono dígito; com nome e sem cadastro, cadastra.
+  `comandas.guests_count` e `comandas.bill_requested_at` (migration `0056`).
+- Pedir a conta: `POST /comandas/:id/request-bill` (`{ requested }`) → evento `comanda:bill_requested`; o painel avisa
+  quem tem `cashier:write` e a mesa mostra "Conta pedida". Quem tem caixa também recebe pelo app (`ComandaBillModal`).
+- Pedido pronto: `order:status_changed` traz `number`, `type`, `tableId`, `comandaId`; pedido de mesa pronto toca o bipe,
+  vibra, notifica pelo service worker (`public/sw-notifications.js` abre a comanda) e fica em "Prontos para levar"
+  (no aparelho) até o garçom tocar em "Levei". Com o app fechado não chega aviso (sem Web Push).
+
 ## Painel: base comum
 
 - Status de entrega e de nota em `constants/statusLabels.ts` (pedido em `orderLabels.ts`): mesmo nome e cor em toda tela.

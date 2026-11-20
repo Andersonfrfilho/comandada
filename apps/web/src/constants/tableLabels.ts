@@ -8,6 +8,10 @@ export interface Comanda {
   status: ComandaStatus
   customerName: string | null
   customerPhone: string | null
+  /** Pessoas na comanda, informado pelo garçom ao abrir. */
+  guestsCount?: number | null
+  /** Garçom pediu a conta pelo app; o caixa recebe. */
+  billRequestedAt?: string | null
   openedAt: string
   closedAt: string | null
   /** Consumo da comanda aberta (pedidos não cancelados), vindo da lista de mesas. */

@@ -1,8 +1,9 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { BrandIdentity } from '@/components/brand/BrandIdentity'
 import { AppFooter } from '@/components/brand/AppFooter'
+import { isWaiterPath } from '@/pages/waiter/waiterModel'
 
 export function LoginPage() {
   const [email, setEmail] = useState(() => localStorage.getItem('order-hub-email') ?? '')
@@ -14,6 +15,10 @@ export function LoginPage() {
   const login = useAuthStore((state) => state.login)
   const user = useAuthStore((state) => state.user)
   const navigate = useNavigate()
+  const [searchParams] = useSearchParams()
+  // Só volta para o app do garçom: `next` vindo de fora não leva a lugar nenhum além dele.
+  const next = searchParams.get('next')
+  const afterLogin = next && isWaiterPath(next) ? next : '/'
 
   async function handleSubmit(event: FormEvent) {
     event.preventDefault()
@@ -23,7 +28,7 @@ export function LoginPage() {
       await login(email, password, rememberMe)
       // user state is updated synchronously by zustand before this line
       const updatedUser = useAuthStore.getState().user
-      navigate(updatedUser?.passwordMustChange ? '/change-password' : '/')
+      navigate(updatedUser?.passwordMustChange ? '/change-password' : afterLogin)
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Erro ao fazer login')
     } finally {

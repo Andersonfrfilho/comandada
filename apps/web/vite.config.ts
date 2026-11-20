@@ -39,7 +39,9 @@ export default defineConfig({
         ],
       },
       workbox: {
-        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2}'],
+        // Toque na notificação de pedido pronto abre o app do garçom (public/sw-notifications.js).
+        importScripts: ['/sw-notifications.js'],
+        globPatterns: ['**/*.{js,css,html,ico,png,svg,woff2,webmanifest}'],
         runtimeCaching: [
           {
             // Mesma origem: no servidor da loja o nginx serve a API em /api (ver infra/loja/nginx.conf).

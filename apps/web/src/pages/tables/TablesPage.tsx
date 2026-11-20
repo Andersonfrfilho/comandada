@@ -9,7 +9,8 @@ import { elapsedLabel } from './elapsed'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
 import { Skeleton } from '@/components/ui/Skeleton'
-import { Plus, LayoutGrid, Map, Link2, ReceiptText } from 'lucide-react'
+import { Plus, LayoutGrid, Map, Link2, ReceiptText, Smartphone } from 'lucide-react'
+import { Link } from 'react-router-dom'
 import { TableFloorMap } from './TableFloorMap'
 import {
   TABLE_STATUS_LABELS,
@@ -231,6 +232,16 @@ export function TablesPage() {
               {selectionMode ? 'Cancelar' : 'Juntar mesas'}
             </button>
           )}
+          {canLaunch && (
+            <Link
+              to="/garcom"
+              className="flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 transition-colors"
+              title="Abra no celular do garçom e instale na tela inicial"
+            >
+              <Smartphone className="h-4 w-4" />
+              App do garçom
+            </Link>
+          )}
           {canLaunch && <button
             onClick={openCreate}
             className="flex items-center gap-2 px-4 py-2 bg-brand-600 text-white text-sm font-medium rounded-lg hover:bg-brand-700 transition-colors active:scale-95"
@@ -301,9 +312,17 @@ export function TablesPage() {
                   <p className="text-2xl font-bold text-gray-900">{table.number}</p>
                   <p className="text-xs text-gray-500">{table.capacity} lugares</p>
                 </div>
-                <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[table.status]}`}>
-                  {STATUS_LABELS[table.status]}
-                </span>
+                <div className="flex flex-col items-end gap-1">
+                  <span className={`inline-flex px-1.5 py-0.5 rounded text-xs font-medium border ${STATUS_COLORS[table.status]}`}>
+                    {STATUS_LABELS[table.status]}
+                  </span>
+                  {table.comandas.some((comanda) => comanda.billRequestedAt) && (
+                    <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-500 text-white">
+                      <ReceiptText className="h-3 w-3" />
+                      Conta pedida
+                    </span>
+                  )}
+                </div>
               </div>
 
               {table.comanda ? (

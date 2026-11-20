@@ -11,6 +11,7 @@ export const ROLE_IDS = {
   cozinha: '00000000-0000-0000-0001-000000000004',
   entregador: '00000000-0000-0000-0001-000000000005',
   atendente: '00000000-0000-0000-0001-000000000006',
+  garcom: '00000000-0000-0000-0001-000000000007',
 } as const
 
 // `finance` estava fora desta lista embora as rotas usem `authorize('finance')`
@@ -54,6 +55,10 @@ const ROLE_PERMISSIONS = [
   { roleId: ROLE_IDS.gerente, resource: 'finance', action: 'write' },
   { roleId: ROLE_IDS.gerente, resource: 'users', action: 'read' },
   { roleId: ROLE_IDS.gerente, resource: 'users', action: 'write' },
+  // Garçom: abre comanda, lança pedido e pede a conta pelo app do celular (/garcom).
+  // Clientes vêm da migration 0048 (quem lança pedido lê e cadastra cliente).
+  { roleId: ROLE_IDS.garcom, resource: 'orders', action: 'read' },
+  { roleId: ROLE_IDS.garcom, resource: 'orders', action: 'write' },
 ]
 
 const DERIVED_PERMISSIONS_SQL_PATH = fileURLToPath(
@@ -75,6 +80,7 @@ export async function seedRolesAndPermissions(establishmentId: string): Promise<
     { id: ROLE_IDS.cozinha, establishmentId, name: 'Cozinha' },
     { id: ROLE_IDS.entregador, establishmentId, name: 'Entregador' },
     { id: ROLE_IDS.atendente, establishmentId, name: 'Atendente' },
+    { id: ROLE_IDS.garcom, establishmentId, name: 'Garçom' },
   ]
   await db.insert(schema.roles).values(roles).onConflictDoNothing()
 

@@ -19,6 +19,8 @@ export function registerTableRoutes(router: Router, controller: TableController)
   router.get('/tables/:id/comandas', authenticate, authorize('orders', 'read'), controller.listComandasByTable)
   router.post('/tables/:id/comanda', authenticate, authorize('orders', 'write'), controller.openComanda)
   router.patch('/comandas/:comandaId/close', authenticate, authorize('orders', 'write'), controller.closeComanda)
+  // App do garçom: pede a conta (o caixa recebe em Mesas).
+  router.post('/comandas/:comandaId/request-bill', authenticate, authorize('orders', 'write'), controller.requestBill)
   router.patch('/comandas/:comandaId/transfer', authenticate, authorize('orders', 'write'), controller.transferComanda)
   // Conta da mesa: quem lança pedido e quem cuida do caixa veem; receber é do caixa.
   router.get('/comandas/:comandaId/bill', authenticate, authorize('orders', 'read'), controller.getComandaBill)

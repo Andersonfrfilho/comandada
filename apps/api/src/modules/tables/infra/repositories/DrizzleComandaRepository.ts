@@ -1,6 +1,6 @@
 import { eq, and, desc, ne, sql } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import type { ComandaConsumption, ComandaRepository, ComandaWithTable } from '../../domain/repositories/ComandaRepository'
+import type { ComandaConsumption, ComandaRepository, ComandaWithTable, CreateComandaInput } from '../../domain/repositories/ComandaRepository'
 import * as schema from '@/infra/database/schema'
 import type { Comanda } from '@/infra/database/schema'
 
@@ -121,16 +121,35 @@ export class DrizzleComandaRepository implements ComandaRepository {
     return Promise.all(rows.map((r) => this.joinTable(r)))
   }
 
-  async create(input: { establishmentId: string; tableId: string; code: string }): Promise<Comanda> {
+  async create(input: CreateComandaInput): Promise<Comanda> {
     const [comanda] = await this.db
       .insert(schema.comandas)
       .values({
         establishmentId: input.establishmentId,
         tableId: input.tableId,
         code: input.code.toUpperCase(),
+        customerId: input.customerId ?? null,
+        customerName: input.customerName ?? null,
+        customerPhone: input.customerPhone ?? null,
+        guestsCount: input.guestsCount ?? null,
       })
       .returning()
     return comanda!
+  }
+
+  async setBillRequested(id: string, establishmentId: string, requestedAt: Date | null): Promise<Comanda | null> {
+    const [comanda] = await this.db
+      .update(schema.comandas)
+      .set({ billRequestedAt: requestedAt })
+      .where(
+        and(
+          eq(schema.comandas.id, id),
+          eq(schema.comandas.establishmentId, establishmentId),
+          eq(schema.comandas.status, 'open')
+        )
+      )
+      .returning()
+    return comanda ?? null
   }
 
   async confirm(

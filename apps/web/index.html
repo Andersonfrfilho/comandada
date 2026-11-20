@@ -13,6 +13,18 @@
   </head>
   <body>
     <div id="root"></div>
+    <script>
+      // App do garçom (/garcom) instala com o manifest dele: ícone "Garçom" que abre direto nas mesas.
+      if (location.pathname === '/garcom' || location.pathname.indexOf('/garcom/') === 0) {
+        var manifestLink = document.querySelector('link[rel="manifest"]')
+        if (!manifestLink) {
+          manifestLink = document.createElement('link')
+          manifestLink.rel = 'manifest'
+          document.head.appendChild(manifestLink)
+        }
+        manifestLink.href = '/garcom.webmanifest'
+      }
+    </script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

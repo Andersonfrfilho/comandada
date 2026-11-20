@@ -1,5 +1,6 @@
 import { useEffect } from 'react'
 import { useLocation } from 'react-router-dom'
+import { useQueryClient } from '@tanstack/react-query'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { useCan } from '@/stores/authStore'
 import { useAlertsStore } from '@/stores/alertsStore'
@@ -31,6 +32,8 @@ export function useOperationAlerts(): void {
   const watchesOrders = useCan({ resource: 'orders', action: 'write' })
   const watchesKitchen = useCan({ resource: 'kitchen', action: 'read' })
   const watchesConversations = useCan({ resource: 'conversations', action: 'read' })
+  const receivesBills = useCan({ resource: 'cashier', action: 'write' })
+  const queryClient = useQueryClient()
   const addOrder = useAlertsStore((state) => state.addOrder)
   const addHandoff = useAlertsStore((state) => state.addHandoff)
   const clearOrders = useAlertsStore((state) => state.clearOrders)
@@ -61,6 +64,18 @@ export function useOperationAlerts(): void {
       notifyBrowser(label, 'Chegou um pedido no ComandAdA.')
       const onOrderScreen = location.pathname === '/orders' || location.pathname === '/kitchen'
       if (!onOrderScreen) addOrder()
+      return
+    }
+
+    // Garçom pediu a conta pelo app: o caixa ouve e a mesa mostra "Conta pedida".
+    if (message.type === 'comanda:bill_requested') {
+      void queryClient.invalidateQueries({ queryKey: ['tables'] })
+      if (!receivesBills) return
+      const tableNumber = payloadField(message.payload, 'tableNumber')
+      const label = typeof tableNumber === 'number' ? `Mesa ${tableNumber} pediu a conta` : 'Mesa pediu a conta'
+      playAlertSound()
+      toast.info(label)
+      notifyBrowser(label, 'Abra Mesas para receber.')
       return
     }
 

@@ -56,6 +56,7 @@ import { ListComandasByTableUseCase } from '@/modules/tables/application/use-cas
 import { UngroupTablesUseCase } from '@/modules/tables/application/use-cases/UngroupTablesUseCase'
 import { UpdateTableUseCase } from '@/modules/tables/application/use-cases/UpdateTableUseCase'
 import { DeleteTableUseCase } from '@/modules/tables/application/use-cases/DeleteTableUseCase'
+import { RequestComandaBillUseCase } from '@/modules/tables/application/use-cases/RequestComandaBillUseCase'
 import { OpenComandaUseCase } from '@/modules/tables/application/use-cases/OpenComandaUseCase'
 import { CloseComandaUseCase } from '@/modules/tables/application/use-cases/CloseComandaUseCase'
 import { GetComandaBillUseCase } from '@/modules/tables/application/use-cases/GetComandaBillUseCase'
@@ -663,7 +664,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const deleteTableUseCase = new DeleteTableUseCase(tableRepository)
   const groupTablesUseCase = new GroupTablesUseCase(db, tableRepository, createAuditLogUseCase)
   const ungroupTablesUseCase = new UngroupTablesUseCase(db, createAuditLogUseCase)
-  const openComandaUseCase = new OpenComandaUseCase(tableRepository, comandaRepository)
+  const openComandaUseCase = new OpenComandaUseCase(tableRepository, comandaRepository, customerRepository)
+  const requestComandaBillUseCase = new RequestComandaBillUseCase(comandaRepository, wsHub)
   const getComandaBillUseCase = new GetComandaBillUseCase(db)
   const closeComandaUseCase = new CloseComandaUseCase(tableRepository, comandaRepository, getComandaBillUseCase)
   const settleComandaUseCase = new SettleComandaUseCase(
@@ -694,7 +696,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     comandaRepository,
     getComandaBillUseCase,
     settleComandaUseCase,
-    transferComandaUseCase
+    transferComandaUseCase,
+    requestComandaBillUseCase
   )
 
   // Conversations

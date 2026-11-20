@@ -26,6 +26,7 @@ import { ComandaConfirmPage } from '@/pages/comanda/ComandaConfirmPage'
 import { CustomerInvoicePage } from '@/pages/public/CustomerInvoicePage'
 import { StorefrontPage } from '@/pages/storefront/StorefrontPage'
 import { StorefrontOrderPage } from '@/pages/storefront/StorefrontOrderPage'
+import { WaiterApp } from '@/pages/waiter/WaiterApp'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGuard'
@@ -88,6 +89,16 @@ export default function App() {
       <Routes>
         <Route path="/login" element={<LoginPage />} />
         <Route path="/change-password" element={<ChangePasswordPage />} />
+
+        {/* App do garçom: tela própria de celular, instalável à parte (manifest em /garcom). */}
+        <Route
+          path="/garcom/*"
+          element={
+            <AuthGuard>
+              <WaiterApp />
+            </AuthGuard>
+          }
+        />
 
         <Route
           element={
