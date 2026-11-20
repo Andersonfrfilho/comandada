@@ -16,6 +16,7 @@ import { TablesPage } from '@/pages/tables/TablesPage'
 import { StaffPage } from '@/pages/staff/StaffPage'
 import { RolesPage } from '@/pages/staff/RolesPage'
 import { CatalogPage } from '@/pages/catalog/CatalogPage'
+import { ProductDetailPage } from '@/pages/catalog/ProductDetailPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { FiscalDocumentsPage } from '@/pages/fiscal/FiscalDocumentsPage'
@@ -221,6 +222,22 @@ export default function App() {
             element={
               <PermissionGate>
                 <CatalogPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/catalog/categoria/:catalogId"
+            element={
+              <PermissionGate>
+                <CatalogPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/catalog/produto/:productId"
+            element={
+              <PermissionGate>
+                <ProductDetailPage />
               </PermissionGate>
             }
           />
