@@ -3,6 +3,7 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { sql } from 'drizzle-orm'
 import { runMetaWhatsAppMigrations } from '@adatechnology/meta-whatsapp-module'
 import { runSchedulingMigrations } from '@adatechnology/scheduling-module'
+import { runExpenseMigrations } from '@adatechnology/expense-module'
 import { Pool } from 'pg'
 import path from 'path'
 import * as schema from './schema'
@@ -30,6 +31,8 @@ export async function runMigrations(): Promise<void> {
   await runMetaWhatsAppMigrations({ db, migrate })
   // Agenda (encomendas e reservas): schema `scheduling`, exige a extensão btree_gist no cluster.
   await runSchedulingMigrations({ db, migrate })
+  // Contas a pagar: schema `expense` e journal `drizzle.expense_migrations`.
+  await runExpenseMigrations({ db, migrate })
 
   // Triggers não podem ser expressos em schema Drizzle — aplicados aqui (idempotente)
   await db.execute(sql`

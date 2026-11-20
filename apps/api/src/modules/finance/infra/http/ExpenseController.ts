@@ -1,3 +1,5 @@
+import { competenceBounds } from '@adatechnology/expense-module'
+import { expenseModule } from '@/infra/expenses/expenseModule'
 import { eq, and, gte, lt, lte, sql, desc, inArray } from 'drizzle-orm'
 import { localMonthRange, localYearMonth, orderRevenueAmount, revenueOrdersWhere, type DateRange } from '@/modules/reports/shared/revenue'
 import { ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT } from '@/modules/products/shared/orderStockConsumption'
@@ -270,16 +272,14 @@ export class ExpenseController {
         lt(schema.expenses.expenseDate, currentMonthEndSlug),
       ))
 
-    // Total monthly accounts (pending)
-    const monthlyAccountsTotal = await this.db
-      .select({ total: sql<string>`COALESCE(SUM(${schema.monthlyAccounts.amount}), '0')` })
-      .from(schema.monthlyAccounts)
-      .where(and(
-        eq(schema.monthlyAccounts.establishmentId, establishmentId),
-        eq(schema.monthlyAccounts.status, 'pending'),
-      ))
-
-    const totalMonthlyAccounts = Number(monthlyAccountsTotal[0]?.total ?? '0')
+    // Contas a pagar do mês (módulo do SDK): o previsto das abertas mais o pago das pagas; cancelada fica de fora.
+    const accountsBounds = competenceBounds(expenseModule.clock.today().slice(0, 7))
+    const accountsSummary = await expenseModule.expenses.summarize({
+      companyId: establishmentId,
+      from: accountsBounds.from,
+      to: accountsBounds.to,
+    })
+    const totalMonthlyAccounts = Number(accountsSummary.total)
 
     const totalStockCosts = await this.stockCostBetween(establishmentId, currentMonthRange)
     const totalExpenses = Number(monthExpenses[0]?.total ?? '0')

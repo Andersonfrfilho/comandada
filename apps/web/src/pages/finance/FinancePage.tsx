@@ -11,30 +11,10 @@ import { DataTable, type DataTableColumn } from '@/components/ui/DataTable'
 import { Pagination } from '@/components/ui/Pagination'
 import { FilterBar, FilterField, FilterSelect, SearchField } from '@/components/ui/ListFilters'
 import { formatPercent, matchesSearch, paginateRows, sortRows, toggleSort, type SortDirection, type SortState } from '@/lib/listing'
-import { Banknote, Plus, ChevronLeft, ChevronRight, CheckCircle, XCircle, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react'
+import { Banknote, Plus, ChevronLeft, ChevronRight, TrendingUp, AlertTriangle, AlertCircle } from 'lucide-react'
 import { MarketplaceFinanceTab } from './MarketplaceFinanceTab'
+import { AccountsPayableTab } from './AccountsPayableTab'
 import type { MarketplaceOverview } from '@/lib/marketplaces'
-
-interface MonthlyAccount {
-  id: string
-  establishmentId: string
-  description: string
-  category: string
-  amount: string
-  dueDay: number
-  recurrence: string
-  status: 'pending' | 'paid'
-  paidAt: string | null
-  notes: string | null
-  createdAt: string
-  updatedAt: string
-}
-
-interface AccountsResponse {
-  accounts: MonthlyAccount[]
-  totalPending: string
-  totalPaid: string
-}
 
 interface Expense {
   id: string
@@ -71,19 +51,6 @@ interface FinancialOverviewResponse {
   }>
 }
 
-const MONTHLY_CATEGORY_LABELS: Record<string, string> = {
-  aluguel: 'Aluguel',
-  energia: 'Energia',
-  agua: 'Água',
-  internet: 'Internet',
-  telefone: 'Telefone',
-  salarios: 'Salários',
-  impostos: 'Impostos',
-  marketing: 'Marketing',
-  manutencao: 'Manutenção',
-  outros: 'Outros',
-}
-
 const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   ingredientes: 'Ingredientes',
   embalagens: 'Embalagens',
@@ -96,19 +63,6 @@ const EXPENSE_CATEGORY_LABELS: Record<string, string> = {
   outros: 'Outros',
 }
 
-const MONTHLY_CATEGORY_OPTIONS: readonly SelectOption<string>[] = [
-  { value: 'aluguel', label: 'Aluguel' },
-  { value: 'energia', label: 'Energia' },
-  { value: 'agua', label: 'Água' },
-  { value: 'internet', label: 'Internet' },
-  { value: 'telefone', label: 'Telefone' },
-  { value: 'salarios', label: 'Salários' },
-  { value: 'impostos', label: 'Impostos' },
-  { value: 'marketing', label: 'Marketing' },
-  { value: 'manutencao', label: 'Manutenção' },
-  { value: 'outros', label: 'Outros' },
-]
-
 const EXPENSE_CATEGORY_OPTIONS: readonly SelectOption<string>[] = [
   { value: 'ingredientes', label: 'Ingredientes' },
   { value: 'embalagens', label: 'Embalagens' },
@@ -120,18 +74,6 @@ const EXPENSE_CATEGORY_OPTIONS: readonly SelectOption<string>[] = [
   { value: 'taxas', label: 'Taxas' },
   { value: 'outros', label: 'Outros' },
 ]
-
-const RECURRENCE_OPTIONS: readonly SelectOption<string>[] = [
-  { value: 'monthly', label: 'Mensal' },
-  { value: 'bimonthly', label: 'Bimestral' },
-  { value: 'yearly', label: 'Anual' },
-]
-
-const RECURRENCE_LABELS: Record<string, string> = {
-  monthly: 'Mensal',
-  bimonthly: 'Bimestral',
-  yearly: 'Anual',
-}
 
 const MONTHS = [
   'Janeiro', 'Fevereiro', 'Março', 'Abril',
@@ -192,16 +134,6 @@ export function FinancePage() {
   const [currentMonth, setCurrentMonth] = useState(() => new Date().getMonth())
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear())
 
-  // Monthly accounts state
-  const [modalOpen, setModalOpen] = useState(false)
-  const [editingAccount, setEditingAccount] = useState<MonthlyAccount | null>(null)
-  const [formDescription, setFormDescription] = useState('')
-  const [formCategory, setFormCategory] = useState('outros')
-  const [formAmount, setFormAmount] = useState('')
-  const [formDueDay, setFormDueDay] = useState('')
-  const [formRecurrence, setFormRecurrence] = useState('monthly')
-  const [formNotes, setFormNotes] = useState('')
-
   // Expense state
   const [expenseModalOpen, setExpenseModalOpen] = useState(false)
   const [editingExpense, setEditingExpense] = useState<Expense | null>(null)
@@ -219,12 +151,6 @@ export function FinancePage() {
     queryFn: () => api.get<FinancialOverviewResponse>('/finance/overview?months=6', accessToken ?? undefined),
   })
 
-  // Monthly accounts query
-  const { data, isLoading } = useQuery({
-    queryKey: ['monthly-accounts', currentMonth, currentYear],
-    queryFn: () => api.get<AccountsResponse>(`/monthly-accounts?month=${currentMonth + 1}`, accessToken ?? undefined),
-  })
-
   // Expenses query
   const [expenseSearch, setExpenseSearch] = useState('')
   const [expenseCategoryFilter, setExpenseCategoryFilter] = useState('')
@@ -236,25 +162,10 @@ export function FinancePage() {
     queryFn: () => api.get<ExpensesResponse>(`/expenses?month=${currentMonth + 1}&year=${currentYear}`, accessToken ?? undefined),
   })
 
-  const invalidateMonthly = () => {
-    void queryClient.invalidateQueries({ queryKey: ['monthly-accounts'] })
-  }
-
   const invalidateExpenses = () => {
     void queryClient.invalidateQueries({ queryKey: ['expenses'] })
     void queryClient.invalidateQueries({ queryKey: ['financial-overview'] })
   }
-
-  // Monthly accounts form validation
-  const amountAsNumber = parseFloat(formAmount)
-  const dueDayAsNumber = parseInt(formDueDay)
-  const isMonthlyFormValid =
-    formDescription.trim().length > 0 &&
-    !isNaN(amountAsNumber) &&
-    amountAsNumber > 0 &&
-    !isNaN(dueDayAsNumber) &&
-    dueDayAsNumber >= 1 &&
-    dueDayAsNumber <= 31
 
   // Expense form validation
   const expenseAmountNumber = parseFloat(expenseAmount)
@@ -262,51 +173,6 @@ export function FinancePage() {
     expenseDesc.trim().length > 0 &&
     !isNaN(expenseAmountNumber) &&
     expenseAmountNumber > 0
-
-  // Monthly account mutations
-  const createMutation = useMutation({
-    mutationFn: () =>
-      api.post('/monthly-accounts', {
-        description: formDescription.trim(),
-        category: formCategory,
-        amount: amountAsNumber,
-        dueDay: dueDayAsNumber,
-        recurrence: formRecurrence,
-        ...(formNotes.trim() ? { notes: formNotes.trim() } : {}),
-      }, accessToken ?? undefined),
-    onSuccess: () => { closeModal(); invalidateMonthly() },
-  })
-
-  const updateMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.put(`/monthly-accounts/${id}`, {
-        description: formDescription.trim(),
-        category: formCategory,
-        amount: amountAsNumber,
-        dueDay: dueDayAsNumber,
-        recurrence: formRecurrence,
-        notes: formNotes.trim() || null,
-      }, accessToken ?? undefined),
-    onSuccess: () => { closeModal(); invalidateMonthly() },
-  })
-
-  const deleteMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.delete(`/monthly-accounts/${id}`, accessToken ?? undefined),
-    onSuccess: () => invalidateMonthly(),
-  })
-
-  const payMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.patch(`/monthly-accounts/${id}/pay`, {}, accessToken ?? undefined),
-    onSuccess: () => invalidateMonthly(),
-  })
-
-  const unpayMutation = useMutation({
-    mutationFn: (id: string) =>
-      api.patch(`/monthly-accounts/${id}/unpay`, {}, accessToken ?? undefined),
-    onSuccess: () => invalidateMonthly(),
-  })
 
   // Expense mutations
   const createExpenseMutation = useMutation({
@@ -342,34 +208,6 @@ export function FinancePage() {
       api.delete(`/expenses/${id}`, accessToken ?? undefined),
     onSuccess: () => invalidateExpenses(),
   })
-
-  // Modal handlers (monthly accounts)
-  function openCreateModal() {
-    setEditingAccount(null)
-    setFormDescription('')
-    setFormCategory('outros')
-    setFormAmount('')
-    setFormDueDay('')
-    setFormRecurrence('monthly')
-    setFormNotes('')
-    setModalOpen(true)
-  }
-
-  function openEditModal(account: MonthlyAccount) {
-    setEditingAccount(account)
-    setFormDescription(account.description)
-    setFormCategory(account.category)
-    setFormAmount(account.amount)
-    setFormDueDay(String(account.dueDay))
-    setFormRecurrence(account.recurrence)
-    setFormNotes(account.notes ?? '')
-    setModalOpen(true)
-  }
-
-  function closeModal() {
-    setModalOpen(false)
-    setEditingAccount(null)
-  }
 
   // Modal handlers (expenses)
   function openCreateExpenseModal() {
@@ -431,10 +269,6 @@ export function FinancePage() {
       setCurrentMonth((m) => m + 1)
     }
   }
-
-  const accounts = data?.accounts ?? []
-  const totalPending = data?.totalPending ?? '0.00'
-  const totalPaid = data?.totalPaid ?? '0.00'
 
   const expenses = expensesData?.expenses ?? []
   const filteredExpenses = sortRows(
@@ -549,7 +383,6 @@ export function FinancePage() {
   ]
   const totalExpenses = expensesData?.totalAmount ?? '0.00'
 
-  const pendingMutation = payMutation.isPending || unpayMutation.isPending
   const isSavingExpense = createExpenseMutation.isPending || updateExpenseMutation.isPending
 
   return (
@@ -561,7 +394,7 @@ export function FinancePage() {
       {/* Tabs */}
       <div className="flex border-b border-gray-200 mb-6">
         {([
-          { key: 'fixed' as const, label: 'Contas Fixas', icon: Banknote },
+          { key: 'fixed' as const, label: 'Contas a pagar', icon: Banknote },
           { key: 'variable' as const, label: 'Gastos Avulsos' },
           { key: 'report' as const, label: 'Parecer' },
           ...(marketplaceFinancePlatforms.length > 0 ? [{ key: 'marketplaces' as const, label: 'Marketplaces' }] : []),
@@ -587,135 +420,8 @@ export function FinancePage() {
 
       {activeTab === 'marketplaces' && <MarketplaceFinanceTab platforms={marketplaceFinancePlatforms} />}
 
-      {/* ===== CONTAS FIXAS TAB ===== */}
-      {activeTab === 'fixed' && (
-        <>
-          <div className="flex items-center justify-between mb-4">
-            <button
-              type="button"
-              onClick={goToPrevMonth}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-            >
-              <ChevronLeft className="h-5 w-5" />
-            </button>
-            <h2 className="text-lg font-semibold text-gray-800">
-              {MONTHS[currentMonth]} {currentYear}
-            </h2>
-            <button
-              type="button"
-              onClick={goToNextMonth}
-              className="p-1.5 rounded-lg hover:bg-gray-100 text-gray-500 transition-colors"
-            >
-              <ChevronRight className="h-5 w-5" />
-            </button>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 mb-4">
-            <div className="bg-red-50 rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-red-500 mb-1">Pendente</p>
-              <p className="text-xl font-bold text-red-700">{formatBRL(totalPending)}</p>
-            </div>
-            <div className="bg-green-50 rounded-2xl shadow-sm p-4">
-              <p className="text-xs text-green-600 mb-1">Pago</p>
-              <p className="text-xl font-bold text-green-700">{formatBRL(totalPaid)}</p>
-            </div>
-          </div>
-
-          <div className="mb-4">
-            <button
-              type="button"
-              onClick={openCreateModal}
-              className="flex items-center gap-1.5 px-4 py-2 bg-brand-600 text-white text-sm font-semibold rounded-xl hover:bg-brand-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Nova conta
-            </button>
-          </div>
-
-          {isLoading ? (
-            <p className="text-gray-400 text-center py-8">Carregando...</p>
-          ) : accounts.length === 0 ? (
-            <p className="text-gray-400 text-center py-8">Nenhuma conta cadastrada para este mês.</p>
-          ) : (
-            <div className="space-y-2">
-              {accounts.map((account) => (
-                <div
-                  key={account.id}
-                  className={`bg-white rounded-2xl shadow-sm p-4 flex items-center justify-between gap-3 ${
-                    account.status === 'paid' ? 'opacity-60' : ''
-                  }`}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="font-medium text-gray-900 truncate">{account.description}</span>
-                      <span className={`text-xs font-semibold px-1.5 py-0.5 rounded-full flex-shrink-0 ${
-                        account.status === 'paid'
-                          ? 'bg-green-100 text-green-800'
-                          : 'bg-orange-100 text-orange-700'
-                      }`}>
-                        {account.status === 'paid' ? 'Pago' : 'Pendente'}
-                      </span>
-                    </div>
-                    <div className="flex items-center gap-2 text-xs text-gray-400">
-                      <span>{MONTHLY_CATEGORY_LABELS[account.category] ?? account.category}</span>
-                      <span>·</span>
-                      <span>Venc. dia {account.dueDay}</span>
-                      <span>·</span>
-                      <span>{RECURRENCE_LABELS[account.recurrence] ?? account.recurrence}</span>
-                    </div>
-                    {account.notes && (
-                      <p className="text-xs text-gray-400 mt-0.5 truncate">{account.notes}</p>
-                    )}
-                  </div>
-
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    <span className="font-semibold text-gray-900 text-sm">{formatBRL(account.amount)}</span>
-                    {account.status === 'pending' ? (
-                      <button
-                        type="button"
-                        onClick={() => payMutation.mutate(account.id)}
-                        disabled={pendingMutation}
-                        className="p-1.5 text-green-600 hover:bg-green-50 rounded-lg transition-colors disabled:opacity-50"
-                        title="Marcar como pago"
-                      >
-                        <CheckCircle className="h-5 w-5" />
-                      </button>
-                    ) : (
-                      <button
-                        type="button"
-                        onClick={() => unpayMutation.mutate(account.id)}
-                        disabled={pendingMutation}
-                        className="p-1.5 text-gray-400 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
-                        title="Marcar como pendente"
-                      >
-                        <XCircle className="h-5 w-5" />
-                      </button>
-                    )}
-                    <button
-                      type="button"
-                      onClick={() => openEditModal(account)}
-                      className="text-xs text-gray-400 hover:text-gray-600 px-2 py-1 hover:bg-gray-100 rounded-lg transition-colors"
-                    >
-                      Editar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (await confirmDialog({ title: 'Excluir esta conta?', confirmLabel: 'Excluir', tone: 'danger' })) {
-                          deleteMutation.mutate(account.id)
-                        }
-                      }}
-                      className="text-xs text-red-400 hover:text-red-600 px-2 py-1 hover:bg-red-50 rounded-lg transition-colors"
-                    >
-                      Excluir
-                    </button>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-        </>
-      )}
+      {/* ===== CONTAS A PAGAR (módulo do SDK) ===== */}
+      {activeTab === 'fixed' && <AccountsPayableTab />}
 
       {/* ===== GASTOS AVULSOS TAB ===== */}
       {activeTab === 'variable' && (
@@ -905,95 +611,6 @@ export function FinancePage() {
           )}
         </>
       )}
-
-      {/* Monthly account modal */}
-      <Modal open={modalOpen} onClose={closeModal} title={editingAccount ? 'Editar conta' : 'Nova conta fixa'} size="md">
-        <div className="p-5 space-y-4 flex-1">
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Descrição</label>
-            <input
-              type="text"
-              value={formDescription}
-              onChange={(e) => setFormDescription(e.target.value)}
-              placeholder="Ex: Aluguel do salão"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              maxLength={255}
-            />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Categoria</label>
-            <Select value={formCategory} onChange={setFormCategory} options={MONTHLY_CATEGORY_OPTIONS} />
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Valor (R$)</label>
-            <input
-              type="number"
-              value={formAmount}
-              onChange={(e) => setFormAmount(e.target.value)}
-              placeholder="0,00"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-              min="0.01"
-              step="0.01"
-            />
-          </div>
-          <div className="grid grid-cols-2 gap-3">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Dia do vencimento</label>
-              <input
-                type="number"
-                value={formDueDay}
-                onChange={(e) => setFormDueDay(e.target.value)}
-                placeholder="1-31"
-                className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-                min={1}
-                max={31}
-              />
-            </div>
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">Recorrência</label>
-              <Select value={formRecurrence} onChange={setFormRecurrence} options={RECURRENCE_OPTIONS} />
-            </div>
-          </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">Observações</label>
-            <textarea
-              value={formNotes}
-              onChange={(e) => setFormNotes(e.target.value)}
-              placeholder="Observações (opcional)"
-              className="w-full px-3 py-2.5 border border-gray-300 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 resize-none"
-              rows={2}
-              maxLength={1000}
-            />
-          </div>
-          <div className="flex gap-2 pt-2">
-            <button
-              type="button"
-              onClick={closeModal}
-              className="flex-1 py-2.5 text-sm font-medium text-gray-600 hover:bg-gray-100 rounded-xl transition-colors"
-            >
-              Cancelar
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                if (editingAccount) {
-                  updateMutation.mutate(editingAccount.id)
-                } else {
-                  createMutation.mutate()
-                }
-              }}
-              disabled={!isMonthlyFormValid || createMutation.isPending || updateMutation.isPending}
-              className="flex-1 py-2.5 bg-brand-600 text-white text-sm font-semibold rounded-xl disabled:opacity-50 hover:bg-brand-700 transition-colors"
-            >
-              {createMutation.isPending || updateMutation.isPending
-                ? 'Salvando...'
-                : editingAccount
-                  ? 'Salvar'
-                  : 'Criar'}
-            </button>
-          </div>
-        </div>
-      </Modal>
 
       {/* Expense modal */}
       <Modal open={expenseModalOpen} onClose={closeExpenseModal} title={editingExpense ? 'Editar gasto' : 'Novo gasto avulso'} size="md">

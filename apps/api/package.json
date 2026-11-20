@@ -15,6 +15,7 @@
     "db:seed:yuyaki": "bun run src/infra/database/seeds/yuyaki.seed.ts"
   },
   "dependencies": {
+    "@adatechnology/expense-module": "0.1.0",
     "@adatechnology/fiscal-provider": "0.4.0",
     "@adatechnology/mercadopago-payment-provider": "0.2.0",
     "@adatechnology/marketplace-contracts": "0.1.0",

@@ -37,6 +37,9 @@ import { registerWhatsAppSettingsRoutes } from '@/modules/conversations/infra/ht
 import { registerFiscalRoutes } from '@/modules/fiscal/infra/http/FiscalRoutes'
 import { registerMonthlyAccountRoutes } from '@/modules/finance/infra/http/MonthlyAccountRoutes'
 import { registerExpenseRoutes } from '@/modules/finance/infra/http/ExpenseRoutes'
+import { registerAccountsPayableRoutes } from '@/modules/finance/infra/http/AccountsPayableRoutes'
+import { expenseModule } from '@/infra/expenses/expenseModule'
+import { importLegacyMonthlyAccounts } from '@/modules/finance/application/importLegacyMonthlyAccounts'
 import { registerUploadRoutes } from '@/modules/uploads/infra/http/UploadRoutes'
 import { registerBotRoutes } from '@/modules/bot/infra/http/BotRoutes'
 import { registerReminderRoutes } from '@/modules/reminders/infra/http/ReminderRoutes'
@@ -62,6 +65,11 @@ function renderDocs(): string {
 export async function createServer() {
   await checkDatabaseConnection()
   await runMigrations()
+  // Contas fixas antigas → contas a pagar (cópia idempotente, nada é apagado). A loja não copia: as contas moram na nuvem.
+  if (process.env.SYNC_ROLE !== 'loja') {
+    const { imported } = await importLegacyMonthlyAccounts({ database: db, module: expenseModule })
+    if (imported > 0) console.log(`[Finance] ${imported} conta(s) fixa(s) copiada(s) para contas a pagar`)
+  }
   await checkRedisConnection()
 
   const router = new Router()
@@ -146,6 +154,7 @@ export async function createServer() {
   registerFiscalRoutes(router, container.fiscalController)
   registerMonthlyAccountRoutes(router, container.monthlyAccountController)
   registerExpenseRoutes(router, container.expenseController)
+  registerAccountsPayableRoutes(router, expenseModule)
   registerUploadRoutes(router, container.uploadController)
   registerBotRoutes(router, container.botController)
   registerReminderRoutes(router, container.reminderController)
