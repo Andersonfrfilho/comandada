@@ -6,6 +6,8 @@ const PAYMENT_METHOD_LABELS: Readonly<Record<string, string>> = {
   debito: 'Cartão de débito',
   card_credit: 'Cartão de crédito',
   card_debit: 'Cartão de débito',
+  credit_card: 'Cartão de crédito',
+  debit_card: 'Cartão de débito',
   dinheiro: 'Dinheiro',
   cash: 'Dinheiro',
   voucher: 'Vale-refeição',
