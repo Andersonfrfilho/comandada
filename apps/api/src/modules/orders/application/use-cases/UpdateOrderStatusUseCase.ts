@@ -56,7 +56,9 @@ export class UpdateOrderStatusUseCase {
     // Cancelado com Pix em aberto: cancela a cobrança no provedor (pagamentos). Falha não desfaz o cancelamento.
     private readonly onCancelled?: (order: schema.Order) => Promise<unknown>,
     // Cancelado: devolve ao estoque o que a receita tinha baixado.
-    private readonly restoreStock?: Pick<RestoreStockForOrderUseCase, 'execute'>
+    private readonly restoreStock?: Pick<RestoreStockForOrderUseCase, 'execute'>,
+    // Pedido de marketplace (iFood, 99Food): avisa a plataforma do novo status. Falha não desfaz nada.
+    private readonly onStatusChanged?: (order: schema.Order, newStatus: OrderStatus) => Promise<unknown>
   ) {}
 
   async execute(input: UpdateStatusInput) {
@@ -164,6 +166,12 @@ export class UpdateOrderStatusUseCase {
       tableId: order.tableId ?? null,
       comandaId: order.comandaId ?? null,
     })
+
+    if (this.onStatusChanged && updated) {
+      this.onStatusChanged(updated, input.newStatus).catch((error: unknown) =>
+        console.error('[Orders] marketplace status sync failed', error instanceof Error ? error.message : error)
+      )
+    }
 
     // Fire-and-forget: a fiscal hiccup must never block the order status change.
     // Concluído de novo depois de uma correção manual não emite outra nota.

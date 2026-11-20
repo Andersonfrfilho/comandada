@@ -55,9 +55,11 @@ interface CreateOrderInput {
   userId?: string | undefined
   /**
    * Pedido digitado no painel: preço e nome vêm do cardápio, nunca do navegador, e a hora agendada
-   * não pode estar no passado. O bot já precifica pelo cardápio antes; o iFood manda o preço dele.
+   * não pode estar no passado. O bot já precifica pelo cardápio antes; iFood e 99Food mandam o preço delas.
    */
   priceFromCatalog?: boolean | undefined
+  /** Número do pedido na plataforma (iFood, 99Food): painel e cozinha mostram ao lado do canal. */
+  code?: string | undefined
 }
 
 // Folga para arredondamento de divisão por pessoa (3 x 33,33 de um pedido de 100,00).
@@ -134,6 +136,7 @@ export class CreateOrderUseCase {
         notes: input.notes ?? null,
         fiscalEnabled: input.fiscalEnabled ?? true,
         whatsappMessageId: input.whatsappMessageId ?? null,
+        ...(input.code ? { code: input.code.slice(0, 40) } : {}),
         scheduledFor: input.scheduledFor ? new Date(input.scheduledFor) : null,
       })
       .returning()

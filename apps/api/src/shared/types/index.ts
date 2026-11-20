@@ -37,7 +37,7 @@ export type OrderStatus =
 
 export type OrderType = 'delivery' | 'pickup' | 'table'
 
-export type OrderChannel = 'whatsapp' | 'ifood' | 'manual' | 'web'
+export type OrderChannel = 'whatsapp' | 'ifood' | 'manual' | 'web' | '99food'
 
 export type DeliveryStatus = 'pending' | 'dispatched' | 'delivered' | 'failed'
 

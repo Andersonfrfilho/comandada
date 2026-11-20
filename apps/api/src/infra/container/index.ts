@@ -253,6 +253,9 @@ import { UploadController } from '@/modules/uploads/infra/http/UploadController'
 // WebSocket Hub (passed in from server bootstrap to avoid circular dep)
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import type { QueueWorkerDependencies } from '@/infra/queue/startQueueWorkers'
+import { MarketplaceOrderService } from '@/modules/marketplaces/application/MarketplaceOrderService'
+import { readMarketplaceSetup } from '@/modules/marketplaces/infra/marketplaceConfig'
+import { MarketplaceWebhookController } from '@/modules/marketplaces/infra/http/MarketplaceWebhookController'
 
 export interface AppContainer {
   cache: RedisProvider
@@ -285,6 +288,7 @@ export interface AppContainer {
   webhookController: WebhookController
   whatsAppInboundController: WhatsAppInboundController
   paymentController: PaymentController
+  marketplaceWebhookController: MarketplaceWebhookController
   expireStaleCharges: ExpireStaleChargesUseCase
   previewInboundController: PreviewInboundController
   previewMediaController: PreviewMediaController
@@ -391,6 +395,8 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const notifiesCustomerHere = process.env['SYNC_ROLE'] !== 'loja'
   // Pagamentos montados mais abaixo; o cancelamento chama na hora de rodar, não na construção.
   let orderCancellationPayments: OrderCancellationPayments | undefined
+  // Marketplaces (iFood, 99Food) montados depois dos pedidos; o aviso de status chama na hora de rodar.
+  let marketplaceOrders: MarketplaceOrderService | undefined
   const updateOrderStatusUseCase = new UpdateOrderStatusUseCase(
     db,
     wsHub,
@@ -399,13 +405,26 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     notifiesCustomerHere ? notifyOrderStatusUseCase : undefined,
     recordOrderPaymentsUseCase,
     async (order) => orderCancellationPayments?.releasePending(order),
-    new RestoreStockForOrderUseCase(db)
+    new RestoreStockForOrderUseCase(db),
+    async (order, newStatus) => marketplaceOrders?.onOrderStatusChanged(order, newStatus)
   )
 
   // Orders
   const botConfigRepository = new BotConfigRepository(db)
   const calculateDeliveryFeeUseCase = new CalculateDeliveryFeeUseCase(botConfigRepository, new NominatimProvider())
   const createOrderUseCase = new CreateOrderUseCase(db, wsHub, calculateDeliveryFeeUseCase)
+
+  // Marketplaces: cada plataforma só liga com `<PLATAFORMA>_ENABLED=true` e as credenciais completas.
+  const marketplaceSetup = readMarketplaceSetup()
+  for (const problem of marketplaceSetup.problems) console.warn(`[Marketplaces] ${problem}: integração desligada`)
+  marketplaceOrders = new MarketplaceOrderService(
+    db,
+    marketplaceSetup.connections,
+    createOrderUseCase,
+    () => updateOrderStatusUseCase,
+    { autoConfirm: marketplaceSetup.autoConfirm }
+  )
+  const marketplaceWebhookController = new MarketplaceWebhookController(marketplaceOrders)
   const updateOrderNotesUseCase = new UpdateOrderNotesUseCase(db)
   const getOrderUseCase = new GetOrderUseCase(db)
   const getOrderRouteUseCase = new GetOrderRouteUseCase(
@@ -796,8 +815,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
       database: db,
       websocketHub: wsHub,
       botMessages,
-      createOrderUseCase,
-      updateOrderStatusUseCase,
+      marketplaceOrders,
       metaWhatsAppModules,
       documentIngestionEnabled: Boolean(objectStorage),
     },
@@ -829,6 +847,7 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     webhookController,
     whatsAppInboundController,
     paymentController,
+    marketplaceWebhookController,
     expireStaleCharges,
     previewInboundController,
     previewMediaController,

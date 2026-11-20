@@ -19,10 +19,11 @@ import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels
 import { Pagination } from '@/components/ui/Pagination'
 import { PAGE_SIZE_OPTIONS, DEFAULT_PAGE_SIZE, formatBRL, plural } from '@/lib/listing'
 import { orderNumberLabel } from '@/lib/orderLabel'
+import { MarketplaceBadge } from '@/components/orders/MarketplaceBadge'
 import { CancelOrderDialog } from '@/components/orders/CancelOrderDialog'
 
 type OrderTypeValue = 'table' | 'delivery' | 'pickup'
-type OrderChannelValue = 'whatsapp' | 'ifood' | 'manual' | 'web'
+type OrderChannelValue = 'whatsapp' | 'ifood' | '99food' | 'manual' | 'web'
 
 const TYPE_OPTIONS: SelectOption<OrderTypeValue>[] = [
   { value: 'table', label: ORDER_TYPE_LABELS.table },
@@ -33,6 +34,7 @@ const TYPE_OPTIONS: SelectOption<OrderTypeValue>[] = [
 const CHANNEL_OPTIONS: SelectOption<OrderChannelValue>[] = [
   { value: 'whatsapp', label: ORDER_CHANNEL_LABELS.whatsapp ?? 'WhatsApp' },
   { value: 'ifood', label: ORDER_CHANNEL_LABELS.ifood ?? 'iFood' },
+  { value: '99food', label: ORDER_CHANNEL_LABELS['99food'] ?? '99Food' },
   { value: 'manual', label: ORDER_CHANNEL_LABELS.manual ?? 'Manual' },
   { value: 'web', label: ORDER_CHANNEL_LABELS.web ?? 'Cardápio online' },
 ]
@@ -401,6 +403,7 @@ export function OrdersPage() {
               <div className="flex items-start justify-between mb-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <span className="text-sm font-extrabold text-gray-900">{orderNumberLabel(order)}</span>
+                  <MarketplaceBadge order={order} />
                   <span className={`text-xs font-semibold px-2 py-0.5 rounded-full ${ORDER_STATUS_COLORS[order.status]}`}>
                     {ORDER_STATUS_LABELS[order.status]}
                   </span>

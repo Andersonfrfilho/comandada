@@ -302,6 +302,18 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 - **Pedido do painel** (`POST /orders`): preço e nome vêm do cardápio (`priceFromCatalog`), pagamento não passa do total,
   "troco para" ≥ valor da parte e agendamento não fica no passado. iFood mantém o preço dele.
 
+## Marketplaces (iFood, 99Food)
+
+`apps/api/src/modules/marketplaces/` (detalhes em `docs/marketplaces-ifood-99food.md`). Porta comum
+`MarketplaceProvider`; iFood pela Merchant API, 99Food pelo padrão Open Delivery (`OpenDeliveryMarketplaceProvider`,
+serve para outras plataformas do padrão). Desligado por padrão: `IFOOD_ENABLED`/`FOOD99_ENABLED=true` + credenciais
+(faltando, o log avisa e a plataforma fica de fora). Polling a cada 30 s na fila `marketplace-polling` (ou webhook
+`POST /webhooks/marketplaces/:platform`); `marketplace_events` evita evento repetido e `marketplace_orders` liga o
+pedido da plataforma ao do painel. Pedido entra com o **preço da plataforma**, `channel` = `ifood`/`99food`,
+`orders.code` = número da plataforma (selo `MarketplaceBadge` no painel e na cozinha), aceite automático
+(`MARKETPLACE_AUTO_CONFIRM`). Entregador da plataforma: fora de Entregas e sem taxa no total. Mudança de status no
+painel volta para a plataforma pelo `onStatusChanged` do `UpdateOrderStatusUseCase`; cancelado lá cancela aqui sem eco.
+
 ## Permissões (painel = API)
 
 - O painel decide menu, rotas e botões pelas **permissões** do usuário (recurso + ação, as mesmas do `authorize` da

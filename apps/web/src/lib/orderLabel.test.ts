@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'bun:test'
-import { orderNumberLabel, orderPartyLabel } from './orderLabel'
+import { marketplaceLabel, orderNumberLabel, orderPartyLabel } from './orderLabel'
 
 describe('orderLabel', () => {
   it('número curto primeiro, depois código do bot, depois o id', () => {
@@ -13,5 +13,11 @@ describe('orderLabel', () => {
     expect(orderPartyLabel({ type: 'table', table: { number: 5 }, customer: { name: 'Ana' } })).toBe('Mesa 5 · Ana')
     expect(orderPartyLabel({ type: 'pickup', customer: { name: 'Ana' } })).toBe('Ana')
     expect(orderPartyLabel({ type: 'pickup' })).toBeNull()
+  })
+
+  it('origem do marketplace com o número da plataforma', () => {
+    expect(marketplaceLabel({ channel: 'ifood', code: '8312' })).toBe('iFood #8312')
+    expect(marketplaceLabel({ channel: '99food', code: null })).toBe('99Food')
+    expect(marketplaceLabel({ channel: 'whatsapp', code: 'PED-1' })).toBeNull()
   })
 })

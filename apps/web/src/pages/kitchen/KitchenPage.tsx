@@ -17,6 +17,7 @@ import {
   type KitchenUrgency,
 } from '@/constants/kitchenPriority'
 import { orderNumberLabel, orderPartyLabel } from '@/lib/orderLabel'
+import { MarketplaceBadge } from '@/components/orders/MarketplaceBadge'
 import { ITEM_READY_LABELS } from '@/constants/partialConfirmation'
 
 interface OrderItem {
@@ -111,6 +112,7 @@ function OrderCard({ order, now, onAdvance, onItemReady, busyIds }: OrderCardPro
             </span>
           )}
           <span className="text-base font-extrabold normal-case tracking-normal text-gray-900">{orderNumberLabel(order)}</span>
+          <MarketplaceBadge order={order} />
           {ORDER_CHANNEL_LABELS[order.channel] ?? order.channel} ·{' '}
           {ORDER_TYPE_LABELS[order.type as keyof typeof ORDER_TYPE_LABELS] ?? order.type}
         </span>

@@ -95,13 +95,14 @@ export const FINANCE_DUE_JOB = {
 
 export type FinanceDueJobName = (typeof FINANCE_DUE_JOB)[keyof typeof FINANCE_DUE_JOB]
 
-export const IFOOD_POLLING_QUEUE = 'ifood-polling' as const
+// Pedidos de marketplaces (iFood, 99Food): um job repetido busca os eventos de todas as plataformas ligadas.
+export const MARKETPLACE_POLLING_QUEUE = 'marketplace-polling' as const
 
-export const IFOOD_POLLING_JOB = {
+export const MARKETPLACE_POLLING_JOB = {
   POLL: 'poll',
 } as const
 
-export type IfoodPollingJobName = (typeof IFOOD_POLLING_JOB)[keyof typeof IFOOD_POLLING_JOB]
+export type MarketplacePollingJobName = (typeof MARKETPLACE_POLLING_JOB)[keyof typeof MARKETPLACE_POLLING_JOB]
 
 export const WHATSAPP_INBOUND_QUEUE = 'whatsapp-inbound' as const
 
