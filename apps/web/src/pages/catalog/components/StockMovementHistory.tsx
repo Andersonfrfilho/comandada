@@ -4,6 +4,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Pagination } from '@/components/ui/Pagination'
+import { Select } from '@/components/ui/Select'
 
 interface StockMovement {
   id: string
@@ -69,20 +70,20 @@ export function StockMovementHistory({ ingredientId }: StockMovementHistoryProps
     <div className="mt-3">
       <div className="flex items-center justify-between gap-2">
         <span className="text-xs font-medium text-gray-500">Histórico de movimentações</span>
-        <select
+        <Select
+          size="sm"
+          className="w-44"
           value={movementType}
-          onChange={(event) => {
-            setMovementType(event.target.value)
+          onChange={(value) => {
+            setMovementType(value)
             setPage(1)
           }}
-          aria-label="Filtrar movimentações por tipo"
-          className="text-xs border border-gray-200 rounded-lg px-1.5 py-1 bg-white"
-        >
-          <option value="">Todos os tipos</option>
-          {Object.entries(MOVEMENT_LABELS).map(([value, info]) => (
-            <option key={value} value={value}>{info.label}</option>
-          ))}
-        </select>
+          ariaLabel="Filtrar movimentações por tipo"
+          options={[
+            { value: '', label: 'Todos os tipos' },
+            ...Object.entries(MOVEMENT_LABELS).map(([value, info]) => ({ value, label: info.label })),
+          ]}
+        />
       </div>
       <div className="border border-gray-200 rounded-xl overflow-hidden mt-1">
         <div className="max-h-64 overflow-y-auto">

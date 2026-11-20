@@ -8,6 +8,7 @@ import { Modal } from '@/components/ui/Modal'
 import { ITEM_READY_LABELS, PARTIAL_CONFIRMATION_LABELS as LABELS } from '@/constants/partialConfirmation'
 import type { OrderStatus } from '@/constants/orderLabels'
 import { formatBrl, totalAfterShortage } from './orderDetailFormat'
+import { Select } from '@/components/ui/Select'
 
 export interface OrderItemsCardItem {
   readonly id: string
@@ -348,19 +349,20 @@ export function OrderItemsCard({
                   {substitutesQuery.isLoading ? (
                     <span className="text-gray-400">{LABELS.substitutesLoading}</span>
                   ) : (
-                    <select
+                    <Select
+                      size="sm"
                       value={effectiveShortage.get(item.id)?.productId ?? ''}
-                      onChange={(event) => chooseSubstitute(item.id, event.target.value || null)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm text-gray-800"
-                    >
-                      {substitutes.map((product) => (
-                        <option key={product.productId} value={product.productId}>
-                          {product.productName} · {formatBrl(product.unitPrice)}
-                          {product.catalogName ? ` (${product.catalogName})` : ''}
-                        </option>
-                      ))}
-                      <option value="">{LABELS.substituteNone}</option>
-                    </select>
+                      onChange={(value) => chooseSubstitute(item.id, value || null)}
+                      ariaLabel={LABELS.substituteLabel}
+                      options={[
+                        ...substitutes.map((product) => ({
+                          value: product.productId,
+                          label: product.productName,
+                          hint: `${formatBrl(product.unitPrice)}${product.catalogName ? ` · ${product.catalogName}` : ''}`,
+                        })),
+                        { value: '', label: LABELS.substituteNone },
+                      ]}
+                    />
                   )}
                   {!substitutesQuery.isLoading && substitutes.length === 0 && (
                     <span className="mt-1 block text-gray-400">{LABELS.substitutesEmpty}</span>

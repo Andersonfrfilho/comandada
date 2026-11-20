@@ -51,6 +51,7 @@ import {
   type Product,
   type ProductFormSubmit,
 } from './catalogShared'
+import { Select } from '@/components/ui/Select'
 
 type CatalogFormData = {
   name: string
@@ -480,15 +481,13 @@ function CatalogPageContent() {
             />
           </FilterField>
           <FilterField label="Ordenar por" className="w-full sm:w-44">
-            <select
+            <Select
+              size="sm"
               value={productSort}
-              onChange={(event) => setProductSort(event.target.value as ProductSort)}
-              className="w-full rounded-lg border border-gray-300 bg-white px-2.5 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500"
-            >
-              {PRODUCT_SORT_OPTIONS.map((option) => (
-                <option key={option.value} value={option.value}>{option.label}</option>
-              ))}
-            </select>
+              onChange={setProductSort}
+              ariaLabel="Ordenar"
+              options={PRODUCT_SORT_OPTIONS}
+            />
           </FilterField>
           {hasProductFilters && (
             <button

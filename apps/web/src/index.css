@@ -21,3 +21,42 @@
     @apply bg-gray-50 text-gray-900;
   }
 }
+
+/* Select (components/ui/Select.tsx): lista do computador e folha do celular entram com movimento curto. */
+@layer components {
+  .select-popover {
+    animation: select-popover-in 140ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .select-popover[data-placement='top'] {
+    animation-name: select-popover-in-up;
+  }
+  .select-sheet {
+    animation: select-sheet-in 240ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .select-sheet-backdrop {
+    animation: select-fade-in 200ms ease-out;
+  }
+  @keyframes select-popover-in {
+    from { opacity: 0; margin-top: -4px; }
+    to { opacity: 1; margin-top: 0; }
+  }
+  @keyframes select-popover-in-up {
+    from { opacity: 0; margin-top: 4px; }
+    to { opacity: 1; margin-top: 0; }
+  }
+  @keyframes select-sheet-in {
+    from { transform: translateY(100%); }
+    to { transform: translateY(0); }
+  }
+  @keyframes select-fade-in {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .select-popover,
+    .select-sheet,
+    .select-sheet-backdrop {
+      animation: none;
+    }
+  }
+}

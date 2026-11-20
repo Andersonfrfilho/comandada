@@ -6,7 +6,7 @@ import { QRCodeSVG } from 'qrcode.react'
 import { useAuthStore } from '@/stores/authStore'
 import { api, ApiError } from '@/lib/api'
 import { ORDER_TYPE_LABELS, type OrderType } from '@/constants/orderLabels'
-import type { SelectOption } from '@/components/ui/Select'
+import { Select, type SelectOption } from '@/components/ui/Select'
 import { ScheduleStep } from './ScheduleStep'
 import { DeliveryStep, type SavedAddress } from './DeliveryStep'
 import { PaymentStep, type PaymentLeg } from './PaymentStep'
@@ -463,18 +463,17 @@ export function CreateOrderPage() {
                     <label htmlFor="order-comanda" className="block text-sm font-medium text-gray-700 mb-1">
                       Lançar na comanda
                     </label>
-                    <select
+                    <Select
                       id="order-comanda"
-                      value={activeComanda?.id ?? ''}
-                      onChange={(event) => setComandaId(event.target.value)}
-                      className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm"
-                    >
-                      {tableComandas.map((comanda) => (
-                        <option key={comanda.id} value={comanda.id}>
-                          {comanda.code}{comanda.customerName ? ` · ${comanda.customerName}` : ''}
-                        </option>
-                      ))}
-                    </select>
+                      value={activeComanda?.id ?? null}
+                      onChange={setComandaId}
+                      title="Lançar na comanda"
+                      options={tableComandas.map((comanda) => ({
+                        value: comanda.id,
+                        label: comanda.code,
+                        hint: comanda.customerName ?? undefined,
+                      }))}
+                    />
                   </div>
                 )}
                 {selectedTable && !selectedTable.comanda && (
