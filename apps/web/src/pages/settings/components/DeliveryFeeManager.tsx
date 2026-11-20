@@ -268,7 +268,7 @@ export function DeliveryFeeManager() {
         </h2>
         <button
           onClick={openNewRule}
-          className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
+          className="flex shrink-0 items-center gap-1.5 whitespace-nowrap px-3 py-1.5 text-xs font-medium bg-brand-600 text-white rounded-lg hover:bg-brand-700 transition-colors"
         >
           <Plus className="h-3.5 w-3.5" />
           Nova regra

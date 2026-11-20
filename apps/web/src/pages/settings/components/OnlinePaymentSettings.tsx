@@ -190,7 +190,7 @@ export function OnlinePaymentSettings() {
         </label>
 
         <label className="block">
-          <span className="text-sm font-medium text-gray-700">Prazo para pagar (minutos)</span>
+          <span className="block text-sm font-medium text-gray-700">Prazo para pagar (minutos)</span>
           <input
             type="number"
             min={30}

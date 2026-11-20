@@ -1,5 +1,5 @@
 import { confirmDialog } from '@/stores/confirmStore'
-import { useState, useRef } from 'react'
+import { useState, useRef, useEffect } from 'react'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
@@ -75,19 +75,23 @@ export function FiscalSettingsPage() {
   const [certFileName, setCertFileName] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
-  // Sync config into form when loaded
-  if (config && form.model === 'none' && !form.cnpj) {
+  // Copia a configuração salva para o formulário uma vez, quando chega. Antes a cópia rodava no
+  // render e, com modelo "none" e sem CNPJ salvos, repetia sem parar (tela branca na aba Fiscal).
+  const hydratedRef = useRef(false)
+  useEffect(() => {
+    if (!config || hydratedRef.current) return
+    hydratedRef.current = true
     setForm({
       ...EMPTY_CONFIG,
       ...config,
       providerConfig: config.providerConfig ?? {},
     })
     // Detect if certificate is already stored (sanitized on GET, real on first load)
-    const pc = config.providerConfig as Record<string, unknown>
-    if (pc && pc['certificadoBase64'] && String(pc['certificadoBase64']).length > 50) {
+    const providerConfig = config.providerConfig as Record<string, unknown> | undefined
+    if (providerConfig && providerConfig['certificadoBase64'] && String(providerConfig['certificadoBase64']).length > 50) {
       setCertFileName('certificado.pfx')
     }
-  }
+  }, [config])
 
   const saveMutation = useMutation({
     mutationFn: (data: FiscalConfig) =>
@@ -178,16 +182,16 @@ export function FiscalSettingsPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between mb-4">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
         <h2 className="flex items-center gap-2 text-sm font-semibold text-gray-500 uppercase tracking-wider">
           <Settings className="h-4 w-4" />
           Configuração Fiscal
         </h2>
-        <div className="flex gap-2">
+        <div className="flex shrink-0 gap-2">
           <button
             onClick={() => void handleTest()}
             disabled={testing || form.model === 'none'}
-            className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
+            className="flex items-center gap-2 whitespace-nowrap px-3 py-1.5 text-xs font-medium border border-gray-300 rounded-lg hover:bg-gray-50 disabled:opacity-40 transition-colors"
           >
             <AlertCircle className="h-4 w-4" />
             {testing ? 'Testando...' : 'Testar conexão'}
@@ -195,7 +199,7 @@ export function FiscalSettingsPage() {
           <button
             onClick={() => saveMutation.mutate(form)}
             disabled={saveMutation.isPending}
-            className="flex items-center gap-2 px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
+            className="flex items-center gap-2 whitespace-nowrap px-4 py-1.5 text-xs font-semibold bg-brand-600 text-white rounded-lg hover:bg-brand-700 disabled:opacity-50 transition-colors"
           >
             <CheckCircle className="h-4 w-4" />
             {saveMutation.isPending ? 'Salvando...' : saved ? 'Salvo' : 'Salvar'}
