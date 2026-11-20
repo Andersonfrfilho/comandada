@@ -32,3 +32,27 @@ export const API_URL: string = removeTrailingSlash(
 export const WS_URL: string = resolveWebSocketUrl(
   (import.meta.env.VITE_API_WS_URL as string | undefined) ?? DEFAULT_WS_URL
 )
+
+/**
+ * Servidor escolhido em tempo de execução (app do garçom: loja ou nuvem). Sem escolha, vale o do
+ * build. Só o cliente HTTP (`lib/api.ts`) e o WebSocket seguem a troca.
+ */
+let serverOverride: { apiUrl: string; wsUrl: string } | null = null
+
+/** `https://loja.x/api` → `wss://loja.x/ws`; `https://api.x` → `wss://api.x/ws`. */
+export function webSocketUrlFor(apiUrl: string): string {
+  const url = removeTrailingSlash(apiUrl).replace(/^http/, 'ws')
+  return url.endsWith('/api') ? `${url.slice(0, -'/api'.length)}/ws` : `${url}/ws`
+}
+
+export function setApiServerOverride(apiUrl: string | null): void {
+  serverOverride = apiUrl ? { apiUrl: removeTrailingSlash(apiUrl), wsUrl: webSocketUrlFor(apiUrl) } : null
+}
+
+export function getApiUrl(): string {
+  return serverOverride?.apiUrl ?? API_URL
+}
+
+export function getWsUrl(): string {
+  return serverOverride?.wsUrl ?? WS_URL
+}

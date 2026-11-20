@@ -3,6 +3,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 import { useQueryClient, type QueryClient, type QueryKey } from '@tanstack/react-query'
 import { api, ApiError } from '@/lib/api'
+import { getApiUrl } from '@/lib/apiEndpoints'
 import { useAuthStore } from '@/stores/authStore'
 import { toast } from '@/stores/toastStore'
 
@@ -159,6 +160,17 @@ export function useIsOnline(): boolean {
   return useSyncExternalStore(subscribeOnline, () => navigator.onLine, () => true)
 }
 
+/**
+ * Com loja e nuvem, a comanda aberta num servidor leva alguns segundos para chegar no outro: um 404
+ * logo depois de lançar é atraso da sincronização, não recusa. Passou disso, o garçom decide.
+ */
+const SYNC_GRACE_MS = 5 * 60 * 1000
+
+export function isRetryableForQueue(error: unknown, createdAt: string, now = Date.now()): boolean {
+  if (isRetryableError(error)) return true
+  return error instanceof ApiError && error.status === 404 && now - Date.parse(createdAt) < SYNC_GRACE_MS
+}
+
 /** Falha de rede (sem resposta, servidor fora, tempo esgotado): vale tentar de novo depois. */
 export function isRetryableError(error: unknown): boolean {
   if (!(error instanceof ApiError)) return true
@@ -185,8 +197,25 @@ export interface OutboxEntry {
   rejected: string | null
 }
 
+/** Evento já entregue: o que saiu, para qual servidor e quando (últimos 30, para conferir na tela). */
+export interface SentEvent {
+  id: string
+  kind: OutboxKind
+  label: string
+  server: string
+  queued: boolean
+  sentAt: string
+}
+
+const MAX_SENT_EVENTS = 30
+
 interface OutboxState {
   entries: OutboxEntry[]
+  sent: SentEvent[]
+  recordSent(event: Omit<SentEvent, 'sentAt'>): void
+  discard(id: string): void
+  /** Recusado que o garçom quer tentar de novo (ex.: corrigiu a comanda no painel). */
+  retry(id: string): void
   enqueue(entry: Omit<OutboxEntry, 'createdAt' | 'attempts' | 'rejected'>): void
   remove(id: string): void
   markAttempt(id: string, rejected: string | null): void
@@ -197,6 +226,17 @@ export const useWaiterOutboxStore = create<OutboxState>()(
   persist(
     (set) => ({
       entries: [],
+      sent: [],
+      recordSent: (event) =>
+        set((state) => ({
+          sent: [{ ...event, sentAt: new Date().toISOString() }, ...state.sent.filter((existing) => existing.id !== event.id)].slice(
+            0,
+            MAX_SENT_EVENTS
+          ),
+        })),
+      retry: (id) =>
+        set((state) => ({ entries: state.entries.map((entry) => (entry.id === id ? { ...entry, rejected: null } : entry)) })),
+      discard: (id) => set((state) => ({ entries: state.entries.filter((entry) => entry.id !== id) })),
       enqueue: (entry) =>
         set((state) =>
           state.entries.some((existing) => existing.id === entry.id)
@@ -210,7 +250,7 @@ export const useWaiterOutboxStore = create<OutboxState>()(
             entry.id === id ? { ...entry, attempts: entry.attempts + 1, rejected } : entry
           ),
         })),
-      clear: () => set({ entries: [] }),
+      clear: () => set({ entries: [], sent: [] }),
     }),
     { name: 'waiter-outbox' }
   )
@@ -232,10 +272,11 @@ export function flushOutbox(queryClient: QueryClient): Promise<void> {
       try {
         await api.post(entry.path, entry.body, token)
         useWaiterOutboxStore.getState().remove(entry.id)
+        useWaiterOutboxStore.getState().recordSent({ id: entry.id, kind: entry.kind, label: entry.label, server: getApiUrl(), queued: true })
         sent++
         void queryClient.invalidateQueries({ queryKey: ['comanda-bill', entry.comandaId] })
       } catch (error) {
-        if (isRetryableError(error)) {
+        if (isRetryableForQueue(error, entry.createdAt)) {
           useWaiterOutboxStore.getState().markAttempt(entry.id, null)
           break
         }
@@ -286,6 +327,7 @@ export async function sendOrQueue(
   }
   try {
     const result = await api.post(entry.path, entry.body, token)
+    useWaiterOutboxStore.getState().recordSent({ id: entry.id, kind: entry.kind, label: entry.label, server: getApiUrl(), queued: false })
     return { queued: false, result }
   } catch (error) {
     if (!isRetryableError(error)) throw error

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback } from 'react'
 import { useAuthStore } from '@/stores/authStore'
-import { WS_URL } from '@/lib/apiEndpoints'
+import { getWsUrl } from '@/lib/apiEndpoints'
 
 const RECONNECT_DELAY_MS = 3000
 const MAX_RECONNECT_ATTEMPTS = 10
@@ -31,7 +31,7 @@ export function useWebSocket(onMessage: MessageHandler) {
     const current = wsRef.current
     if (current && (current.readyState === WebSocket.OPEN || current.readyState === WebSocket.CONNECTING)) return
 
-    const ws = new WebSocket(WS_URL)
+    const ws = new WebSocket(getWsUrl())
     wsRef.current = ws
 
     ws.onopen = () => {

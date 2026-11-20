@@ -364,6 +364,16 @@ painel volta para a plataforma pelo `onStatusChanged` do `UpdateOrderStatusUseCa
   até 12 h) e abrem na hora, atualizando por trás. Lançar pedido e pedir a conta vão para a fila (`waiter-outbox`) quando o
   servidor não responde e saem sozinhos quando volta; o pedido leva `id` gerado no aparelho e `POST /orders` com `id` já
   gravado devolve o mesmo pedido (não duplica). Abrir comanda precisa do servidor. Sair apaga cache, carrinhos e fila.
+- Loja e nuvem (`pages/waiter/waiterServers.ts`, tela **Servidores e fila** em `/garcom/servidores`, abre sem login):
+  endereço da API de cada um, modo Automático/Só loja/Só nuvem. No automático o app mede `/health` dos dois (10 s; 4 s
+  com o atual fora) e usa a loja quando ela responde, senão a nuvem; nenhum → fila do celular. Login entra nos dois com a
+  mesma conta (usuários são sincronizados); cada servidor tem a própria sessão (`waiter-servers`) e trocar troca o token
+  do `authStore` e o endereço do cliente HTTP/WebSocket (`setApiServerOverride`). Servidor que estava fora entra sozinho
+  quando volta (senha só na memória) ou pelo botão Entrar da tela. A fila mostra pendentes, recusados e os últimos enviados
+  (por qual servidor); 404 nos primeiros 5 min é atraso da sincronização e tenta de novo. A loja precisa de HTTPS e da
+  origem do app em `ALLOWED_ORIGINS`. Renovação de sessão que falha por rede não desloga mais (só recusa do servidor).
+- Número do pedido com sincronização (`nextOrderNumber`): loja usa ímpares e nuvem pares, sempre acima do maior número
+  já gravado (inclusive o que veio do outro lado), então `#N` não repete entre os dois.
 
 ## Painel: base comum
 

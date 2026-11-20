@@ -1,4 +1,4 @@
-import { API_URL } from './apiEndpoints'
+import { getApiUrl } from './apiEndpoints'
 
 interface ApiOptions extends RequestInit {
   token?: string
@@ -7,6 +7,8 @@ interface ApiOptions extends RequestInit {
 interface AuthBridge {
   getAccessToken(): string | null
   refresh(): Promise<boolean>
+  /** Ainda tem refresh token: a renovação falhou por rede, não por recusa. */
+  hasSession(): boolean
   onSessionExpired(): void
 }
 
@@ -47,7 +49,7 @@ function buildHeaders(fetchOptions: RequestInit, token?: string): Record<string,
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   const { token, ...fetchOptions } = options
 
-  let response = await fetch(`${API_URL}${path}`, {
+  let response = await fetch(`${getApiUrl()}${path}`, {
     ...fetchOptions,
     headers: buildHeaders(fetchOptions, token),
   }).catch(() => {
@@ -61,12 +63,16 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
   if (response.status === 401 && !isAuthRoute && authBridge) {
     const renewed = await refreshOnce()
     if (renewed) {
-      response = await fetch(`${API_URL}${path}`, {
+      response = await fetch(`${getApiUrl()}${path}`, {
         ...fetchOptions,
         headers: buildHeaders(fetchOptions, authBridge.getAccessToken() ?? undefined),
       })
     }
     if (response.status === 401) {
+      // Renovação que não chegou ao servidor: a sessão continua, o erro é de conexão.
+      if (!renewed && authBridge.hasSession()) {
+        throw new ApiError('Sem conexão com o servidor. Confira a internet e tente de novo.', 0, 'network_error')
+      }
       authBridge.onSessionExpired()
       throw new ApiError('Sua sessão expirou. Entre novamente.', 401, 'session_expired')
     }

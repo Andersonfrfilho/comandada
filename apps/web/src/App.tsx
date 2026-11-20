@@ -27,6 +27,7 @@ import { CustomerInvoicePage } from '@/pages/public/CustomerInvoicePage'
 import { StorefrontPage } from '@/pages/storefront/StorefrontPage'
 import { StorefrontOrderPage } from '@/pages/storefront/StorefrontOrderPage'
 import { WaiterApp } from '@/pages/waiter/WaiterApp'
+import { WaiterServersPage } from '@/pages/waiter/WaiterServersPage'
 import { Sidebar } from '@/components/layout/Sidebar'
 import { MobileNav } from '@/components/layout/MobileNav'
 import { AuthGuard, HomeRoute, PermissionGate } from '@/components/layout/RoleGuard'
@@ -91,6 +92,8 @@ export default function App() {
         <Route path="/change-password" element={<ChangePasswordPage />} />
 
         {/* App do garçom: tela própria de celular, instalável à parte (manifest em /garcom). */}
+        {/* Servidores abre sem login: é onde se configura o endereço da loja antes de entrar. */}
+        <Route path="/garcom/servidores" element={<WaiterServersPage />} />
         <Route
           path="/garcom/*"
           element={
