@@ -20,6 +20,13 @@ type PaymentChangeInput = {
   readonly changeFor: string | null
 }
 
+/** Quanto o entregador leva de troco; undefined quando não tem troco. */
+export function paymentChangeAmount(payment: PaymentChangeInput): number | undefined {
+  if (payment.changeFor === null) return undefined
+  const change = Number(payment.changeFor) - Number(payment.amount)
+  return change > 0 ? change : undefined
+}
+
 // "Troco p/ R$ 100,00 (levar R$ 51,00)" — the courier needs the change amount, not only the bill.
 export function paymentChangeText(payment: PaymentChangeInput): string | undefined {
   if (payment.changeFor === null) return undefined

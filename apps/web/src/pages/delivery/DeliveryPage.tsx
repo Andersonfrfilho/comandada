@@ -11,7 +11,7 @@ import { useAuthStore, useCan } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { useWebSocket } from '@/hooks/useWebSocket'
 import { buildConversationLink } from '@/constants/conversationLinks'
-import { paymentChangeText, paymentMethodLabel } from '@/constants/paymentLabels'
+import { paymentChangeAmount, paymentMethodLabel } from '@/constants/paymentLabels'
 import {
   formatBrl,
   formatDistance,
@@ -342,8 +342,14 @@ function DeliveryCard({
                 </span>
                 <span className="text-gray-700 whitespace-nowrap">{formatBrl(payment.amount)}</span>
               </div>
-              {!paidOnline && paymentChangeText(payment) && (
-                <p className="text-xs font-semibold text-amber-700">{paymentChangeText(payment)}</p>
+              {!paidOnline && paymentChangeAmount(payment) !== undefined && (
+                // Troco em destaque: é o que o entregador precisa separar antes de sair.
+                <div className="mt-1.5 flex items-center justify-between gap-2 rounded-md border border-amber-200 bg-amber-50 px-2.5 py-1.5">
+                  <span className="text-xs text-amber-800">Cliente paga com <span className="whitespace-nowrap">{formatBrl(payment.changeFor ?? '0')}</span></span>
+                  <span className="whitespace-nowrap text-sm font-bold text-amber-900">
+                    Levar troco {formatBrl(paymentChangeAmount(payment) ?? 0)}
+                  </span>
+                </div>
               )}
             </div>
           ))}
