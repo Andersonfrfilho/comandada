@@ -121,16 +121,32 @@ export class DrizzleComandaRepository implements ComandaRepository {
     return Promise.all(rows.map((r) => this.joinTable(r)))
   }
 
-  async create(input: { establishmentId: string; tableId: string; code: string }): Promise<Comanda> {
+  async create(input: { establishmentId: string; tableId: string; code: string; guestsCount?: number | null }): Promise<Comanda> {
     const [comanda] = await this.db
       .insert(schema.comandas)
       .values({
         establishmentId: input.establishmentId,
         tableId: input.tableId,
         code: input.code.toUpperCase(),
+        guestsCount: input.guestsCount ?? null,
       })
       .returning()
     return comanda!
+  }
+
+  async updateGuestsCount(id: string, establishmentId: string, guestsCount: number | null): Promise<Comanda | null> {
+    const [comanda] = await this.db
+      .update(schema.comandas)
+      .set({ guestsCount })
+      .where(
+        and(
+          eq(schema.comandas.id, id),
+          eq(schema.comandas.establishmentId, establishmentId),
+          eq(schema.comandas.status, 'open')
+        )
+      )
+      .returning()
+    return comanda ?? null
   }
 
   async confirm(

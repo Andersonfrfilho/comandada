@@ -386,6 +386,13 @@
       "when": 1785693000000,
       "tag": "0055_customer_whatsapp_profile_name",
       "breakpoints": true
+    },
+    {
+      "idx": 55,
+      "version": "7",
+      "when": 1785779400000,
+      "tag": "0056_comanda_guests_count",
+      "breakpoints": true
     }
   ]
 }

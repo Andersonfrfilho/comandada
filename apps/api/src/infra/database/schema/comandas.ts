@@ -1,4 +1,4 @@
-import { pgTable, uuid, varchar, timestamp } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, timestamp, smallint } from 'drizzle-orm/pg-core'
 import { establishments } from './establishments'
 import { restaurantTables } from './tables'
 import { customers } from './customers'
@@ -18,6 +18,8 @@ export const comandas = pgTable('comandas', {
   customerName: varchar('customer_name', { length: 255 }),
   customerPhone: varchar('customer_phone', { length: 20 }),
   customerDocument: varchar('customer_document', { length: 20 }),
+  /** Pessoas na comanda (cadeiras ocupadas no desenho da mesa); nulo = não informado. */
+  guestsCount: smallint('guests_count'),
   openedAt: timestamp('opened_at', { withTimezone: true }).defaultNow().notNull(),
   closedAt: timestamp('closed_at', { withTimezone: true }),
 })
