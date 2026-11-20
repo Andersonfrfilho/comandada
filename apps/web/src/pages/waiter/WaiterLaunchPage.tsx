@@ -174,13 +174,13 @@ export function WaiterLaunchPage() {
             </button>
           )}
         </div>
-        <div className="-mx-3 flex gap-2 overflow-x-auto px-3">
+        <div className="-mx-3 flex gap-2 overflow-x-auto px-3 py-1">
           {[{ id: ALL_CATEGORIES, name: 'Tudo' }, ...catalogs].map((catalog) => (
             <button
               key={catalog.id}
               onClick={() => setCategory(catalog.id)}
               className={`h-9 shrink-0 rounded-full px-3.5 text-sm font-semibold ${
-                category === catalog.id ? 'bg-brand-600 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-200'
+                category === catalog.id ? 'bg-brand-600 text-white' : 'bg-white text-gray-700 ring-1 ring-gray-300'
               }`}
             >
               {catalog.name}
@@ -212,7 +212,7 @@ export function WaiterLaunchPage() {
                     <li
                       key={product.id}
                       className={`flex items-center gap-3 rounded-2xl bg-white p-2 pr-2.5 shadow-sm ring-1 ${
-                        quantity > 0 ? 'ring-brand-400' : 'ring-gray-200'
+                        quantity > 0 ? 'ring-brand-400' : 'ring-gray-300'
                       }`}
                     >
                       <button onClick={() => add(product)} className="flex min-w-0 flex-1 items-center gap-3 text-left">

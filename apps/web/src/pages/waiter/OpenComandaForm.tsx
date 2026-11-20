@@ -143,7 +143,7 @@ export function OpenComandaForm({ tableNumber, capacity, submitting, onSubmit, o
             />
           </div>
           {debouncedSearch.length >= 2 && (
-            <ul className="mt-1 overflow-hidden rounded-xl bg-white ring-1 ring-gray-200">
+            <ul className="mt-1 overflow-hidden rounded-xl bg-white ring-1 ring-gray-300">
               {hits.map((customer) => (
                 <li key={customer.id} className="border-b border-gray-100 last:border-0">
                   <button onClick={() => pick(customer)} className="flex min-h-[48px] w-full flex-col justify-center px-3 py-2 text-left active:bg-gray-50">
