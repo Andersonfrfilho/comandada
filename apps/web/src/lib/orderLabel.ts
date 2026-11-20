@@ -27,3 +27,19 @@ export function orderPartyLabel(order: OrderParty): string | null {
   if (table && name) return `${table} · ${name}`
   return table ?? name
 }
+
+/** Plataformas de delivery que mandam pedido para o painel. */
+export type MarketplaceChannel = 'ifood' | '99food'
+
+const MARKETPLACE_NAMES: Record<MarketplaceChannel, string> = { ifood: 'iFood', '99food': '99Food' }
+
+export function isMarketplaceChannel(channel: string): channel is MarketplaceChannel {
+  return channel in MARKETPLACE_NAMES
+}
+
+/** "iFood #8312": de onde veio e o número que o entregador da plataforma vai pedir no balcão. */
+export function marketplaceLabel(order: { channel: string; code?: string | null }): string | null {
+  if (!isMarketplaceChannel(order.channel)) return null
+  const name = MARKETPLACE_NAMES[order.channel]
+  return order.code ? `${name} #${order.code}` : name
+}

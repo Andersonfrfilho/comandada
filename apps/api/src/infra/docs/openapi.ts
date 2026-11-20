@@ -1047,7 +1047,7 @@ export function generateOpenAPISpec(): OpenAPIV3_1.Document {
 
         OrderChannel: {
           type: 'string',
-          enum: ['whatsapp', 'ifood', 'manual'],
+          enum: ['whatsapp', 'ifood', '99food', 'manual', 'web'],
         },
 
         DeliveryStatus: {

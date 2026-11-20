@@ -24,6 +24,4 @@ export function registerOrderRoutes(
     authorize('orders', 'write'),
     controller.requestPartialConfirmation
   )
-  router.post('/orders/:id/ifood/accept', authenticate, authorize('orders', 'write'), controller.ifoodAccept)
-  router.post('/orders/:id/ifood/reject', authenticate, authorize('orders', 'write'), controller.ifoodReject)
 }

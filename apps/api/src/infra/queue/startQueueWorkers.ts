@@ -16,13 +16,12 @@ import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type * as schema from '@/infra/database/schema'
 import type { WebSocketHub } from '@/infra/websocket/WebSocketHub'
 import type { BotMessageProvider } from '@/shared/providers/BotMessageProvider'
-import type { CreateOrderUseCase } from '@/modules/orders/application/use-cases/CreateOrderUseCase'
-import type { UpdateOrderStatusUseCase } from '@/modules/orders/application/use-cases/UpdateOrderStatusUseCase'
+import type { MarketplaceOrderService } from '@/modules/marketplaces/application/MarketplaceOrderService'
 import type { MetaWhatsAppModuleRegistry } from '@/modules/conversations/infra/whatsapp/metaWhatsAppModule'
 import { startDocumentIngestionWorker } from '@/modules/conversations/application/workers/DocumentIngestionWorker'
 import { startFiscalWorker } from '@/modules/fiscal/application/workers/FiscalEmissionProcessor'
 import { startFinanceWorker } from '@/modules/finance/application/workers/AccountDueWorker'
-import { startIfoodWorker } from '@/modules/orders/application/workers/IfoodPollingWorker'
+import { startMarketplacePollingWorker } from '@/modules/marketplaces/infra/workers/MarketplacePollingWorker'
 import { startProductAffinityWorker } from '@/modules/products/application/workers/ProductAffinityWorker'
 import { startStockWorker } from '@/modules/products/application/workers/StockExpiryWorker'
 import { startWhatsAppInboundWorker } from '@/modules/webhook/application/workers/WhatsAppInboundWorker'
@@ -35,8 +34,7 @@ export interface QueueWorkerDependencies {
   database: NodePgDatabase<typeof schema>
   websocketHub: WebSocketHub
   botMessages: BotMessageProvider
-  createOrderUseCase: CreateOrderUseCase
-  updateOrderStatusUseCase: UpdateOrderStatusUseCase
+  marketplaceOrders: MarketplaceOrderService
   metaWhatsAppModules: MetaWhatsAppModuleRegistry
   documentIngestionEnabled: boolean
 }
@@ -67,12 +65,9 @@ export function startQueueWorkers(
     })
   )
   start(plan.finance, 'Finance', () => startFinanceWorker(dependencies.database))
-  start(plan.ifood, 'iFood polling', () =>
-    startIfoodWorker(
-      dependencies.database,
-      dependencies.createOrderUseCase,
-      dependencies.updateOrderStatusUseCase
-    )
+  // Ligado sem credencial completa: a plataforma fica de fora e o motivo aparece no log da montagem.
+  start(plan.marketplaces && dependencies.marketplaceOrders.enabledPlatforms.length > 0, 'Marketplaces polling', () =>
+    startMarketplacePollingWorker(dependencies.marketplaceOrders)
   )
   start(plan.productAffinity, 'Product affinity', () => startProductAffinityWorker(dependencies.database))
   start(plan.stock, 'Stock expiry', () => startStockWorker(dependencies.database))

@@ -41,6 +41,7 @@ import { registerUploadRoutes } from '@/modules/uploads/infra/http/UploadRoutes'
 import { registerBotRoutes } from '@/modules/bot/infra/http/BotRoutes'
 import { registerReminderRoutes } from '@/modules/reminders/infra/http/ReminderRoutes'
 import { registerPaymentRoutes } from '@/modules/payments/infra/http/PaymentRoutes'
+import { registerMarketplaceRoutes } from '@/modules/marketplaces/infra/http/MarketplaceRoutes'
 import { STALE_CHARGE_SWEEP_INTERVAL_MS } from '@/modules/payments/shared/payments.constant'
 import { registerOrderIssueRoutes } from '@/modules/issues/infra/http/OrderIssueRoutes'
 import { registerAgendaRoutes } from '@/modules/agenda/infra/http/AgendaRoutes'
@@ -149,6 +150,7 @@ export async function createServer() {
   registerBotRoutes(router, container.botController)
   registerReminderRoutes(router, container.reminderController)
   registerPaymentRoutes(router, container.paymentController)
+  registerMarketplaceRoutes(router, container.marketplaceWebhookController)
   registerOrderIssueRoutes(router, container.orderIssueController)
   registerAgendaRoutes(router, container.agendaController)
 

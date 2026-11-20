@@ -6,7 +6,7 @@ import type { Queue } from 'bullmq'
 import { fiscalQueue } from './fiscalQueue'
 import { stockExpiryQueue } from './stockQueue'
 import { financeDueQueue } from './financeQueue'
-import { ifoodPollingQueue } from './ifoodQueue'
+import { marketplacePollingQueue } from './marketplaceQueue'
 import { productAffinityQueue } from './productAffinityQueue'
 import { whatsAppInboundQueue } from './whatsAppInboundQueue'
 
@@ -51,7 +51,7 @@ export function startBullBoard(): void {
       new BullMQAdapter(fiscalQueue as unknown as Queue),
       new BullMQAdapter(stockExpiryQueue as unknown as Queue),
       new BullMQAdapter(financeDueQueue as unknown as Queue),
-      new BullMQAdapter(ifoodPollingQueue as unknown as Queue),
+      new BullMQAdapter(marketplacePollingQueue as unknown as Queue),
       new BullMQAdapter(productAffinityQueue as unknown as Queue),
       new BullMQAdapter(whatsAppInboundQueue as unknown as Queue),
     ],

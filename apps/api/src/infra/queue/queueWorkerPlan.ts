@@ -8,7 +8,8 @@ export interface QueueWorkerPlan {
   whatsAppInbound: boolean
   fiscal: boolean
   finance: boolean
-  ifood: boolean
+  /** iFood e 99Food: sobe com qualquer uma ligada (`IFOOD_ENABLED`, `FOOD99_ENABLED`). */
+  marketplaces: boolean
   productAffinity: boolean
   stock: boolean
   documentIngestion: boolean
@@ -27,7 +28,7 @@ export function planQueueWorkers(
       whatsAppInbound: false,
       fiscal: false,
       finance: false,
-      ifood: false,
+      marketplaces: false,
       productAffinity: false,
       stock: false,
       documentIngestion: false,
@@ -41,7 +42,7 @@ export function planQueueWorkers(
         : isOn('WHATSAPP_INBOUND_WORKER_ENABLED'),
     fiscal: isOn('FISCAL_WORKER_ENABLED'),
     finance: isOn('FINANCE_WORKER_ENABLED'),
-    ifood: isOn('IFOOD_ENABLED'),
+    marketplaces: isOn('IFOOD_ENABLED') || isOn('FOOD99_ENABLED'),
     productAffinity: isOn('PRODUCT_AFFINITY_WORKER_ENABLED'),
     stock: isOn('STOCK_WORKER_ENABLED'),
     documentIngestion: documentIngestionEnabled,

@@ -40,4 +40,5 @@ export const ORDER_CHANNEL_LABELS: Record<string, string> = {
   ifood: 'iFood',
   manual: 'Manual',
   web: 'Cardápio online',
+  '99food': '99Food',
 }

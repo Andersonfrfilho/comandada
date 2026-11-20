@@ -23,6 +23,7 @@ import { OrderPaymentCard } from './OrderPaymentCard'
 import { OrderDeliveryCard } from './OrderDeliveryCard'
 import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
 import { orderNumberLabel } from '@/lib/orderLabel'
+import { MarketplaceBadge } from '@/components/orders/MarketplaceBadge'
 
 /** Pedido encerrado não negocia mais itens com o cliente — a API recusa, a tela nem oferece. */
 const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['completed', 'cancelled']
@@ -143,6 +144,7 @@ export function OrderDetailPage() {
             <div className="flex items-start justify-between mb-2">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="text-lg font-extrabold text-gray-900">{orderNumberLabel(order)}</span>
+                <MarketplaceBadge order={order} />
                 {order.table && (
                   <span className="text-xs font-semibold px-2 py-0.5 rounded-full bg-gray-900 text-white">Mesa {order.table.number}</span>
                 )}
