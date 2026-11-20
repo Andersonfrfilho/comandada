@@ -33,4 +33,16 @@ export const PARTIAL_CONFIRMATION_LABELS = {
   declinedNote: (time: string) => `Cliente não quis seguir às ${time}. Pedido cancelado.`,
 } as const
 
+/** Textos de marcar item a item o que ficou pronto no detalhe do pedido (mesma marcação da Cozinha). */
+export const ITEM_READY_LABELS = {
+  progress: (ready: number, total: number) => `${ready}/${total} prontos`,
+  allReady: 'tudo pronto',
+  markAll: 'Marcar todos',
+  markItem: (name: string) => `Marcar ${name} como pronto`,
+  readyAt: (time: string) => `Pronto ${time}`,
+  alreadyReady: 'Já marcado como pronto',
+  orderReady: 'Todos os itens prontos: o pedido foi para Pronto.',
+  failure: 'Não deu para marcar o item. Tente de novo.',
+} as const
+
 export const CONVERSATION_LINK_LABEL = 'Conversar com o cliente'

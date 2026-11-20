@@ -37,3 +37,30 @@ export function requiresManualFlag(from: OrderStatus, to: OrderStatus): boolean 
 export function nextStatus(steps: readonly OrderStatus[], current: OrderStatus): OrderStatus | null {
   return NATURAL_NEXT[current].find((status) => status !== 'cancelled' && steps.includes(status)) ?? null
 }
+
+export type StatusChoiceGroup = 'skip' | 'back' | 'reopen'
+
+export interface StatusChoices {
+  /** Etapas à frente (fora o próximo passo, que já tem o botão principal). */
+  skip: OrderStatus[]
+  /** Etapas anteriores, para corrigir um avanço errado. */
+  back: OrderStatus[]
+  /** Pedido cancelado: em que etapa ele volta a valer. */
+  reopen: OrderStatus[]
+  canCancel: boolean
+}
+
+/** Os status oferecidos como botões, separados pelo tipo de mudança, na ordem das etapas. */
+export function statusChoices(steps: readonly OrderStatus[], current: OrderStatus): StatusChoices {
+  if (current === 'cancelled') return { skip: [], back: [], reopen: [...steps], canCancel: false }
+  const next = nextStatus(steps, current)
+  const skip: OrderStatus[] = []
+  const back: OrderStatus[] = []
+  for (const step of steps) {
+    if (step === current || step === next) continue
+    const kind = classifyStatusMove(steps, current, step)
+    if (kind === 'back') back.push(step)
+    else skip.push(step)
+  }
+  return { skip, back: back.reverse(), reopen: [], canCancel: true }
+}
