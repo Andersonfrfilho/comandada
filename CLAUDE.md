@@ -306,8 +306,9 @@ Outro provedor (Stone) é outra implementação de `PaymentGatewayFactory`. Cód
 
 `apps/api/src/modules/marketplaces/` (detalhes em `docs/marketplaces-ifood-99food.md`; regras do iFood em
 `docs/integracoes/ifood.md`; 99Food em `docs/integracoes/99food.md`, com a base completa só nos arquivos privados do
-projeto porque a doc da 99Food é confidencial e este repositório é público: nada dela entra aqui). Porta comum
-`MarketplaceProvider`; iFood pela Merchant API (polling 30 s, até 100 lojas por chamada), 99Food pelo Open Delivery
+projeto porque a doc da 99Food é confidencial e este repositório é público: nada dela entra aqui). Conectores e porta comum `MarketplaceProvider`
+vêm do SDK (`@adatechnology/marketplace-contracts`, `ifood-marketplace-provider`, `opendelivery-marketplace-provider`;
+mudança no conector é no SDK, publica e sobe a versão aqui); iFood pela Merchant API (polling 30 s, até 100 lojas por chamada), 99Food pelo Open Delivery
 (`OpenDeliveryMarketplaceProvider`, serve para outras plataformas do padrão). Desligado por padrão: `IFOOD_ENABLED`/`FOOD99_ENABLED=true` + credenciais (faltando, o log avisa e a
 plataforma fica de fora). `marketplace_events` evita evento repetido, `marketplace_orders` liga o pedido da plataforma
 ao do painel. Pedido entra com o **preço da plataforma**, `channel` = `ifood`/`99food`, `orders.code` = número da

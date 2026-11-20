@@ -15,14 +15,21 @@ iFood / 99Food ──polling 30 s (ou webhook)──▶ worker ──▶ Marketp
 painel muda status ──▶ UpdateOrderStatusUseCase ──onStatusChanged──┘──▶ ação na plataforma
 ```
 
-Código em `apps/api/src/modules/marketplaces/`:
+Os conectores ficam no SDK `adatechnology-packages`, para outros projetos usarem:
+
+| Pacote | Papel |
+|---|---|
+| `@adatechnology/marketplace-contracts` | Tipos comuns (pedido, evento, ação), porta `MarketplaceProvider`, regra de status e utilitários HTTP |
+| `@adatechnology/ifood-marketplace-provider` | iFood Merchant API, Financial v3 e Review v2 (`IfoodMarketplaceProvider`) |
+| `@adatechnology/opendelivery-marketplace-provider` | Padrão Open Delivery (Abrasel), usado pela 99Food e outras plataformas |
+
+Mudança no conector é feita no SDK (com changeset), publicada e só então a versão sobe aqui.
+
+Código do ComandAdA em `apps/api/src/modules/marketplaces/`:
 
 | Arquivo | Papel |
 |---|---|
-| `domain/Marketplace.ts` | Tipos comuns (pedido, evento, ação) e a porta `MarketplaceProvider` |
-| `domain/statusSync.ts` | Status do painel → ação na plataforma, só para a frente |
-| `infra/providers/IfoodMarketplaceProvider.ts` | iFood Merchant API, Financial v3 e Review v2 |
-| `infra/providers/OpenDeliveryMarketplaceProvider.ts` | Padrão Open Delivery (Abrasel), usado pela 99Food e outras plataformas |
+| `domain/Marketplace.ts`, `domain/statusSync.ts` | Reexportam `@adatechnology/marketplace-contracts` (tipos, porta `MarketplaceProvider`, status painel → plataforma) |
 | `infra/marketplaceConfig.ts` | Lê as variáveis e liga cada plataforma |
 | `application/MarketplaceOrderService.ts` | Importa pedido, cancela, avisa status, negociações, financeiro e avaliações |
 | `infra/http/MarketplacePanelController.ts` | Rotas `/marketplaces/*` do painel |

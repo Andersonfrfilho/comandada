@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { readMarketplaceSetup } from './marketplaceConfig'
-import { OpenDeliveryMarketplaceProvider } from './providers/OpenDeliveryMarketplaceProvider'
+import { OpenDeliveryMarketplaceProvider } from '@adatechnology/opendelivery-marketplace-provider'
 
 describe('readMarketplaceSetup', () => {
   it('tudo desligado sem variáveis', () => {

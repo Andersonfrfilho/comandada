@@ -1,7 +1,7 @@
 import type { MarketplacePlatform, MarketplaceProvider } from '../domain/Marketplace'
-import { IfoodMarketplaceProvider } from './providers/IfoodMarketplaceProvider'
-import { OpenDeliveryMarketplaceProvider } from './providers/OpenDeliveryMarketplaceProvider'
-import type { FetchFunction } from './providers/marketplaceHttp'
+import { IfoodMarketplaceProvider } from '@adatechnology/ifood-marketplace-provider'
+import { OpenDeliveryMarketplaceProvider } from '@adatechnology/opendelivery-marketplace-provider'
+import type { FetchFunction } from '@adatechnology/marketplace-contracts'
 
 type Environment = Record<string, string | undefined>
 
