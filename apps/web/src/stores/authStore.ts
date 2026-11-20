@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
-import { api, configureAuthBridge } from '@/lib/api'
+import { api, ApiError, configureAuthBridge } from '@/lib/api'
 import { hasPermission, permissionsFromAccessToken, type Permission, type PermissionRule } from '@/lib/permissions'
 
 interface AuthUser {
@@ -97,7 +97,10 @@ export const useAuthStore = create<AuthState>()(
               user: state.user && permissions ? { ...state.user, permissions } : state.user,
             }))
             return true
-          } catch {
+          } catch (error) {
+            // Sem rede ou servidor fora do ar não é sessão vencida: quem está offline (app do garçom)
+            // continua logado e renova quando o servidor voltar. Só a recusa do servidor encerra.
+            if (error instanceof ApiError && (error.status === 0 || error.status >= 500)) return false
             set({ user: null, accessToken: null, refreshToken: null, isAuthenticated: false })
             return false
           }
@@ -126,6 +129,7 @@ export function useCan(required: PermissionRule): boolean {
 configureAuthBridge({
   getAccessToken: () => useAuthStore.getState().accessToken,
   refresh: () => useAuthStore.getState().refresh(),
+  hasSession: () => Boolean(useAuthStore.getState().refreshToken),
   onSessionExpired: () => {
     useAuthStore.setState({
       user: null,

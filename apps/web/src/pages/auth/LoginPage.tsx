@@ -1,9 +1,10 @@
 import { useState, type FormEvent } from 'react'
-import { useNavigate, useSearchParams } from 'react-router-dom'
+import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { useAuthStore } from '@/stores/authStore'
 import { BrandIdentity } from '@/components/brand/BrandIdentity'
 import { AppFooter } from '@/components/brand/AppFooter'
 import { isWaiterPath } from '@/pages/waiter/waiterModel'
+import { connectOtherServers, prepareWaiterLogin } from '@/pages/waiter/waiterServers'
 
 export function LoginPage() {
   const [email, setEmail] = useState(() => localStorage.getItem('order-hub-email') ?? '')
@@ -25,7 +26,11 @@ export function LoginPage() {
     setError('')
     setLoading(true)
     try {
+      // App do garçom: entra pelo servidor que responder (loja ou nuvem) e depois nos outros.
+      const waiterLogin = afterLogin !== '/'
+      if (waiterLogin) await prepareWaiterLogin()
       await login(email, password, rememberMe)
+      if (waiterLogin) void connectOtherServers(email, password)
       // user state is updated synchronously by zustand before this line
       const updatedUser = useAuthStore.getState().user
       navigate(updatedUser?.passwordMustChange ? '/change-password' : afterLogin)
@@ -122,6 +127,11 @@ export function LoginPage() {
                 {loading ? 'Entrando...' : 'Entrar'}
               </button>
             </form>
+            {afterLogin !== '/' && (
+              <Link to="/garcom/servidores" className="mt-5 block text-center text-sm font-medium text-brand-700 hover:underline">
+                Servidores (loja e nuvem)
+              </Link>
+            )}
           </div>
         </div>
       </div>

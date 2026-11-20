@@ -1,6 +1,6 @@
-import { useEffect, useState, useSyncExternalStore } from 'react'
+import { useCallback, useEffect, useState, useSyncExternalStore } from 'react'
 import { Link, Navigate, Route, Routes, useNavigate } from 'react-router-dom'
-import { Bell, BellRing, Check, LogOut, UtensilsCrossed, X } from 'lucide-react'
+import { Bell, BellRing, Check, LogOut, Server, UtensilsCrossed, X } from 'lucide-react'
 import { useAuthStore, useCan } from '@/stores/authStore'
 import { useBrandingStore } from '@/stores/brandingStore'
 import { WaiterTablesPage } from './WaiterTablesPage'
@@ -18,6 +18,7 @@ import {
   useWaiterOutboxStore,
   useWaiterPersistedCache,
 } from './waiterOffline'
+import { SERVER_LABELS, signOutAllServers, useServerSelection, useWaiterServersStore } from './waiterServers'
 import { PANEL_MANIFEST_PATH, WAITER_MANIFEST_PATH, readyNoticeLabel, waiterPaths } from './waiterModel'
 
 /** Instalar pelo /garcom tem que levar o manifest do garçom, mesmo quando o app abriu pelo painel. */
@@ -134,6 +135,8 @@ function ConnectionBar() {
 function WaiterHeader() {
   const brand = useBrandingStore((state) => state.branding)
   const user = useAuthStore((state) => state.user)
+  const activeServer = useWaiterServersStore((state) => state.active)
+  const hasLoja = useWaiterServersStore((state) => Boolean(state.urls.loja))
   const logout = useAuthStore((state) => state.logout)
   const clearNotices = useWaiterAlertsStore((state) => state.clear)
   const [permission, setPermission] = useState(notificationState)
@@ -142,6 +145,7 @@ function WaiterHeader() {
     // Celular pode ser de outro garçom no próximo turno: nada da sessão fica no aparelho.
     clearWaiterDeviceData()
     clearNotices()
+    await signOutAllServers()
     await logout()
   }
 
@@ -160,7 +164,10 @@ function WaiterHeader() {
           )}
           <div className="min-w-0">
             <p className="truncate text-sm font-bold leading-tight text-gray-900">{brand.name}</p>
-            <p className="truncate text-xs leading-tight text-gray-500">Garçom · {user?.name}</p>
+            <p className="truncate text-xs leading-tight text-gray-500">
+              Garçom · {user?.name}
+              {hasLoja ? ` · ${SERVER_LABELS[activeServer].replace('Servidor da ', '')}` : ''}
+            </p>
           </div>
         </Link>
         {permission === 'default' && (
@@ -172,6 +179,13 @@ function WaiterHeader() {
             Ativar avisos
           </button>
         )}
+        <Link
+          to={waiterPaths.servers}
+          aria-label="Servidores e fila"
+          className="flex h-10 w-10 items-center justify-center rounded-full text-gray-500 hover:bg-gray-100 active:scale-95"
+        >
+          <Server className="h-5 w-5" />
+        </Link>
         <button
           onClick={() => void signOut()}
           aria-label="Sair"
@@ -210,6 +224,10 @@ export function WaiterApp() {
   useWaiterPersistedCache()
   useWaiterAlerts()
   useOutboxSync()
+  const queryClient = useQueryClient()
+  // Trocou de servidor: o que estava na fila tenta sair pelo novo na hora.
+  const flushAfterSwitch = useCallback(() => void flushOutbox(queryClient), [queryClient])
+  useServerSelection(flushAfterSwitch)
 
   if (!canLaunch) return <NoAccess />
 

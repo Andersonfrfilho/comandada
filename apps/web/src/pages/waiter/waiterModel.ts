@@ -10,6 +10,7 @@ export const waiterPaths = {
   table: (tableId: string) => `${WAITER_BASE_PATH}/mesa/${tableId}`,
   comanda: (comandaId: string) => `${WAITER_BASE_PATH}/comanda/${comandaId}`,
   launch: (comandaId: string) => `${WAITER_BASE_PATH}/comanda/${comandaId}/lancar`,
+  servers: `${WAITER_BASE_PATH}/servidores`,
 }
 
 export function isWaiterPath(pathname: string): boolean {
