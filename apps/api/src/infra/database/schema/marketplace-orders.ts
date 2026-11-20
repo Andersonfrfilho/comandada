@@ -1,6 +1,7 @@
-import { pgTable, uuid, varchar, timestamp, jsonb, unique, primaryKey } from 'drizzle-orm/pg-core'
+import { pgTable, uuid, varchar, timestamp, jsonb, unique, primaryKey, text, index } from 'drizzle-orm/pg-core'
 import { establishments } from './establishments'
 import { orders } from './orders'
+import { users } from './users'
 
 // Pedido de marketplace (iFood, 99Food) ligado ao pedido do painel. `platformStatus` é o último status
 // que a plataforma conhece: o aviso de status do painel só sai quando muda, e o cancelamento que veio
@@ -39,4 +40,35 @@ export const marketplaceEvents = pgTable(
   (table) => [primaryKey({ columns: [table.platform, table.eventId] })]
 )
 
+// Negociação aberta pela plataforma (cliente pediu cancelamento, reembolso ou mais prazo). `payload` guarda a
+// negociação inteira (alternativas, itens, fotos) e `response` o que a equipe respondeu.
+export const marketplaceDisputes = pgTable(
+  'marketplace_disputes',
+  {
+    id: uuid('id').primaryKey().defaultRandom(),
+    establishmentId: uuid('establishment_id')
+      .notNull()
+      .references(() => establishments.id, { onDelete: 'cascade' }),
+    platform: varchar('platform', { length: 20 }).notNull(),
+    externalId: varchar('external_id', { length: 120 }).notNull(),
+    orderId: uuid('order_id').references(() => orders.id, { onDelete: 'set null' }),
+    externalOrderId: varchar('external_order_id', { length: 100 }).notNull(),
+    kind: varchar('kind', { length: 40 }).notNull(),
+    message: text('message'),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    status: varchar('status', { length: 20 }).notNull().default('open'),
+    payload: jsonb('payload').notNull(),
+    response: jsonb('response'),
+    respondedBy: uuid('responded_by').references(() => users.id, { onDelete: 'set null' }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
+  },
+  (table) => [
+    unique('marketplace_disputes_unique').on(table.platform, table.externalId),
+    index('marketplace_disputes_open_idx').on(table.establishmentId, table.status, table.createdAt),
+    index('marketplace_disputes_order_idx').on(table.orderId),
+  ]
+)
+
 export type MarketplaceOrderRow = typeof marketplaceOrders.$inferSelect
+export type MarketplaceDisputeRow = typeof marketplaceDisputes.$inferSelect

@@ -46,11 +46,33 @@ describe('buildOrderNotes', () => {
     const notes = buildOrderNotes(baseOrder)
     expect(notes).toContain('Pedido iFood #8312')
     expect(notes).toContain('Pago no iFood: Crédito R$ 61,00')
-    expect(notes).toContain('Cobrar na entrega: Dinheiro R$ 50,00 (troco para R$ 100,00)')
+    expect(notes).toContain('Cobrar na entrega: Dinheiro R$ 50,00 (troco para R$ 100,00: levar R$ 50,00)')
     expect(notes).toContain('Desconto no iFood: R$ 5,00')
     expect(notes).toContain('Entrega pelo iFood')
     expect(notes).toContain('Código de coleta: 4321')
     expect(notes).toContain('Referência: portão azul')
     expect(notes).toContain('Obs.: tocar a campainha')
+  })
+
+  it('mostra bandeira, cupom com quem paga, mesa e CPF da nota', () => {
+    const notes = buildOrderNotes({
+      ...baseOrder,
+      type: 'table',
+      table: '12',
+      customerDocument: '123.456.789-00',
+      payments: [{ method: 'Crédito', brand: 'VISA', prepaid: true, amount: 106 }],
+      benefits: [{ amount: 5, description: 'PRIMEIRA', sponsors: [{ name: 'iFood', amount: 3 }, { name: 'loja', amount: 2 }] }],
+    })
+    expect(notes).toContain('Mesa 12 (consumo no local)')
+    expect(notes).toContain('Pago no iFood: Crédito VISA R$ 106,00')
+    expect(notes).toContain('Cupom/desconto "PRIMEIRA": R$ 5,00 (R$ 3,00 pago por iFood, R$ 2,00 pago por loja)')
+    expect(notes).toContain('CPF/CNPJ na nota: 123.456.789-00')
+    expect(notes).not.toContain('Desconto no iFood')
+  })
+
+  it('99Food mostra o número do dia e o id do pedido', () => {
+    const notes = buildOrderNotes({ ...baseOrder, platform: '99food', displayId: '7', externalId: '5764607801871631353' })
+    expect(notes).toContain('Pedido 99Food #7')
+    expect(notes).toContain('ID do pedido na 99Food: 5764607801871631353')
   })
 })

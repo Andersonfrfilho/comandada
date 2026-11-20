@@ -24,6 +24,9 @@ import { OrderDeliveryCard } from './OrderDeliveryCard'
 import { formatBrl, formatPhoneBr, splitLocationNote } from './orderDetailFormat'
 import { orderNumberLabel } from '@/lib/orderLabel'
 import { MarketplaceBadge } from '@/components/orders/MarketplaceBadge'
+import { MarketplaceOrderCard } from '@/components/orders/MarketplaceOrderCard'
+import { isMarketplaceChannel } from '@/lib/orderLabel'
+import { cancelsOnPlatform, marketplaceOrderQueryKey, type MarketplaceOrderView } from '@/lib/marketplaces'
 
 /** Pedido encerrado não negocia mais itens com o cliente — a API recusa, a tela nem oferece. */
 const CLOSED_ORDER_STATUSES: readonly OrderStatus[] = ['completed', 'cancelled']
@@ -109,6 +112,15 @@ export function OrderDetailPage() {
     // Esperando o cliente responder a falta de item: confere a cada 15 s caso o aviso em tempo real se perca.
     refetchInterval: (query) => (query.state.data?.partialConfirmation?.status === 'pending' ? 15_000 : false),
   })
+
+  // Pedido de iFood/99Food: o quadro da plataforma e o controle de status leem o mesmo cache.
+  const { data: marketplaceData } = useQuery({
+    queryKey: marketplaceOrderQueryKey(id ?? ''),
+    queryFn: () => api.get<{ marketplace: MarketplaceOrderView | null }>(`/marketplaces/orders/${id}`, accessToken ?? undefined),
+    enabled: Boolean(id && order && isMarketplaceChannel(order.channel)),
+  })
+  const marketplaceView = marketplaceData?.marketplace
+  const platformCancelLabel = cancelsOnPlatform(marketplaceView) ? marketplaceView!.label : null
 
   // Resposta do cliente no WhatsApp, mudança de status: a tela atualiza sozinha.
   useWebSocket((message) => {
@@ -238,8 +250,12 @@ export function OrderDetailPage() {
                 variant="full"
               />
             )}
-            <OrderStatusControl orderId={order.id} orderType={order.type} status={order.status} />
+            <OrderStatusControl orderId={order.id} orderType={order.type} status={order.status} platformCancelLabel={platformCancelLabel} />
           </section>
+
+          {isMarketplaceChannel(order.channel) && (
+            <MarketplaceOrderCard orderId={order.id} orderClosed={CLOSED_ORDER_STATUSES.includes(order.status)} />
+          )}
 
           {order.type === 'delivery' && order.delivery?.[0] && (
             <OrderDeliveryCard

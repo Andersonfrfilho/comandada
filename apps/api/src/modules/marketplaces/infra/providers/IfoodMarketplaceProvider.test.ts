@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { createHmac } from 'crypto'
-import { IfoodMarketplaceProvider, mapIfoodOrder, pickCancellationCode } from './IfoodMarketplaceProvider'
+import { IfoodMarketplaceProvider, mapIfoodOrder, mapIfoodReview, mapIfoodSale, pickCancellationCode } from './IfoodMarketplaceProvider'
 
 interface Call {
   url: string
@@ -138,7 +138,7 @@ describe('IfoodMarketplaceProvider', () => {
       (url) => (url.endsWith('/requestCancellation') ? new Response(null, { status: 202 }) : undefined),
     ])
     const provider = new IfoodMarketplaceProvider(config, fetchFunction)
-    await provider.requestCancellation('order-uuid', 'Acabou o salmão')
+    await provider.requestCancellation('order-uuid', { reason: 'Acabou o salmão' })
     expect(JSON.parse(String(calls[2]!.init!.body))).toEqual({ reason: 'Acabou o salmão', cancellationCode: '503' })
   })
 
@@ -172,8 +172,8 @@ describe('IfoodMarketplaceProvider', () => {
     expect(provider.verifyWebhook(body, { 'x-ifood-signature': signature })).toBe(true)
     expect(provider.verifyWebhook(body, { 'x-ifood-signature': 'a'.repeat(64) })).toBe(false)
     expect(provider.verifyWebhook(body, {})).toBe(false)
-    expect(provider.parseWebhook(JSON.parse(body.toString()))).toHaveLength(1)
-    expect(provider.parseWebhook({ hello: 'world' })).toHaveLength(0)
+    expect(provider.parseWebhook(body, JSON.parse(body.toString()))).toHaveLength(1)
+    expect(provider.parseWebhook(body, { hello: 'world' })).toHaveLength(0)
   })
 })
 
@@ -198,20 +198,117 @@ describe('mapIfoodOrder', () => {
     expect(order.items[0]).toMatchObject({ name: 'Hot Roll', externalCode: 'HR10', quantity: 2, unitPrice: 28, notes: 'sem cebolinha' })
   })
 
-  it('retirada não tem endereço e entrega do iFood fica com a plataforma', () => {
-    expect(mapIfoodOrder({ ...sampleOrder, orderType: 'TAKEOUT' }).deliveryAddress).toBeUndefined()
+  it('retirada não tem endereço e fica com a loja; entrega do iFood fica com a plataforma', () => {
+    const takeout = mapIfoodOrder({ ...sampleOrder, orderType: 'TAKEOUT' })
+    expect(takeout.deliveryAddress).toBeUndefined()
+    expect(takeout.deliveredBy).toBe('merchant')
     expect(mapIfoodOrder({ ...sampleOrder, delivery: { deliveredBy: 'IFOOD' } }).deliveredBy).toBe('platform')
   })
 })
 
 describe('pickCancellationCode', () => {
   const reasons = [
-    { cancelCodeId: '501', description: 'PROBLEMAS DE SISTEMA' },
-    { cancelCodeId: '504', description: 'RESTAURANTE SEM MOTOBOY' },
+    { code: '501', description: 'PROBLEMAS DE SISTEMA' },
+    { code: '504', description: 'RESTAURANTE SEM MOTOBOY' },
   ]
   it('usa o primeiro da lista quando nada combina', () => {
     expect(pickCancellationCode(reasons, 'cliente desistiu')).toBe('501')
     expect(pickCancellationCode(reasons, 'sem entregador agora')).toBe('504')
     expect(pickCancellationCode([], 'qualquer')).toBeNull()
+  })
+})
+
+describe('negociação do iFood (HANDSHAKE_DISPUTE)', () => {
+  const event = {
+    id: 'ev-hsd',
+    code: 'HSD',
+    kind: 'dispute_opened' as const,
+    orderId: 'order-uuid',
+    metadata: {
+      disputeId: 'disp-1',
+      action: 'CANCELLATION',
+      handshakeType: 'AFTER_DELIVERY',
+      message: 'Veio frio',
+      expiresAt: '2026-11-20T12:05:00Z',
+      timeoutAction: 'ACCEPT_CANCELLATION',
+      evidences: [{ url: 'https://img.test/1.jpg' }],
+      metadata: { acceptCancellationReasons: ['Item com defeito'] },
+      alternatives: [
+        { id: 'alt-refund', type: 'REFUND', metadata: { maxAmount: { currency: 'BRL', value: '2550' } } },
+        { id: 'alt-time', type: 'ADDITIONAL_TIME', metadata: { allowedsAdditionalTimeInMinutes: [10, 20], allowedsAdditionalTimeReasons: ['HIGH_STORE_DEMAND'] } },
+      ],
+    },
+  }
+
+  it('lê a negociação com valores em reais', () => {
+    const provider = new IfoodMarketplaceProvider(config)
+    const dispute = provider.parseDispute(event)!
+    expect(dispute).toMatchObject({ externalId: 'disp-1', kind: 'refund', message: 'Veio frio', reasons: ['Item com defeito'] })
+    expect(dispute.alternatives).toEqual([
+      { id: 'alt-refund', type: 'refund', maxAmount: 25.5, minutes: undefined, reasons: undefined },
+      { id: 'alt-time', type: 'additional_time', maxAmount: undefined, minutes: [10, 20], reasons: ['HIGH_STORE_DEMAND'] },
+    ])
+    expect(dispute.evidenceUrls).toEqual(['https://img.test/1.jpg'])
+    expect(provider.parseDisputeSettlement({ ...event, kind: 'dispute_settled', metadata: { disputeId: 'disp-1', status: 'ACCEPTED' } })).toEqual({
+      disputeExternalId: 'disp-1',
+      status: 'accepted',
+    })
+  })
+
+  it('responde aceitando, recusando ou com contraproposta em centavos', async () => {
+    const { calls, fetchFunction } = fakeFetch([tokenResponse, () => new Response(null, { status: 201 })])
+    const provider = new IfoodMarketplaceProvider(config, fetchFunction)
+    const dispute = provider.parseDispute(event)!
+    await provider.respondDispute(dispute, { decision: 'reject', reason: 'Pedido saiu correto' })
+    await provider.respondDispute(dispute, { decision: 'alternative', alternativeId: 'alt-refund', amount: 12.3 })
+    await provider.respondDispute(dispute, { decision: 'alternative', alternativeId: 'alt-time', minutes: 20 })
+    const sent = calls.slice(1).map((call) => [call.url.replace('https://merchant-api.ifood.com.br', ''), JSON.parse(String(call.init!.body))])
+    expect(sent).toEqual([
+      ['/order/v1.0/disputes/disp-1/reject', { reason: 'Pedido saiu correto' }],
+      ['/order/v1.0/disputes/disp-1/alternatives/alt-refund', { type: 'REFUND', metadata: { amount: { currency: 'BRL', value: '1230' } } }],
+      [
+        '/order/v1.0/disputes/disp-1/alternatives/alt-time',
+        { type: 'ADDITIONAL_TIME', metadata: { additionalTimeInMinutes: 20, additionalTimeReason: 'HIGH_STORE_DEMAND' } },
+      ],
+    ])
+  })
+})
+
+describe('financeiro e avaliações do iFood', () => {
+  it('venda com bruto, lançamentos e líquido', () => {
+    const sale = mapIfoodSale('merchant-1', {
+      id: 'order-uuid',
+      shortId: '8312',
+      createdAt: '2026-11-01T12:00:00Z',
+      currentStatus: 'CONCLUDED',
+      saleGrossValue: { bag: '60.00', deliveryFee: '7.99', serviceFee: '0.99' },
+      payments: { methods: [{ method: 'CREDIT', card: { brand: 'VISA' }, liability: 'IFOOD' }] },
+      billingSummary: { saleBalance: '52.10', billingEntries: [{ name: 'COMMISSION', value: '-7.20' }] },
+    })
+    expect(sale).toMatchObject({ grossAmount: 68.98, netAmount: 52.1, displayId: '8312' })
+    expect(sale.entries).toEqual([{ label: 'Comissão', amount: -7.2 }])
+  })
+
+  it('avaliação só pode ser respondida enquanto não respondida', () => {
+    const review = mapIfoodReview({ id: 'r1', score: 4, status: 'NOT_REPLIED', createdAt: '2026-11-01T12:00:00Z', comment: 'Bom' })
+    expect(review).toMatchObject({ id: 'r1', score: 4, canReply: true, replies: [] })
+    expect(mapIfoodReview({ id: 'r2', score: 5, status: 'REPLIED', createdAt: '2026-11-01T12:00:00Z' }).canReply).toBe(false)
+  })
+
+  it('lista e responde avaliações pela Review API v2', async () => {
+    const { calls, fetchFunction } = fakeFetch([
+      tokenResponse,
+      (url) =>
+        url.includes('/review/v2.0/merchants/merchant-1/reviews?')
+          ? Response.json({ page: 1, size: 20, total: 1, pageCount: 1, reviews: [{ id: 'r1', score: 5, status: 'NOT_REPLIED', createdAt: '2026-11-01T12:00:00Z' }] })
+          : undefined,
+      (url) => (url.endsWith('/answers') ? new Response(null, { status: 201 }) : undefined),
+    ])
+    const provider = new IfoodMarketplaceProvider(config, fetchFunction)
+    const page = await provider.reviews.list('merchant-1', { page: 1, pageSize: 20 })
+    expect(page.reviews).toHaveLength(1)
+    await provider.reviews.answer('merchant-1', 'r1', 'Obrigado pela visita!')
+    expect(calls.at(-1)!.url).toBe('https://merchant-api.ifood.com.br/review/v2.0/merchants/merchant-1/reviews/r1/answers')
+    expect(JSON.parse(String(calls.at(-1)!.init!.body))).toEqual({ text: 'Obrigado pela visita!' })
   })
 })

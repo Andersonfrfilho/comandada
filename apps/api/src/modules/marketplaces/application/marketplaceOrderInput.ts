@@ -68,31 +68,54 @@ export function toOrderItems(order: MarketplaceOrder, products: CatalogProduct[]
   })
 }
 
-/** Observação do pedido: de onde veio, como foi pago, o que cobrar na entrega e o recado do cliente. */
+function paymentLabel(payment: MarketplaceOrder['payments'][number]): string {
+  return [payment.method, payment.brand].filter(Boolean).join(' ')
+}
+
+/**
+ * Observação do pedido: de onde veio, como foi pago (bandeira e troco), cupons e quem paga, CPF da
+ * nota, código de coleta e o recado do cliente. É o que a homologação do iFood cobra na comanda.
+ */
 export function buildOrderNotes(order: MarketplaceOrder): string {
   const label = MARKETPLACE_LABELS[order.platform]
   const lines: string[] = [`Pedido ${label} #${order.displayId}`]
+  if (order.platform === '99food' && order.externalId !== order.displayId) lines.push(`ID do pedido na 99Food: ${order.externalId}`)
+  if (order.table) lines.push(`Mesa ${order.table} (consumo no local)`)
 
   const prepaid = order.payments.filter((payment) => payment.prepaid)
   const pending = order.payments.filter((payment) => !payment.prepaid)
   if (prepaid.length > 0) {
-    lines.push(`Pago no ${label}: ${prepaid.map((payment) => `${payment.method} ${formatMoney(payment.amount)}`).join(', ')}`)
+    lines.push(`Pago no ${label}: ${prepaid.map((payment) => `${paymentLabel(payment)} ${formatMoney(payment.amount)}`).join(', ')}`)
   }
   if (pending.length > 0) {
     lines.push(
       `Cobrar na ${order.type === 'delivery' ? 'entrega' : 'retirada'}: ${pending
-        .map(
-          (payment) =>
-            `${payment.method} ${formatMoney(payment.amount)}${payment.changeFor ? ` (troco para ${formatMoney(payment.changeFor)})` : ''}`
-        )
+        .map((payment) => {
+          const change = payment.changeFor && payment.changeFor > payment.amount ? payment.changeFor - payment.amount : 0
+          const changeText = payment.changeFor
+            ? ` (troco para ${formatMoney(payment.changeFor)}${change > 0 ? `: levar ${formatMoney(change)}` : ''})`
+            : ''
+          return `${paymentLabel(payment)} ${formatMoney(payment.amount)}${changeText}`
+        })
         .join(', ')}`
     )
   }
-  if (order.discount > 0) lines.push(`Desconto no ${label}: ${formatMoney(order.discount)}`)
+  const benefits = (order.benefits ?? []).filter((benefit) => benefit.amount > 0)
+  if (benefits.length > 0) {
+    for (const benefit of benefits) {
+      const sponsors = benefit.sponsors.map((sponsor) => `${formatMoney(sponsor.amount)} pago por ${sponsor.name}`).join(', ')
+      lines.push(
+        `Cupom/desconto${benefit.description ? ` "${benefit.description}"` : ''}: ${formatMoney(benefit.amount)}${sponsors ? ` (${sponsors})` : ''}`
+      )
+    }
+  } else if (order.discount > 0) {
+    lines.push(`Desconto no ${label}: ${formatMoney(order.discount)}`)
+  }
   if (order.type === 'delivery') {
     lines.push(order.deliveredBy === 'platform' ? `Entrega pelo ${label}` : 'Entrega própria do restaurante')
   }
   if (order.pickupCode) lines.push(`Código de coleta: ${order.pickupCode}`)
+  if (order.customerDocument) lines.push(`CPF/CNPJ na nota: ${order.customerDocument}`)
   if (order.customerPhone) lines.push(`Contato do cliente: ${order.customerPhone}`)
   if (order.deliveryAddress?.reference) lines.push(`Referência: ${order.deliveryAddress.reference}`)
   if (order.notes) lines.push(`Obs.: ${order.notes}`)

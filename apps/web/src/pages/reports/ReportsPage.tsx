@@ -8,6 +8,7 @@ import { ORDER_CHANNEL_LABELS, ORDER_TYPE_LABELS, ORDER_STATUS_LABELS } from '@/
 import { Select } from '@/components/ui/Select'
 import { AlertTriangle, Info } from 'lucide-react'
 import { OrderIssuesSection } from './components/OrderIssuesSection'
+import { MarketplaceReviewsSection } from './components/MarketplaceReviewsSection'
 
 interface DailyBreakdown {
   day: number
@@ -544,6 +545,7 @@ export function ReportsPage() {
       </div>
 
       <OrderIssuesSection />
+      <MarketplaceReviewsSection />
 
       {/* Table Metrics */}
       <div className="mt-8">

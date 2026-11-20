@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'bun:test'
 import { readMarketplaceSetup } from './marketplaceConfig'
+import { OpenDeliveryMarketplaceProvider } from './providers/OpenDeliveryMarketplaceProvider'
 
 describe('readMarketplaceSetup', () => {
   it('tudo desligado sem variáveis', () => {
@@ -15,6 +16,7 @@ describe('readMarketplaceSetup', () => {
     expect(setup.problems[0]).toContain('IFOOD_CLIENT_SECRET')
     expect(setup.problems[0]).toContain('IFOOD_MERCHANT_IDS')
     expect(setup.problems[1]).toContain('FOOD99_API_BASE_URL')
+    expect(setup.problems[1]).toContain('FOOD99_MERCHANT_IDS')
   })
 
   it('liga cada plataforma com as credenciais (aceita IFOOD_MERCHANT_ID antigo)', () => {
@@ -34,6 +36,9 @@ describe('readMarketplaceSetup', () => {
     })
     expect([...setup.connections.keys()]).toEqual(['ifood', '99food'])
     expect(setup.connections.get('ifood')!.establishmentId).toBe('est-1')
+    expect(setup.connections.get('ifood')!.merchantIds).toEqual(['m1'])
+    expect(setup.connections.get('99food')!.provider).toBeInstanceOf(OpenDeliveryMarketplaceProvider)
+    expect(setup.connections.get('99food')!.merchantIds).toEqual(['a', 'b'])
     expect(setup.autoConfirm).toBe(false)
   })
 })
