@@ -5,6 +5,7 @@
     "": {
       "name": "@order-hub/api",
       "dependencies": {
+        "@adatechnology/expense-module": "0.1.0",
         "@adatechnology/fiscal-provider": "0.4.0",
         "@adatechnology/food99-marketplace-provider": "0.1.0",
         "@adatechnology/ifood-marketplace-provider": "0.1.0",
@@ -47,6 +48,10 @@
     },
   },
   "packages": {
+    "@adatechnology/expense-contracts": ["@adatechnology/expense-contracts@0.1.0", "", {}, "sha512-Glnl+sVkb3PtsydbOUN7RAqAzIPHTW1MT3q2CMbN1Y9Eljj6dHwNicp0nrdQ6EUAUXiXBqpHOn8HanmWyxu32g=="],
+
+    "@adatechnology/expense-module": ["@adatechnology/expense-module@0.1.0", "", { "dependencies": { "@adatechnology/expense-contracts": "0.1.0", "@adatechnology/module-http": "0.1.1", "zod": "^3.24.1" }, "peerDependencies": { "drizzle-orm": ">=0.36.0 <1" } }, "sha512-+7vdoKdScgL+ODgzlPmvo1lWj789cCNwh1zSC0OS5qVnqbNnQnzWaVnoRZrETXg/gnBlr3G1wXwF8U3YxXWATw=="],
+
     "@adatechnology/fiscal-provider": ["@adatechnology/fiscal-provider@0.4.0", "", { "dependencies": { "fast-xml-parser": "^4.5.3", "node-forge": "^1.3.1", "pdfkit": "^0.19.1", "qrcode": "^1.5.4", "xml-crypto": "^6.0.1" } }, "sha512-kZDpmfV60Uc/wzzniculs3EPGspoWZbg3xOyJ8QpIEuXKw/9tQ0v5r6TIjUoUuaP7UK84ZnI49jYQdvcEU2G6Q=="],
 
     "@adatechnology/food99-marketplace-provider": ["@adatechnology/food99-marketplace-provider@0.1.0", "", { "dependencies": { "@adatechnology/marketplace-contracts": "0.1.0" } }, "sha512-M5kLiNtCkkPPMTrbmvTumhHkGPVURrMvJLCZ9Hd1qzUoYxT48m5Pcc2t+jhWMgRLcLkmrJMCxWVEO3Lpkl98BQ=="],
