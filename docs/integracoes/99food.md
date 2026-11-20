@@ -7,7 +7,7 @@ que é público, não traz nada dela. A base de conhecimento completa fica nos a
 ## Situação
 
 - **Hoje:** a 99Food entra pelo padrão público **Open Delivery** (Abrasel), pelo conector genérico
-  `OpenDeliveryMarketplaceProvider`, que também serve para outras plataformas do padrão.
+  `OpenDeliveryMarketplaceProvider` (pacote `@adatechnology/opendelivery-marketplace-provider` do SDK), que também serve para outras plataformas do padrão.
 - **Conector próprio da 99Food:** pronto e testado, mas guardado fora do repositório (arquivos privados do
   projeto, `marketplaces/food99-nativo/`) até decidir onde ele pode morar sem expor a documentação confidencial.
   É o caminho que a 99Food recomenda e o único com dados financeiros pela API.
