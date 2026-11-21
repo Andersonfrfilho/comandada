@@ -1,21 +1,23 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
-  <!-- ComandAdA: o C da comanda abraça a pirâmide da Ada Technology (traço fino em degradê azul, rede de linhas e círculos no centro, como no logo da Ada). -->
-  <defs>
-    <linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1">
-      <stop offset="0" stop-color="#14977D"/>
-      <stop offset="1" stop-color="#0A5C4C"/>
-    </linearGradient>
-    <linearGradient id="ada" x1="0" y1="16" x2="0" y2="43" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#DCEBF7"/>
-      <stop offset="1" stop-color="#5FD3F3"/>
-    </linearGradient>
-  </defs>
+  <!-- ComandAdA: o C da comanda abraça a pirâmide da Ada Technology (pirâmide em 3D com duas faces, traço em degradê azul, rede de linhas e flor de círculos no centro, como no logo da Ada). -->
+  <defs><linearGradient id="fundo" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#17A386"/><stop offset=".55" stop-color="#0E7C66"/><stop offset="1" stop-color="#08493D"/></linearGradient>
+<radialGradient id="luz" cx="18" cy="10" r="40" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#fff" stop-opacity=".22"/><stop offset="1" stop-color="#fff" stop-opacity="0"/></radialGradient>
+<radialGradient id="brilho" cx="32" cy="33" r="16" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#7FE3F5" stop-opacity=".45"/><stop offset="1" stop-color="#7FE3F5" stop-opacity="0"/></radialGradient>
+<linearGradient id="cgrad" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset="1" stop-color="#D3F1EA"/></linearGradient>
+<linearGradient id="ada" x1="0" y1="14" x2="0" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#E6F1FA"/><stop offset=".5" stop-color="#9BD7F2"/><stop offset="1" stop-color="#3FC7EE"/></linearGradient>
+<linearGradient id="faceL" x1="0" y1="14" x2="0" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#1E3C68" stop-opacity=".55"/><stop offset="1" stop-color="#1B6FA8" stop-opacity=".55"/></linearGradient>
+<linearGradient id="faceR" x1="0" y1="14" x2="0" y2="44" gradientUnits="userSpaceOnUse"><stop offset="0" stop-color="#3E8FC4" stop-opacity=".45"/><stop offset="1" stop-color="#2AB6DB" stop-opacity=".55"/></linearGradient>
+<filter id="sombra" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="1" stdDeviation=".9" flood-color="#03251F" flood-opacity=".45"/></filter></defs>
   <rect width="64" height="64" rx="15" fill="url(#fundo)"/>
-  <path d="M45.4 45.4A19 19 0 1 1 45.4 18.6" fill="none" stroke="#fff" stroke-width="6.5" stroke-linecap="round"/>
-  <g fill="none" stroke="url(#ada)" stroke-linecap="round" stroke-linejoin="round">
-    <path d="M32 16.5 L45.5 42 H18.5 Z" stroke-width="2.1"/>
-    <path d="M32 16.5 L25.25 42 M32 16.5 L32 42 M32 16.5 L38.75 42 M24.57 30.52 H39.42 M21.20 36.90 H42.80 M18.5 42 L38.75 29.25 M45.5 42 L25.25 29.25" stroke-width="0.90" opacity=".8"/>
-    <g stroke-width="0.90"><circle cx="32" cy="33" r="2.6"/><circle cx="34.25" cy="34.30" r="2.6"/><circle cx="32.00" cy="35.60" r="2.6"/><circle cx="29.75" cy="34.30" r="2.6"/><circle cx="29.75" cy="31.70" r="2.6"/><circle cx="32.00" cy="30.40" r="2.6"/><circle cx="34.25" cy="31.70" r="2.6"/></g>
-    <circle cx="32" cy="33" r="1.1" fill="#fff" stroke="none"/>
-  </g>
+  <rect width="64" height="64" rx="15" fill="url(#luz)"/>
+  <rect x=".5" y=".5" width="63" height="63" rx="14.5" fill="none" stroke="#fff" stroke-opacity=".12"/>
+  <path d="M45.6 45.6A19.2 19.2 0 1 1 45.6 18.4" fill="none" stroke="url(#cgrad)" stroke-width="6.4" stroke-linecap="round" filter="url(#sombra)"/>
+  <circle cx="32" cy="33" r="16" fill="url(#brilho)"/>
+  <polygon points="32,14.5 18.5,42.5 35.5,45.5" fill="url(#faceL)"/>
+  <polygon points="32,14.5 35.5,45.5 45.5,42.5" fill="url(#faceR)"/>
+  <path d="M26.60 25.70 L33.40 26.90 L37.40 25.70 M22.55 34.10 L34.45 36.20 L41.45 34.10 M32 14.5 L24.11 43.49 M32 14.5 L38.80 44.51 M32 14.5 L29.72 44.48 M32 14.5 L42.10 43.52 " fill="none" stroke="url(#ada)" stroke-width=".6" opacity=".7"/>
+  <path d="M32 14.5 L18.5 42.5 L35.5 45.5 L45.5 42.5 Z M32 14.5 L35.5 45.5" fill="none" stroke="url(#ada)" stroke-width="1.5" stroke-linejoin="round"/>
+  <g fill="none" stroke="#E6F7FD" stroke-width="0.6" opacity=".95"><circle cx="33" cy="32.5" r="2.4"/><circle cx="35.08" cy="33.70" r="2.4"/><circle cx="33.00" cy="34.90" r="2.4"/><circle cx="30.92" cy="33.70" r="2.4"/><circle cx="30.92" cy="31.30" r="2.4"/><circle cx="33.00" cy="30.10" r="2.4"/><circle cx="35.08" cy="31.30" r="2.4"/><circle cx="33" cy="32.5" r="4.80" stroke-opacity=".6"/></g>
+  <circle cx="33" cy="32.5" r="1.1" fill="#fff"/>
+  <circle cx="32" cy="14.5" r="0.95" fill="#fff"/><circle cx="18.5" cy="42.5" r="0.95" fill="#fff"/><circle cx="45.5" cy="42.5" r="0.95" fill="#fff"/><circle cx="35.5" cy="45.5" r="0.95" fill="#fff"/>
 </svg>
