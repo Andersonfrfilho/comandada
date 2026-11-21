@@ -42,7 +42,7 @@ export function BrandIdentity({ size = 'small', tone = 'light', layout = 'inline
   )
 }
 
-// Nome da plataforma com o "AdA" destacado, no mesmo tom do A do monograma.
+// Nome da plataforma com o "AdA" destacado, no mesmo tom da pirâmide da Ada no logo.
 const PLATFORM_HIGHLIGHT = 'AdA'
 
 function PlatformWordmark({ tone }: { tone: 'light' | 'dark' }) {
