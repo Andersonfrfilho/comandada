@@ -1,8 +1,7 @@
 import { mkdirSync, writeFileSync, unlinkSync, existsSync } from 'fs'
-import { join, dirname } from 'path'
+import { dirname } from 'path'
 import type { StorageProvider } from './StorageProvider'
-
-const UPLOAD_DIR = '/tmp/uploads'
+import { isValidStorageKey, resolveUploadPath, UPLOAD_DIR } from './storageKey'
 const BASE_URL = 'http://localhost:3333'
 
 export class LocalStorageProvider implements StorageProvider {
@@ -29,12 +28,12 @@ export class LocalStorageProvider implements StorageProvider {
     return `${BASE_URL}/uploads/${key}`
   }
 
-  getFilePath(key: string): string {
+  getFilePath(key: string): string | undefined {
+    if (!isValidStorageKey(key)) return undefined
     return this.resolvePath(key)
   }
 
   private resolvePath(key: string): string {
-    const sanitized = key.replace(/\.\.\/|\.\.\\/g, '').replace(/[^\w.\-/]/g, '')
-    return join(UPLOAD_DIR, sanitized)
+    return resolveUploadPath(key)
   }
 }

@@ -185,7 +185,7 @@ export async function createServer() {
   router.raw('GET', '/uploads/:key', (_request, params) => {
     const key = params['key'] ?? ''
     const filePath = storageProvider.getFilePath(key)
-    if (!key || !existsSync(filePath)) return new Response('File not found', { status: 404 })
+    if (!filePath || !existsSync(filePath)) return new Response('File not found', { status: 404 })
 
     const extension = extname(key).toLowerCase()
     const headers = new Headers({ 'Content-Type': MIME_TYPES[extension] ?? 'application/octet-stream' })

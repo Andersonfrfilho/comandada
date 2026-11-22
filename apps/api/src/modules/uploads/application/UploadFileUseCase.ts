@@ -1,6 +1,7 @@
 import { randomUUID } from 'crypto'
 import { extname } from 'path'
 import type { StorageProvider } from '@/shared/providers/StorageProvider'
+import { normalizeFileExtension } from '@/shared/providers/storageKey'
 import { mediaQueue } from '@/infra/queue/mediaQueue'
 import { MEDIA_PROCESSING_JOB } from '@/infra/queue/QueueNames.constant'
 
@@ -19,7 +20,7 @@ export class UploadFileUseCase {
   constructor(private readonly storageProvider: StorageProvider) {}
 
   async execute(input: UploadFileInput): Promise<UploadFileOutput> {
-    const extension = extname(input.originalName) || '.bin'
+    const extension = normalizeFileExtension(extname(input.originalName))
     const key = `${randomUUID()}${extension}`
 
     const url = await this.storageProvider.upload(key, input.buffer, input.contentType)
