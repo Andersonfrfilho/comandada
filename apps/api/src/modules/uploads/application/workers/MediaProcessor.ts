@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'fs'
-import { join, dirname } from 'path'
+import { dirname } from 'path'
 import { Worker, type ConnectionOptions } from 'bullmq'
 import { queueConnection } from '@/infra/queue/redisConnection'
 import {
@@ -7,13 +7,7 @@ import {
   MEDIA_PROCESSING_JOB,
   type MediaProcessingJobData,
 } from '@/infra/queue/QueueNames.constant'
-
-const UPLOAD_DIR = '/tmp/uploads'
-
-function resolvePath(key: string): string {
-  const sanitized = key.replace(/\.\.\/|\.\.\\/g, '').replace(/[^\w.\-/]/g, '')
-  return join(UPLOAD_DIR, sanitized)
-}
+import { resolveUploadPath as resolvePath } from '@/shared/providers/storageKey'
 
 async function resizeImage(key: string): Promise<void> {
   const sourcePath = resolvePath(key)
