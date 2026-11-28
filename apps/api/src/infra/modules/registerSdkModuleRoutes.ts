@@ -31,8 +31,15 @@ function mountModule({ router, routes, basePath }: MountModuleParams): void {
   for (const route of routes) router.raw(route.method, `${basePath}${route.path}`, handle)
 }
 
+// Resgatar e liberar uso de cupom é decisão do backend (com o total que ele calculou): nunca por token de usuário.
+const BACKEND_ONLY_COUPON_PATHS: ReadonlySet<string> = new Set(['/redemptions', '/redemptions/release'])
+
+export function selectHttpCouponRoutes(routes: ModuleRouteTable): ModuleRouteTable {
+  return routes.filter((route) => !BACKEND_ONLY_COUPON_PATHS.has(route.path))
+}
+
 export function registerSdkModuleRoutes(router: Router): void {
   mountModule({ router, routes: createRecipeRoutes({ module: recipeModule }), basePath: MODULE_BASE_PATH.RECIPES })
   mountModule({ router, routes: createStockRoutes({ module: stockModule }), basePath: MODULE_BASE_PATH.STOCK })
-  mountModule({ router, routes: createCouponRoutes({ module: couponModule }), basePath: MODULE_BASE_PATH.COUPONS })
+  mountModule({ router, routes: selectHttpCouponRoutes(createCouponRoutes({ module: couponModule })), basePath: MODULE_BASE_PATH.COUPONS })
 }
