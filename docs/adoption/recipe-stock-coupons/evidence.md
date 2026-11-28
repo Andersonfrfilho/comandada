@@ -100,3 +100,67 @@ Nenhuma, exceto a lista de sincronização da loja (`modules/sync/shared/syncTab
 4. **Perda no custo do estoque** (`ExpenseController`): antes a perda, gravada com sinal negativo, *diminuía* o custo do mês; agora soma, como diz o comentário original.
 5. Entrada de lote: o custo médio do insumo continua sendo atualizado (no adaptador); saldo negativo conta como zero na média.
 6. Motivo é obrigatório em ajuste e perda (já era no formulário).
+
+---
+
+# Evidência: fase 4 (painel usa `recipes-ui` e `stock-ui`)
+
+- Data: 2026-11-28
+- Ambiente: PostgreSQL 16 e Redis descartáveis (`comandada-rsc-test-pg4`, `comandada-rsc-test-redis4`, removidos ao fim), API local na 3391 com o seed de desenvolvimento, painel no Vite na 4391, Chromium (Playwright) a 1366 e 375 px, `deviceScaleFactor` 2. Nada de staging ou produção.
+
+## O que foi trocado
+
+| Antes | Agora |
+|---|---|
+| `IngredientManager` (barra de 224 px do cardápio, rotas `/ingredients`) | Página `/stock` ("Insumos e estoque", menu Gestão): abas Insumos (`IngredientsWorkspace`, com `IngredientStockButton` na linha quando há estoque), Saldos (`StockLevelsWorkspace`) e Inventário (`InventoryWorkspace`). A barra do cardápio ganhou só um link para ela. |
+| `RecipeManager` | `RecipeEditor` (`ProductRecipeEditor`) no modal de edição do produto e na página do produto, com `salePriceCents` do preço atual. Os campos de tempo e modo de preparo saíram do formulário do produto (a ficha é a dona; a API espelha em `products`). |
+| `RecipeCostBadge` (duas consultas por produto) | `useRecipeCosts`: um `POST /sdk/recipes/recipe-costs` por 500 produtos, chave estável (todos os produtos da empresa, não muda com o filtro). Ficha sem linhas aparece como "Sem ficha técnica". |
+| `StockBatchList`, `StockAdjustmentForm`, `StockMovementHistory` | `IngredientStockPanel` (dentro do botão de estoque do insumo). |
+| `ExpiringBatchBadge` (`/stock-batches/expiring/count`) | `StockAlertBadges`: "abaixo do mínimo" (`listLevels({ belowMinimum: true })`, total) e "lotes vencendo" (`GET /sdk/stock/batches?expiringWithinDays=7`, total). |
+| `StockCard` da página do produto (`/ingredients`, soma de saldo sem conversão) | `ProductStockCard`: ficha e saldos pelo SDK; a quantidade por porção vem convertida para a unidade do insumo (`cost.lines[].quantityInIngredientUnit / yieldPortions`). O aviso de unidade diferente saiu (o módulo converte). |
+| (não existia) | Página `/shopping-list` ("Lista de compras", menu Gestão) com `ShoppingListWorkspace`. |
+
+Apagados: `IngredientManager.tsx`, `RecipeManager.tsx`, `StockAdjustmentForm.tsx`, `StockBatchList.tsx`, `StockMovementHistory.tsx`, `hasUnitMismatch` (e seu teste). O painel não chama mais `/ingredients*`, `/stock-batches*` nem `/stock-movements*` (`grep` em `apps/web/src` vazio; o que sobra com "ingredients" é `/reports/ingredients-ranking`).
+
+## Ligação
+
+- `lib/recipesSdkApi.ts` (`RecipesApi`) e `lib/stockSdkApi.ts` (`StockApi`) sobre o `api` do painel, via `lib/sdkHttp.ts` (abre o envelope `{ data }`; lista vem em `{ data: { data, pagination } }`). 404 de `GET /recipes/:productId` vira `null`. Exportações usam `api.getBlob`/`api.postBlob` (novos, passam pela renovação de token).
+- `lib/api.ts` entende `{ error: { code, message } }` dos módulos (antes o código se perdia e a mensagem virava a genérica) e guarda o corpo em `ApiError.body`, que é onde `readErrorCode` do SDK procura.
+- `RecipesStockProviders` envolve o `Outlet` do layout: `renderSelect` com o `Select` do painel (rótulo em cima), pt-BR, `styles.css` dos dois pacotes. Tokens `--arc-*` no `:root` (`index.css`), `--arc-accent` ligado a `--brand-600`, então a marca do restaurante vale.
+- Dependências diretas novas em `apps/web`: `@adatechnology/recipe-contracts` e `stock-contracts` 0.1.0 (já estavam no lock).
+- API: `GET /agenda` passou a devolver `items: [{ productId, quantity }]` em cada encomenda (a lista de compras precisa dos produtos, não do texto `itemsSummary`).
+
+## Estoque ligado ou não
+
+Nenhuma rota diz isso. `useStockEnabled` faz uma listagem de uma linha em `/sdk/stock/levels`: 200 = ligado; 404 `STOCK_DISABLED` = desligado; outro erro não conta como desligado. Desligado: a página mostra só a aba Insumos, sem botão de estoque, sem badges, sem card de estoque no produto. O `StockProvider` fica sempre montado (só contexto), para a página não remontar quando a sonda responde.
+
+## Lista de compras
+
+Origens: encomendas da agenda (`GET /agenda?date=`) de hoje, de amanhã e dos próximos 7 dias, somando por produto e ignorando as canceladas. Reservas de mesa não têm itens (só mesa e pessoas), então não entram. Produto sem ficha aparece no aviso do próprio componente.
+
+## Verificação visual (dev seed; duas encomendas agendadas e quantidades alteradas por SQL só para exercitar a compra)
+
+| Tela | 1366 | 375 |
+|---|---|---|
+| Insumos (4 resultados, botão de estoque na linha) | `scrollWidth - innerWidth` = 0 | 0 (cartões) |
+| Estoque do insumo (saldo, mínimo, entrada, lotes, movimentos) | 0 | 0 |
+| Novo insumo, seletor de unidade (menu do painel, opções visíveis por cima do modal) | 0 | 0 |
+| Saldos | 0 | 0 |
+| Produto: ficha técnica, custo e "rende 112 porções" | 0 | 0 (tabela do card rola dentro do cartão, como já era) |
+| Cardápio (custos em lote) e modal de edição com `RecipeEditor` | 0 | 0 |
+| Lista de compras (origem "próximos 7 dias", 180 marmitas, gerar, exportar) | 0 | 0 |
+
+- `<select>` nativos: 0 em todas as telas novas. No modal de edição do produto há 3 (`product-unit`, `product-catalog`, `product-section`) e um `input[type=number]`, todos do `ProductForm` do `products-ui` (fora do escopo; vai para o SDK). Há também o `input[type=file]` oculto do `ProductPhotoManager`, que já existia.
+- Console e respostas >= 400 do painel contra a API: nenhum erro nos dois tamanhos.
+- Prints (2x): `docs/adoption/recipe-stock-coupons/screens/` (`insumos`, `estoque-do-insumo`, `novo-insumo-select`, `saldos`, `produto-ficha`, `catalogo-editar-produto`, `lista-de-compras`, cada um `-1366.png` e `-375.png`).
+
+## Testes
+
+- `apps/web`: `bun run typecheck` limpo; `bun test src` 129 passam (126 antes, menos 1 do `hasUnitMismatch` removido, mais 4 novos em `sdkHttp.test.ts`); `bun run build` ok.
+- `apps/api`: `bun run typecheck` limpo.
+
+## Lacunas
+
+1. Empresa com estoque desligado não tem como ligá-lo: antes a primeira escrita pelas rotas antigas ligava (`ensureStockEnabledForCompany`), e o painel não as usa mais. Falta uma rota ou configuração para ligar (decisão do dono).
+2. O aviso de validade do painel usa 7 dias fixos; a janela por restaurante (`settings.stock.expiry_alert_days`) não é lida pelo painel.
+3. Combos (`product_components`) não têm ficha própria no `recipe-module`: na lista de compras entram como "sem ficha".
