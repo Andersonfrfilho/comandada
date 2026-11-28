@@ -9,6 +9,15 @@ BEGIN
   IF EXISTS (SELECT 1 FROM public.ingredients WHERE unit NOT IN ('mg','g','kg','ml','l','un','dz') OR cost_per_unit < 0) THEN
     RAISE EXCEPTION 'Insumo com unidade fora do módulo ou custo negativo: corrigir antes de migrar';
   END IF;
+  IF EXISTS (SELECT 1 FROM public.ingredients WHERE minimum_stock < 0) THEN
+    RAISE EXCEPTION 'Insumo com estoque mínimo negativo (stock.levels.minimum_quantity >= 0): corrigir antes de migrar';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.products WHERE preparation_time_minutes < 0) THEN
+    RAISE EXCEPTION 'Produto com tempo de preparo negativo (recipes_preparation_not_negative): corrigir antes de migrar';
+  END IF;
+  IF EXISTS (SELECT 1 FROM public.stock_movements WHERE movement_type NOT IN ('in','out','return','adjustment','loss')) THEN
+    RAISE EXCEPTION 'Movimento de estoque com tipo desconhecido (in, out, return, adjustment, loss): corrigir antes de migrar';
+  END IF;
   IF EXISTS (SELECT 1 FROM public.product_ingredients WHERE quantity <= 0) THEN
     RAISE EXCEPTION 'Linha de ficha com quantidade <= 0: corrigir antes de migrar';
   END IF;
