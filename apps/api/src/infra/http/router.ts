@@ -1,6 +1,8 @@
 import { randomUUID } from 'crypto'
 import type { AuthenticatedUser } from '@/shared/types'
 import { MetaWhatsAppError } from '@adatechnology/meta-whatsapp-contracts'
+import { RecipeError } from '@adatechnology/recipe-contracts'
+import { StockError } from '@adatechnology/stock-contracts'
 import { AppError } from '@/shared/errors/AppError'
 
 export interface ParsedRequest {
@@ -193,6 +195,11 @@ function respondWithError(error: unknown, response: ResponseHelper): void {
   // O módulo tem a própria hierarquia, com status e código estáveis; sem a ponte viraria 500.
   if (error instanceof MetaWhatsAppError) {
     response.error(error.code, error.message, error.statusCode, error.details)
+    return
+  }
+  // Rotas antigas de insumo e estoque são adaptadores dos módulos de ficha e estoque.
+  if (error instanceof RecipeError || error instanceof StockError) {
+    response.error(error.code, error.message, error.statusCode, error.publicDetails)
     return
   }
   const message = error instanceof Error ? error.message : 'An unexpected error occurred'

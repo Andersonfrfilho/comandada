@@ -1,8 +1,10 @@
-import { and, asc, count, desc, eq, inArray } from 'drizzle-orm'
+import { and, asc, count, desc, eq, inArray, sql } from 'drizzle-orm'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
+import { movements } from '@adatechnology/stock-module'
 import * as schema from '@/infra/database/schema'
+import { orderReturnCondition } from '../../shared/orderStockMovements'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 import { buildPageResult, parseAllowedList, parsePageRequest } from '@/shared/utils/listQuery'
 import type { CreateStockMovementUseCase } from '@/modules/products/application/use-cases/CreateStockMovementUseCase'
@@ -10,6 +12,15 @@ import type { CreateStockMovementUseCase } from '@/modules/products/application/
 type Database = NodePgDatabase<typeof schema>
 
 const STOCK_MOVEMENT_TYPES = ['in', 'out', 'return', 'adjustment', 'loss'] as const
+
+// O módulo guarda `in/out/adjust/loss` com sinal; a tela antiga espera os tipos e sinais de antes
+// (devolução = entrada ligada a pedido, saída sempre positiva, ajuste e perda com sinal).
+const movementTypeExpression = sql<string>`CASE
+  WHEN ${movements.kind} = 'adjust' THEN 'adjustment'
+  WHEN ${orderReturnCondition} THEN 'return'
+  ELSE ${movements.kind} END`
+const quantityExpression = sql<string>`CASE WHEN ${movements.kind} = 'out' THEN abs(${movements.delta}) ELSE ${movements.delta} END`
+const orderIdExpression = sql<string | null>`substring(${movements.sourceKey} from '^order(?:-return)?:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})')`
 
 const createStockMovementSchema = z.object({
   ingredientId: z.string().uuid(),
@@ -59,31 +70,31 @@ export class StockMovementController {
     const pageRequest = parsePageRequest(request.query)
     const movementTypes = parseAllowedList(request.query['movementType'], STOCK_MOVEMENT_TYPES)
     const where = and(
-      eq(schema.stockMovements.establishmentId, establishmentId),
-      eq(schema.stockMovements.ingredientId, ingredientId),
-      movementTypes.length ? inArray(schema.stockMovements.movementType, movementTypes) : undefined
+      eq(movements.companyId, establishmentId),
+      eq(movements.ingredientId, ingredientId),
+      movementTypes.length ? inArray(movementTypeExpression, movementTypes) : undefined
     )
 
-    const [movements, [totalRow]] = await Promise.all([
+    const [rows, [totalRow]] = await Promise.all([
       this.db
         .select({
-          id: schema.stockMovements.id,
-          movementType: schema.stockMovements.movementType,
-          quantity: schema.stockMovements.quantity,
-          reason: schema.stockMovements.reason,
+          id: movements.id,
+          movementType: movementTypeExpression,
+          quantity: quantityExpression,
+          reason: movements.reason,
           userName: schema.users.name,
-          orderId: schema.stockMovements.orderId,
-          createdAt: schema.stockMovements.createdAt,
+          orderId: orderIdExpression,
+          createdAt: movements.createdAt,
         })
-        .from(schema.stockMovements)
-        .leftJoin(schema.users, eq(schema.stockMovements.userId, schema.users.id))
+        .from(movements)
+        .leftJoin(schema.users, sql`${schema.users.id}::text = ${movements.actorId}`)
         .where(where)
-        .orderBy(desc(schema.stockMovements.createdAt), asc(schema.stockMovements.id))
+        .orderBy(desc(movements.createdAt), asc(movements.id))
         .limit(pageRequest.pageSize)
         .offset(pageRequest.offset),
-      this.db.select({ total: count() }).from(schema.stockMovements).where(where),
+      this.db.select({ total: count() }).from(movements).where(where),
     ])
 
-    response.json(buildPageResult(movements, totalRow?.total ?? 0, pageRequest))
+    response.json(buildPageResult(rows, totalRow?.total ?? 0, pageRequest))
   }
 }

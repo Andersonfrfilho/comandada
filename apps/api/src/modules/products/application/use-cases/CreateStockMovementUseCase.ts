@@ -1,10 +1,21 @@
-import { eq, and } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { MOVEMENT_KIND } from '@adatechnology/stock-contracts'
+import { movements, type StockModule } from '@adatechnology/stock-module'
+
 import * as schema from '@/infra/database/schema'
 import type { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/CreateAuditLogUseCase'
-import { NotFoundError } from '@/shared/errors/AppError'
 
 type Database = NodePgDatabase<typeof schema>
+
+const DECIMAL_SCALE = 4
+
+export type CreateStockMovementDependencies = {
+  readonly db: Database
+  readonly stock: StockModule
+  readonly createAuditLogUseCase: CreateAuditLogUseCase
+  readonly ensureStockEnabled: (establishmentId: string) => Promise<void>
+}
 
 export type StockMovementType = 'adjustment' | 'loss'
 export type StockMovementDirection = 'increase' | 'decrease'
@@ -28,58 +39,53 @@ export interface CreateStockMovementResult {
   stockQuantityAfter: string
 }
 
+/** Ajuste e perda pelo painel antigo, sobre o módulo de estoque (que exige o motivo e tira de lotes pelo que vence antes). */
 export class CreateStockMovementUseCase {
-  constructor(
-    private readonly db: Database,
-    private readonly createAuditLogUseCase: CreateAuditLogUseCase
-  ) {}
+  private readonly db: Database
+  private readonly stock: StockModule
+  private readonly createAuditLogUseCase: CreateAuditLogUseCase
+  private readonly ensureStockEnabled: (establishmentId: string) => Promise<void>
+
+  constructor(dependencies: CreateStockMovementDependencies) {
+    this.db = dependencies.db
+    this.stock = dependencies.stock
+    this.createAuditLogUseCase = dependencies.createAuditLogUseCase
+    this.ensureStockEnabled = dependencies.ensureStockEnabled
+  }
 
   async execute(input: CreateStockMovementInput): Promise<CreateStockMovementResult> {
-    const ingredient = await this.db.query.ingredients.findFirst({
-      where: and(
-        eq(schema.ingredients.id, input.ingredientId),
-        eq(schema.ingredients.establishmentId, input.establishmentId)
-      ),
-    })
-    if (!ingredient) throw new NotFoundError('Ingrediente')
-
+    const { establishmentId, ingredientId } = input
+    const actor = input.userId ? { actorId: input.userId } : {}
     // Perda só reduz saldo; ajuste é bidirecional (recontagem pode subir ou descer).
     const effectiveDirection: StockMovementDirection = input.movementType === 'loss' ? 'decrease' : input.direction
-    const signedQuantity = effectiveDirection === 'increase' ? input.quantity : -input.quantity
-    const stockQuantityAfter = Number(ingredient.stockQuantity) + signedQuantity
+    const quantity = input.quantity.toFixed(DECIMAL_SCALE)
 
-    const movement = await this.db.transaction(async (tx) => {
-      const [insertedMovement] = await tx
-        .insert(schema.stockMovements)
-        .values({
-          establishmentId: input.establishmentId,
-          ingredientId: input.ingredientId,
-          movementType: input.movementType,
-          quantity: String(signedQuantity),
-          reason: input.reason,
-          ...(input.userId ? { userId: input.userId } : {}),
-        })
-        .returning()
+    await this.ensureStockEnabled(establishmentId)
+    const level =
+      input.movementType === 'loss'
+        ? await this.stock.useCases.recordLoss.execute({ companyId: establishmentId, ...actor, input: { ingredientId, quantity, reason: input.reason } })
+        : await this.stock.useCases.adjustStock.execute({
+            companyId: establishmentId,
+            ...actor,
+            input: { ingredientId, direction: effectiveDirection, quantity, reason: input.reason },
+          })
 
-      await tx
-        .update(schema.ingredients)
-        .set({
-          stockQuantity: String(stockQuantityAfter),
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.ingredients.id, input.ingredientId))
-
-      return insertedMovement!
-    })
+    const kind = input.movementType === 'loss' ? MOVEMENT_KIND.LOSS : MOVEMENT_KIND.ADJUST
+    const [movement] = await this.db
+      .select({ id: movements.id })
+      .from(movements)
+      .where(and(eq(movements.companyId, establishmentId), eq(movements.ingredientId, ingredientId), eq(movements.kind, kind)))
+      .orderBy(desc(movements.createdAt))
+      .limit(1)
 
     await this.createAuditLogUseCase.execute({
-      establishmentId: input.establishmentId,
-      ...(input.userId ? { userId: input.userId } : {}),
+      establishmentId,
+      ...actor,
       action: 'stock_movement.created',
       resourceType: 'stock_movement',
-      resourceId: movement.id,
+      resourceId: movement!.id,
       metadata: {
-        ingredientId: input.ingredientId,
+        ingredientId,
         movementType: input.movementType,
         direction: effectiveDirection,
         quantity: input.quantity,
@@ -88,12 +94,12 @@ export class CreateStockMovementUseCase {
     })
 
     return {
-      id: movement.id,
-      ingredientId: movement.ingredientId,
-      movementType: movement.movementType,
-      quantity: movement.quantity,
-      reason: movement.reason,
-      stockQuantityAfter: String(stockQuantityAfter),
+      id: movement!.id,
+      ingredientId,
+      movementType: input.movementType,
+      quantity: effectiveDirection === 'increase' ? quantity : `-${quantity}`,
+      reason: input.reason,
+      stockQuantityAfter: level.quantity,
     }
   }
 }

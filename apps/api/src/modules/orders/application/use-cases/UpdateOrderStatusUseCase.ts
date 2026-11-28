@@ -11,8 +11,8 @@ import type { OrderStatus } from '@/shared/types'
 import type { TriggerFiscalEmissionUseCase } from '@/modules/fiscal/application/use-cases/TriggerFiscalEmissionUseCase'
 import type { NotifyOrderStatusUseCase } from './NotifyOrderStatusUseCase'
 import type { RecordOrderPaymentsUseCase } from '@/modules/cashier/application/use-cases/RecordOrderPaymentsUseCase'
-import type { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
-import type { RestoreStockForOrderUseCase } from '@/modules/products/application/use-cases/RestoreStockForOrderUseCase'
+import type { DeductOrderStockUseCase } from '@/modules/products/application/use-cases/DeductOrderStockUseCase'
+import type { RestoreOrderStockUseCase } from '@/modules/products/application/use-cases/RestoreOrderStockUseCase'
 
 type Database = NodePgDatabase<typeof schema>
 
@@ -50,13 +50,13 @@ export class UpdateOrderStatusUseCase {
     private readonly db: Database,
     private readonly wsHub: WebSocketHub,
     private readonly triggerFiscal?: TriggerFiscalEmissionUseCase,
-    private readonly deductStock?: DeductStockForOrderUseCase,
+    private readonly deductStock?: Pick<DeductOrderStockUseCase, 'execute'>,
     private readonly notifyCustomer?: Pick<NotifyOrderStatusUseCase, 'execute'>,
     private readonly recordPayments?: Pick<RecordOrderPaymentsUseCase, 'execute'>,
     // Cancelado com Pix em aberto: cancela a cobrança no provedor (pagamentos). Falha não desfaz o cancelamento.
     private readonly onCancelled?: (order: schema.Order) => Promise<unknown>,
     // Cancelado: devolve ao estoque o que a receita tinha baixado.
-    private readonly restoreStock?: Pick<RestoreStockForOrderUseCase, 'execute'>,
+    private readonly restoreStock?: Pick<RestoreOrderStockUseCase, 'execute'>,
     // Pedido de marketplace (iFood, 99Food): avisa a plataforma do novo status. Falha não desfaz nada.
     private readonly onStatusChanged?: (order: schema.Order, newStatus: OrderStatus) => Promise<unknown>
   ) {}
@@ -79,22 +79,11 @@ export class UpdateOrderStatusUseCase {
       )
     }
 
-    // Baixa de estoque bloqueia a transição quando o produto não permite saldo negativo —
-    // é aqui que o pedido efetivamente começa a consumir receita.
-    if (input.newStatus === 'in_production' && this.deductStock) {
+    // A baixa é por item do pedido e idempotente: voltar e avançar o status, ou pular a produção, baixa uma vez só.
+    if ((input.newStatus === 'in_production' || PRODUCED_STATUSES.includes(input.newStatus)) && this.deductStock) {
       await this.deductStock.execute({
         orderId: input.orderId,
         establishmentId: input.establishmentId,
-        ...(input.userId ? { userId: input.userId } : {}),
-      })
-    }
-
-    // Pulou a produção (ex.: Recebido → Concluído): a baixa não pode ficar de fora. Já baixado, não faz nada.
-    if (PRODUCED_STATUSES.includes(input.newStatus) && this.deductStock) {
-      await this.deductStock.execute({
-        orderId: input.orderId,
-        establishmentId: input.establishmentId,
-        allowShortage: true,
         ...(input.userId ? { userId: input.userId } : {}),
       })
     }

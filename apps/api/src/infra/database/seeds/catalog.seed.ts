@@ -1,6 +1,8 @@
 import { db } from '../connection'
 import * as schema from '../schema'
 import { CreateStockBatchUseCase } from '@/modules/products/application/use-cases/CreateStockBatchUseCase'
+import { recipeModule, stockModule } from '@/infra/recipes/recipeStockModules'
+import { ensureStockEnabledForCompany } from '@/infra/recipes/stockEnabled'
 import { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/CreateAuditLogUseCase'
 
 function catalogId(index: number): string {
@@ -17,10 +19,6 @@ function productId(index: number): string {
 
 function ingredientId(index: number): string {
   return `00000000-0000-0000-0011-${String(index).padStart(12, '0')}`
-}
-
-function productIngredientId(index: number): string {
-  return `00000000-0000-0000-0012-${String(index).padStart(12, '0')}`
 }
 
 const CATALOGS = [
@@ -118,38 +116,62 @@ export async function seedCatalog(establishmentId: string): Promise<CatalogSeedR
   }))
   await db.insert(schema.products).values(products).onConflictDoNothing()
 
-  const ingredients = INGREDIENTS.map((ingredient, index) => ({
-    id: ingredientId(index),
-    establishmentId,
-    name: ingredient.name,
-    unit: ingredient.unit,
-    minimumStock: String(ingredient.minimumStock),
-  }))
-  await db.insert(schema.ingredients).values(ingredients).onConflictDoNothing()
+  // Insumos, fichas e estoque pelos use cases dos módulos (a mesma porta das rotas), nunca INSERT bruto.
+  const actor = { companyId: establishmentId }
+  await ensureStockEnabledForCompany(establishmentId)
+  const existingIngredients = await recipeModule.useCases.listIngredients.execute({
+    ...actor,
+    query: { sort: 'name', order: 'asc', page: 1, pageSize: 100 },
+  })
+  const ingredientIdByName = new Map(existingIngredients.data.map((ingredient) => [ingredient.name, ingredient.id]))
+  const ingredientIds: string[] = []
+  for (const blueprint of INGREDIENTS) {
+    const existingId = ingredientIdByName.get(blueprint.name)
+    const id =
+      existingId ??
+      (await recipeModule.useCases.createIngredient.execute({
+        ...actor,
+        input: { name: blueprint.name, unit: blueprint.unit, costPerUnit: '0', supplier: null, notes: null },
+      })).id
+    ingredientIds.push(id)
+    if (!existingId) {
+      await stockModule.useCases.setMinimum.execute({ ...actor, ingredientId: id, minimumQuantity: String(blueprint.minimumStock) })
+    }
+  }
 
-  const productIngredients = RECIPES.map((recipe, index) => ({
-    id: productIngredientId(index),
-    productId: productId(recipe.productIndex),
-    ingredientId: ingredientId(recipe.ingredientIndex),
-    quantity: String(recipe.quantity),
-    unit: recipe.unit,
-  }))
-  await db.insert(schema.productIngredients).values(productIngredients).onConflictDoNothing()
+  for (const [productIndex, product] of PRODUCTS.entries()) {
+    const lines = RECIPES.filter((recipe) => recipe.productIndex === productIndex).map((recipe) => ({
+      ingredientId: ingredientIds[recipe.ingredientIndex]!,
+      quantity: String(recipe.quantity),
+      unit: recipe.unit,
+      notes: null,
+    }))
+    const alreadyHasRecipe = await recipeModule.useCases.getRecipe.execute({ ...actor, productId: productId(productIndex) }).then(
+      () => true,
+      () => false
+    )
+    if (alreadyHasRecipe) continue
+    await recipeModule.useCases.saveRecipe.execute({
+      ...actor,
+      productId: productId(productIndex),
+      input: { yieldPortions: '1', preparationTimeMinutes: product.preparationTimeMinutes, instructions: '', lines },
+    })
+  }
 
-  // Entrada de estoque via use-case: reaproveita a mesma lógica de custo médio ponderado
-  // que a rota POST /stock-batches usa em produção, em vez de INSERT bruto.
+  // Entrada de estoque via use case: o mesmo caminho (custo médio ponderado, motivo, autor) da rota POST /stock-batches.
   const createAuditLogUseCase = new CreateAuditLogUseCase(db)
-  const createStockBatchUseCase = new CreateStockBatchUseCase(db, createAuditLogUseCase)
+  const createStockBatchUseCase = new CreateStockBatchUseCase({ db, recipes: recipeModule, stock: stockModule, createAuditLogUseCase, ensureStockEnabled: ensureStockEnabledForCompany })
 
   for (const [index, ingredient] of INGREDIENTS.entries()) {
-    const alreadyHasBatch = await db.query.stockBatches.findFirst({
-      where: (batches, { eq, and }) => and(eq(batches.ingredientId, ingredientId(index)), eq(batches.establishmentId, establishmentId)),
+    const existingBatches = await stockModule.useCases.listBatches.execute({
+      ...actor,
+      query: { ingredientId: ingredientIds[index]!, onlyWithRemaining: false, page: 1, pageSize: 1 },
     })
-    if (alreadyHasBatch) continue
+    if (existingBatches.data.length > 0) continue
 
     await createStockBatchUseCase.execute({
       establishmentId,
-      ingredientId: ingredientId(index),
+      ingredientId: ingredientIds[index]!,
       batchNumber: `SEED-${String(index).padStart(3, '0')}`,
       quantity: ingredient.initialBatchQuantity,
       costPerUnit: ingredient.initialBatchCost,
@@ -159,6 +181,6 @@ export async function seedCatalog(establishmentId: string): Promise<CatalogSeedR
 
   return {
     productIds: products.map((product) => product.id),
-    ingredientIds: ingredients.map((ingredient) => ingredient.id),
+    ingredientIds,
   }
 }

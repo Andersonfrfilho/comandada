@@ -5,7 +5,7 @@ import { createStockEnabledResolver } from './stockEnabled'
 function buildResolver(options: { explicit: boolean | undefined; hasRows: boolean }) {
   return createStockEnabledResolver({
     readExplicitSetting: async () => options.explicit,
-    hasLegacyStockRows: async () => options.hasRows,
+    hasStockRows: async () => options.hasRows,
   })
 }
 

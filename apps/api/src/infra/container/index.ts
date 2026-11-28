@@ -40,8 +40,10 @@ import { SectionController } from '@/modules/products/infra/http/SectionControll
 import { IngredientController } from '@/modules/products/infra/http/IngredientController'
 import { StockBatchController } from '@/modules/products/infra/http/StockBatchController'
 import { CreateStockBatchUseCase } from '@/modules/products/application/use-cases/CreateStockBatchUseCase'
-import { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
-import { RestoreStockForOrderUseCase } from '@/modules/products/application/use-cases/RestoreStockForOrderUseCase'
+import { DeductOrderStockUseCase } from '@/modules/products/application/use-cases/DeductOrderStockUseCase'
+import { RestoreOrderStockUseCase } from '@/modules/products/application/use-cases/RestoreOrderStockUseCase'
+import { recipeModule, stockModule } from '@/infra/recipes/recipeStockModules'
+import { ensureStockEnabledForCompany } from '@/infra/recipes/stockEnabled'
 import { StockMovementController } from '@/modules/products/infra/http/StockMovementController'
 import { CreateStockMovementUseCase } from '@/modules/products/application/use-cases/CreateStockMovementUseCase'
 
@@ -362,12 +364,12 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
   const menuController = new MenuController(db, cache)
   const catalogController = new CatalogController(db, cache, productLookup, regionalPrice)
   const sectionController = new SectionController(db)
-  const ingredientController = new IngredientController(db)
-  const createStockBatchUseCase = new CreateStockBatchUseCase(db, createAuditLogUseCase)
-  const stockBatchController = new StockBatchController(db, createStockBatchUseCase)
-  const createStockMovementUseCase = new CreateStockMovementUseCase(db, createAuditLogUseCase)
+  const ingredientController = new IngredientController({ db, recipes: recipeModule, stock: stockModule, ensureStockEnabled: ensureStockEnabledForCompany })
+  const createStockBatchUseCase = new CreateStockBatchUseCase({ db, recipes: recipeModule, stock: stockModule, createAuditLogUseCase, ensureStockEnabled: ensureStockEnabledForCompany })
+  const stockBatchController = new StockBatchController(db, createStockBatchUseCase, recipeModule)
+  const createStockMovementUseCase = new CreateStockMovementUseCase({ db, stock: stockModule, createAuditLogUseCase, ensureStockEnabled: ensureStockEnabledForCompany })
   const stockMovementController = new StockMovementController(db, createStockMovementUseCase)
-  const deductStockForOrderUseCase = new DeductStockForOrderUseCase(db)
+  const deductOrderStockUseCase = new DeductOrderStockUseCase(db, stockModule.useCases.deductOrder)
   const triggerFiscalEmissionUseCase = new TriggerFiscalEmissionUseCase(db, wsHub)
   // Único caminho de envio ao cliente: o mesmo módulo que a inbox usa, só que atrás de uma
   // interface, para o módulo de pedidos não conhecer o registry.
@@ -403,11 +405,11 @@ export function buildContainer(wsHub: WebSocketHub): AppContainer {
     db,
     wsHub,
     triggerFiscalEmissionUseCase,
-    deductStockForOrderUseCase,
+    deductOrderStockUseCase,
     notifiesCustomerHere ? notifyOrderStatusUseCase : undefined,
     recordOrderPaymentsUseCase,
     async (order) => orderCancellationPayments?.releasePending(order),
-    new RestoreStockForOrderUseCase(db),
+    new RestoreOrderStockUseCase(db),
     async (order, newStatus) => marketplaceOrders?.onOrderStatusChanged(order, newStatus)
   )
 

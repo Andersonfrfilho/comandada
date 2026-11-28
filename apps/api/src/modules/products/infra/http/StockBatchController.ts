@@ -1,14 +1,20 @@
-import { and, eq, lte, gt, asc } from 'drizzle-orm'
+import { and, asc, eq, gt, lte } from 'drizzle-orm'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
+import { batches } from '@adatechnology/stock-module'
+import type { RecipeModule } from '@adatechnology/recipe-module'
 import * as schema from '@/infra/database/schema'
+import { findExpiryAlertDays } from '@/infra/recipes/stockExpiry'
+import { toLegacyStockBatch } from '../../shared/legacyStockShapes'
 import { UnauthorizedError, ValidationError } from '@/shared/errors/AppError'
 import type { CreateStockBatchUseCase } from '@/modules/products/application/use-cases/CreateStockBatchUseCase'
 
 type Database = NodePgDatabase<typeof schema>
 
 const DEFAULT_EXPIRY_ALERT_DAYS = 7
+const MAX_EXPIRY_DAYS = 365
+const DAY_IN_MILLISECONDS = 24 * 60 * 60 * 1000
 
 const createStockBatchSchema = z.object({
   ingredientId: z.string().uuid(),
@@ -21,7 +27,8 @@ const createStockBatchSchema = z.object({
 export class StockBatchController {
   constructor(
     private readonly db: Database,
-    private readonly createStockBatchUseCase: CreateStockBatchUseCase
+    private readonly createStockBatchUseCase: CreateStockBatchUseCase,
+    private readonly recipes: RecipeModule
   ) {}
 
   create: RouteHandler = async (request, response) => {
@@ -51,18 +58,13 @@ export class StockBatchController {
     const ingredientId = (request as { query?: Record<string, string> }).query?.['ingredientId']
     if (!ingredientId) throw new ValidationError('Parâmetro ingredientId é obrigatório')
 
-    const batches = await this.db
+    const rows = await this.db
       .select()
-      .from(schema.stockBatches)
-      .where(
-        and(
-          eq(schema.stockBatches.establishmentId, establishmentId),
-          eq(schema.stockBatches.ingredientId, ingredientId)
-        )
-      )
-      .orderBy(asc(schema.stockBatches.expiresAt))
+      .from(batches)
+      .where(and(eq(batches.companyId, establishmentId), eq(batches.ingredientId, ingredientId)))
+      .orderBy(asc(batches.expiresAt))
 
-    response.json(batches)
+    response.json(rows.map(toLegacyStockBatch))
   }
 
   listExpiring: RouteHandler = async (request, response) => {
@@ -73,65 +75,58 @@ export class StockBatchController {
     const days = parseInt(daysStr, 10)
     if (isNaN(days) || days < 1) throw new ValidationError('Parâmetro days deve ser número positivo')
 
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() + days)
-
-    const batches = await this.db
-      .select({
-        id: schema.stockBatches.id,
-        ingredientId: schema.stockBatches.ingredientId,
-        ingredientName: schema.ingredients.name,
-        batchNumber: schema.stockBatches.batchNumber,
-        quantity: schema.stockBatches.quantity,
-        remainingQuantity: schema.stockBatches.remainingQuantity,
-        costPerUnit: schema.stockBatches.costPerUnit,
-        expiresAt: schema.stockBatches.expiresAt,
-        createdAt: schema.stockBatches.createdAt,
-      })
-      .from(schema.stockBatches)
-      .leftJoin(schema.ingredients, eq(schema.stockBatches.ingredientId, schema.ingredients.id))
+    const rows = await this.db
+      .select()
+      .from(batches)
       .where(
         and(
-          eq(schema.stockBatches.establishmentId, establishmentId),
-          lte(schema.stockBatches.expiresAt, cutoffDate),
-          gt(schema.stockBatches.remainingQuantity, '0')
+          eq(batches.companyId, establishmentId),
+          lte(batches.expiresAt, new Date(Date.now() + Math.min(days, MAX_EXPIRY_DAYS) * DAY_IN_MILLISECONDS)),
+          gt(batches.remainingQuantity, '0')
         )
       )
-      .orderBy(asc(schema.stockBatches.expiresAt))
+      .orderBy(asc(batches.expiresAt))
 
-    response.json(batches)
+    const ingredients = await this.recipes.useCases.findIngredients.execute({
+      companyId: establishmentId,
+      ingredientIds: [...new Set(rows.map((row) => row.ingredientId))],
+    })
+    const nameById = new Map(ingredients.map((ingredient) => [ingredient.id, ingredient.name]))
+
+    response.json(
+      rows.map((row) => {
+        const batch = toLegacyStockBatch(row)
+        return {
+          id: batch.id,
+          ingredientId: batch.ingredientId,
+          ingredientName: nameById.get(batch.ingredientId) ?? null,
+          batchNumber: batch.batchNumber,
+          quantity: batch.quantity,
+          remainingQuantity: batch.remainingQuantity,
+          costPerUnit: batch.costPerUnit,
+          expiresAt: batch.expiresAt,
+          createdAt: batch.createdAt,
+        }
+      })
+    )
   }
 
   countExpiring: RouteHandler = async (request, response) => {
     if (!request.user) throw new UnauthorizedError()
     const { establishmentId } = request.user
 
-    const settingsRows = await this.db
-      .select({ value: schema.settings.value })
-      .from(schema.settings)
-      .where(and(
-        eq(schema.settings.establishmentId, establishmentId),
-        eq(schema.settings.key, 'stock')
-      ))
-      .limit(1)
-
-    const stockSettings = (settingsRows[0]?.value as Record<string, unknown>) ?? {}
-    const alertDays = (stockSettings.expiry_alert_days as number) ?? DEFAULT_EXPIRY_ALERT_DAYS
-
-    const cutoffDate = new Date()
-    cutoffDate.setDate(cutoffDate.getDate() + alertDays)
-
-    const batches = await this.db
-      .select({ id: schema.stockBatches.id })
-      .from(schema.stockBatches)
+    const alertDays = await findExpiryAlertDays(this.db, establishmentId)
+    const rows = await this.db
+      .select({ id: batches.id })
+      .from(batches)
       .where(
         and(
-          eq(schema.stockBatches.establishmentId, establishmentId),
-          lte(schema.stockBatches.expiresAt, cutoffDate),
-          gt(schema.stockBatches.remainingQuantity, '0')
+          eq(batches.companyId, establishmentId),
+          lte(batches.expiresAt, new Date(Date.now() + alertDays * DAY_IN_MILLISECONDS)),
+          gt(batches.remainingQuantity, '0')
         )
       )
 
-    response.json({ count: batches.length, alertDays })
+    response.json({ count: rows.length, alertDays })
   }
 }

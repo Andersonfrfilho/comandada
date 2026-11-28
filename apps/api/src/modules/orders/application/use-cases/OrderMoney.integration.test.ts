@@ -2,7 +2,8 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from 'bun:test'
 import path from 'path'
 import { drizzle, type NodePgDatabase } from 'drizzle-orm/node-postgres'
 import { migrate } from 'drizzle-orm/node-postgres/migrator'
-import { eq, sql } from 'drizzle-orm'
+import { and, eq, sql } from 'drizzle-orm'
+import { batches as stockBatches, levels as stockLevels } from '@adatechnology/stock-module'
 import { Pool } from 'pg'
 
 import * as schema from '@/infra/database/schema'
@@ -11,8 +12,9 @@ import { AppError } from '@/shared/errors/AppError'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import { AddCashMovementUseCase } from '@/modules/cashier/application/use-cases/AddCashMovementUseCase'
 import { CloseCashRegisterUseCase } from '@/modules/cashier/application/use-cases/CloseCashRegisterUseCase'
-import { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
-import { RestoreStockForOrderUseCase } from '@/modules/products/application/use-cases/RestoreStockForOrderUseCase'
+import { createRecipeStockModules, type RecipeStockModules } from '@/infra/recipes/recipeStockModules'
+import { DeductOrderStockUseCase } from '@/modules/products/application/use-cases/DeductOrderStockUseCase'
+import { RestoreOrderStockUseCase } from '@/modules/products/application/use-cases/RestoreOrderStockUseCase'
 import { GetDashboardMetricsUseCase } from '@/modules/dashboard/application/use-cases/GetDashboardMetricsUseCase'
 import { GetMonthlyReportUseCase } from '@/modules/reports/application/use-cases/GetMonthlyReportUseCase'
 import { localYearMonth } from '@/modules/reports/shared/revenue'
@@ -44,6 +46,7 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
   let productId: string
   let ingredientId: string
   let batchId: string
+  let modules: RecipeStockModules
 
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
@@ -58,6 +61,8 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
 
   beforeEach(async () => {
     await db.execute(sql`TRUNCATE establishments CASCADE`)
+    await db.execute(sql`TRUNCATE recipes.recipe_lines, recipes.recipes, recipes.ingredients, stock.movements, stock.batches, stock.levels, stock.deductions CASCADE`)
+    modules = createRecipeStockModules({ database: db, isStockEnabled: () => true })
     const [establishment] = await db.insert(schema.establishments).values({ name: 'Yuyaki' }).returning()
     establishmentId = establishment!.id
     const [role] = await db.insert(schema.roles).values({ establishmentId, name: 'Gerente' }).returning()
@@ -72,29 +77,29 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       .values({ establishmentId, name: 'Hot roll', slug: 'hot-roll', price: '30.00' })
       .returning()
     productId = product!.id
-    const [ingredient] = await db
-      .insert(schema.ingredients)
-      .values({ establishmentId, name: 'Salmão', unit: 'kg', stockQuantity: '10' })
-      .returning()
-    ingredientId = ingredient!.id
+    const ingredient = await modules.recipeModule.useCases.createIngredient.execute({
+      companyId: establishmentId,
+      input: { name: 'Salmão', unit: 'kg', costPerUnit: '50', supplier: null, notes: null },
+    })
+    ingredientId = ingredient.id
+    await modules.stockModule.useCases.receiveBatch.execute({
+      companyId: establishmentId,
+      input: { ingredientId, quantity: '10', batchCode: 'L1', costPerUnit: '50', expiresAt: new Date(Date.now() + 86_400_000).toISOString() },
+    })
     const [batch] = await db
-      .insert(schema.stockBatches)
-      .values({
-        establishmentId,
-        ingredientId,
-        batchNumber: 'L1',
-        quantity: '10',
-        remainingQuantity: '10',
-        costPerUnit: '50',
-        expiresAt: new Date(Date.now() + 86_400_000),
-      })
-      .returning()
+      .select()
+      .from(stockBatches)
+      .where(and(eq(stockBatches.companyId, establishmentId), eq(stockBatches.ingredientId, ingredientId)))
     batchId = batch!.id
-    await db.insert(schema.productIngredients).values({ productId, ingredientId, quantity: '0.5', unit: 'kg' })
+    await modules.recipeModule.useCases.saveRecipe.execute({
+      companyId: establishmentId,
+      productId,
+      input: { yieldPortions: '1', preparationTimeMinutes: null, instructions: '', lines: [{ ingredientId, quantity: '0.5', unit: 'kg', notes: null }] },
+    })
   })
 
   function statusUseCase() {
-    const deduct = new DeductStockForOrderUseCase(db)
+    const deduct = new DeductOrderStockUseCase(db, modules.stockModule.useCases.deductOrder)
     return new UpdateOrderStatusUseCase(
       db,
       silentHub,
@@ -103,7 +108,7 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       undefined,
       undefined,
       undefined,
-      new RestoreStockForOrderUseCase(db)
+      new RestoreOrderStockUseCase(db)
     )
   }
 
@@ -124,9 +129,9 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
   }
 
   async function stock() {
-    const ingredient = await db.query.ingredients.findFirst({ where: eq(schema.ingredients.id, ingredientId) })
-    const batch = await db.query.stockBatches.findFirst({ where: eq(schema.stockBatches.id, batchId) })
-    return { ingredient: Number(ingredient!.stockQuantity), batch: Number(batch!.remainingQuantity) }
+    const [level] = await db.select().from(stockLevels).where(eq(stockLevels.ingredientId, ingredientId))
+    const [batch] = await db.select().from(stockBatches).where(eq(stockBatches.id, batchId))
+    return { ingredient: Number(level!.quantity), batch: Number(batch!.remainingQuantity) }
   }
 
   async function move(orderId: string, newStatus: schema.Order['status'], manual = false) {
@@ -152,7 +157,7 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
       expect(await stock()).toEqual({ ingredient: 9, batch: 9 })
 
       await move(order.id, 'cancelled')
-      await new RestoreStockForOrderUseCase(db).execute({ orderId: order.id, establishmentId })
+      await new RestoreOrderStockUseCase(db).execute({ orderId: order.id, establishmentId })
       expect(await stock()).toEqual({ ingredient: 10, batch: 10 })
     })
 
@@ -406,9 +411,9 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
 
     function settleUseCase() {
       const movements = new AddCashMovementUseCase(db)
-      const deduct = new DeductStockForOrderUseCase(db)
+      const deduct = new DeductOrderStockUseCase(db, modules.stockModule.useCases.deductOrder)
       const status = new UpdateOrderStatusUseCase(
-        db, silentHub, undefined, deduct, undefined, new RecordOrderPaymentsUseCase(db, movements), undefined, new RestoreStockForOrderUseCase(db)
+        db, silentHub, undefined, deduct, undefined, new RecordOrderPaymentsUseCase(db, movements), undefined, new RestoreOrderStockUseCase(db)
       )
       const tables = new DrizzleTableRepository(db)
       const comandas = new DrizzleComandaRepository(db)

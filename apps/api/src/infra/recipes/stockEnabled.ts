@@ -1,4 +1,6 @@
 import { and, eq } from 'drizzle-orm'
+import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import { batches as stockBatches, movements as stockMovements } from '@adatechnology/stock-module'
 
 import { db } from '@/infra/database/connection'
 import * as schema from '@/infra/database/schema'
@@ -7,7 +9,7 @@ export const STOCK_ENABLED_SETTING_KEY = 'stock.enabled'
 
 type StockEnabledResolverDependencies = {
   readonly readExplicitSetting: (establishmentId: string) => Promise<boolean | undefined>
-  readonly hasLegacyStockRows: (establishmentId: string) => Promise<boolean>
+  readonly hasStockRows: (establishmentId: string) => Promise<boolean>
 }
 
 /**
@@ -20,32 +22,53 @@ export function createStockEnabledResolver(
   return async (establishmentId) => {
     const explicitSetting = await dependencies.readExplicitSetting(establishmentId)
     if (explicitSetting !== undefined) return explicitSetting
-    return dependencies.hasLegacyStockRows(establishmentId)
+    return dependencies.hasStockRows(establishmentId)
   }
 }
 
-async function readExplicitSetting(establishmentId: string): Promise<boolean | undefined> {
-  const [row] = await db
-    .select({ value: schema.settings.value })
-    .from(schema.settings)
-    .where(and(eq(schema.settings.establishmentId, establishmentId), eq(schema.settings.key, STOCK_ENABLED_SETTING_KEY)))
-    .limit(1)
-  return typeof row?.value === 'boolean' ? row.value : undefined
+type Database = NodePgDatabase<typeof schema>
+
+export type StockEnabledChecks = {
+  readonly isStockEnabledForCompany: (establishmentId: string) => Promise<boolean>
+  /**
+   * Rotas antigas de estoque são o ponto de entrada de quem começa a usar: a primeira escrita liga o
+   * estoque, salvo se a empresa o desligou de propósito (`stock.enabled = false`).
+   */
+  readonly ensureStockEnabledForCompany: (establishmentId: string) => Promise<void>
 }
 
-async function hasLegacyStockRows(establishmentId: string): Promise<boolean> {
-  const [batch] = await db
-    .select({ id: schema.stockBatches.id })
-    .from(schema.stockBatches)
-    .where(eq(schema.stockBatches.establishmentId, establishmentId))
-    .limit(1)
-  if (batch) return true
-  const [movement] = await db
-    .select({ id: schema.stockMovements.id })
-    .from(schema.stockMovements)
-    .where(eq(schema.stockMovements.establishmentId, establishmentId))
-    .limit(1)
-  return movement !== undefined
+export function createStockEnabledChecks(database: Database): StockEnabledChecks {
+  async function readExplicitSetting(establishmentId: string): Promise<boolean | undefined> {
+    const [row] = await database
+      .select({ value: schema.settings.value })
+      .from(schema.settings)
+      .where(and(eq(schema.settings.establishmentId, establishmentId), eq(schema.settings.key, STOCK_ENABLED_SETTING_KEY)))
+      .limit(1)
+    return typeof row?.value === 'boolean' ? row.value : undefined
+  }
+
+  async function hasStockRows(establishmentId: string): Promise<boolean> {
+    const [batch] = await database.select({ id: stockBatches.id }).from(stockBatches).where(eq(stockBatches.companyId, establishmentId)).limit(1)
+    if (batch) return true
+    const [movement] = await database.select({ id: stockMovements.id }).from(stockMovements).where(eq(stockMovements.companyId, establishmentId)).limit(1)
+    return movement !== undefined
+  }
+
+  const isStockEnabledForCompany = createStockEnabledResolver({ readExplicitSetting, hasStockRows })
+
+  async function ensureStockEnabledForCompany(establishmentId: string): Promise<void> {
+    if (await isStockEnabledForCompany(establishmentId)) return
+    if ((await readExplicitSetting(establishmentId)) === false) return
+    await database
+      .insert(schema.settings)
+      .values({ establishmentId, key: STOCK_ENABLED_SETTING_KEY, value: true })
+      .onConflictDoUpdate({ target: [schema.settings.establishmentId, schema.settings.key], set: { value: true, updatedAt: new Date() } })
+  }
+
+  return { isStockEnabledForCompany, ensureStockEnabledForCompany }
 }
 
-export const isStockEnabledForCompany = createStockEnabledResolver({ readExplicitSetting, hasLegacyStockRows })
+const checks = createStockEnabledChecks(db)
+
+export const isStockEnabledForCompany = checks.isStockEnabledForCompany
+export const ensureStockEnabledForCompany = checks.ensureStockEnabledForCompany
