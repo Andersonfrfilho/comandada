@@ -9,7 +9,7 @@ import { buildCorsAndSecurityHeaders, type Router } from '@/infra/http/router'
 import { recipeModule, stockModule } from '@/infra/recipes/recipeStockModules'
 import { clientIp } from '@/modules/storefront/infra/http/StorefrontController'
 import { createModuleAuthResolver } from './moduleAuthResolver'
-import { MODULE_BASE_PATH } from './moduleScopes.constant'
+import { MODULE_BASE_PATH, RECIPES_DELETE_SCOPE, STOCK_DELETE_SCOPE } from './moduleScopes.constant'
 
 type MountModuleParams = {
   readonly router: Router
@@ -38,8 +38,13 @@ export function selectHttpCouponRoutes(routes: ModuleRouteTable): ModuleRouteTab
   return routes.filter((route) => !BACKEND_ONLY_COUPON_PATHS.has(route.path))
 }
 
+// O escopo de escrita dos módulos vem de products:write; apagar exige o escopo próprio (products:delete).
+export function requireDeleteScope(routes: ModuleRouteTable, deleteScope: string): ModuleRouteTable {
+  return routes.map((route) => (route.method === 'DELETE' ? { ...route, requiredScopes: [deleteScope] } : route))
+}
+
 export function registerSdkModuleRoutes(router: Router): void {
-  mountModule({ router, routes: createRecipeRoutes({ module: recipeModule }), basePath: MODULE_BASE_PATH.RECIPES })
-  mountModule({ router, routes: createStockRoutes({ module: stockModule }), basePath: MODULE_BASE_PATH.STOCK })
+  mountModule({ router, routes: requireDeleteScope(createRecipeRoutes({ module: recipeModule }), RECIPES_DELETE_SCOPE), basePath: MODULE_BASE_PATH.RECIPES })
+  mountModule({ router, routes: requireDeleteScope(createStockRoutes({ module: stockModule }), STOCK_DELETE_SCOPE), basePath: MODULE_BASE_PATH.STOCK })
   mountModule({ router, routes: selectHttpCouponRoutes(createCouponRoutes({ module: couponModule })), basePath: MODULE_BASE_PATH.COUPONS })
 }

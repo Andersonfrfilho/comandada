@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'bun:test'
 import { createCouponRoutes } from '@adatechnology/coupon-module'
+import { createRecipeRoutes } from '@adatechnology/recipe-module'
+import { createStockRoutes } from '@adatechnology/stock-module'
 import { createModuleFetchRouter } from '@adatechnology/module-http/fetch'
 
 import { couponModule } from '@/infra/coupons/couponModule'
+import { recipeModule, stockModule } from '@/infra/recipes/recipeStockModules'
 import { createModuleAuthResolver } from './moduleAuthResolver'
-import { COUPON_SERVICE_SCOPE, MODULE_BASE_PATH } from './moduleScopes.constant'
-import { selectHttpCouponRoutes } from './registerSdkModuleRoutes'
+import { COUPON_SERVICE_SCOPE, MODULE_BASE_PATH, RECIPES_DELETE_SCOPE, STOCK_DELETE_SCOPE } from './moduleScopes.constant'
+import { requireDeleteScope, selectHttpCouponRoutes } from './registerSdkModuleRoutes'
 
 const COMPANY_ID = '00000000-0000-4000-8000-00000000000a'
 
@@ -48,5 +51,49 @@ describe('rotas de cupom expostas por HTTP', () => {
     expect((await call('/redemptions/release')).status).toBe(404)
     const quote = await call('/coupons/quote')
     expect([401, 403, 404]).not.toContain(quote.status)
+  })
+})
+
+describe('rotas de apagar de ficha técnica e estoque', () => {
+  const targets = [
+    { basePath: MODULE_BASE_PATH.RECIPES, scope: RECIPES_DELETE_SCOPE, routes: requireDeleteScope(createRecipeRoutes({ module: recipeModule }), RECIPES_DELETE_SCOPE) },
+    { basePath: MODULE_BASE_PATH.STOCK, scope: STOCK_DELETE_SCOPE, routes: requireDeleteScope(createStockRoutes({ module: stockModule }), STOCK_DELETE_SCOPE) },
+  ]
+
+  function resolverFor(actions: readonly string[]) {
+    return createModuleAuthResolver(async () => ({
+      id: 'user-1',
+      establishmentId: COMPANY_ID,
+      email: 'gerente@example.com',
+      name: 'Gerente',
+      role: 'manager',
+      permissions: actions.map((action) => ({ resource: 'products', action })),
+    }))
+  }
+
+  for (const target of targets) {
+    const deleteRoutes = target.routes.filter((route) => route.method === 'DELETE')
+
+    it(`${target.basePath}: só quem tem products:delete passa nas rotas DELETE`, async () => {
+      const withWriteOnly = createModuleFetchRouter({ routes: target.routes, basePath: target.basePath, authResolver: resolverFor(['read', 'write']) })
+      const withDelete = createModuleFetchRouter({ routes: target.routes, basePath: target.basePath, authResolver: resolverFor(['read', 'write', 'delete']) })
+      for (const route of deleteRoutes) {
+        const path = route.path.replace(/:[A-Za-z]+/g, '00000000-0000-4000-8000-000000000001')
+        const call = (router: typeof withDelete) =>
+          router.handle(new Request(`http://localhost${target.basePath}${path}`, { method: 'DELETE', headers: { authorization: 'Bearer any' } }), { ip: '127.0.0.1' })
+        const denied = await call(withWriteOnly)
+        expect(denied.status).toBe(403)
+        expect((await denied.json()) as { error: { code: string } }).toMatchObject({ error: { code: 'FORBIDDEN' } })
+        expect([401, 403]).not.toContain((await call(withDelete)).status)
+      }
+    })
+
+    it(`${target.basePath}: as rotas DELETE pedem o escopo ${target.scope}`, () => {
+      for (const route of deleteRoutes) expect(route.requiredScopes).toEqual([target.scope])
+    })
+  }
+
+  it('existe ao menos uma rota DELETE nas fichas', () => {
+    expect(targets[0]!.routes.some((route) => route.method === 'DELETE')).toBe(true)
   })
 })
