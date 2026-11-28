@@ -2,7 +2,7 @@ import { describe, expect, it } from 'bun:test'
 
 import type { AuthenticatedUser } from '@/shared/types'
 import { createModuleAuthResolver, mapPermissionsToScopes } from './moduleAuthResolver'
-import { COUPON_ADMIN_SCOPE } from './moduleScopes.constant'
+import { COUPON_ADMIN_SCOPE, COUPON_SERVICE_SCOPE } from './moduleScopes.constant'
 
 const ESTABLISHMENT_ID = '00000000-0000-0000-0000-00000000000a'
 
@@ -21,6 +21,24 @@ describe('mapPermissionsToScopes', () => {
 
   it('settings:write leva a administração de cupons', () => {
     expect(mapPermissionsToScopes([{ resource: 'settings', action: 'write' }])).toEqual([COUPON_ADMIN_SCOPE])
+  })
+
+  it('orders:write e cashier:write levam só o escopo de serviço (validar cupom), nunca a administração', () => {
+    expect(mapPermissionsToScopes([{ resource: 'orders', action: 'write' }])).toEqual([COUPON_SERVICE_SCOPE])
+    expect(mapPermissionsToScopes([{ resource: 'cashier', action: 'write' }])).toEqual([COUPON_SERVICE_SCOPE])
+  })
+
+  it('quem tem pedido e configurações recebe os dois escopos, sem repetir', () => {
+    const scopes = mapPermissionsToScopes([
+      { resource: 'orders', action: 'write' },
+      { resource: 'cashier', action: 'write' },
+      { resource: 'settings', action: 'write' },
+    ])
+    expect([...scopes].sort()).toEqual([COUPON_ADMIN_SCOPE, COUPON_SERVICE_SCOPE])
+  })
+
+  it('leitura de pedido não vira escopo', () => {
+    expect(mapPermissionsToScopes([{ resource: 'orders', action: 'read' }])).toEqual([])
   })
 
   it('permissão sem regra não vira escopo', () => {

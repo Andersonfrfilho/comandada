@@ -5,6 +5,7 @@ export const MODULE_BASE_PATH = {
 } as const
 
 export const COUPON_ADMIN_SCOPE = 'coupons:admin'
+export const COUPON_SERVICE_SCOPE = 'coupons:service'
 
 type PermissionScopeRule = {
   readonly resource: string
@@ -18,4 +19,7 @@ export const PERMISSION_SCOPE_RULES: readonly PermissionScopeRule[] = [
   { resource: 'products', action: 'write', scopes: ['recipes:write', 'stock:write'] },
   // Quem gerencia as configurações do restaurante gerencia as campanhas (admin e gerente hoje).
   { resource: 'settings', action: 'write', scopes: [COUPON_ADMIN_SCOPE] },
+  // Quem lança pedido (atendente, garçom) ou fecha o caixa valida cupom no fechamento, sem gerir campanhas.
+  { resource: 'orders', action: 'write', scopes: [COUPON_SERVICE_SCOPE] },
+  { resource: 'cashier', action: 'write', scopes: [COUPON_SERVICE_SCOPE] },
 ]
