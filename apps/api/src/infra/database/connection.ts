@@ -9,6 +9,7 @@ import { Pool } from 'pg'
 import path from 'path'
 import * as schema from './schema'
 import { runRecipeStockMigrations } from './runRecipeStockMigrations'
+import { reconcilePreparationMirror } from '@/infra/recipes/preparationMirror'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -29,6 +30,8 @@ export async function runMigrations(): Promise<void> {
   // Ficha técnica e estoque primeiro: a migration 0061 do Drizzle copia dados para `recipes` e `stock`.
   await runRecipeStockMigrations({ db })
   await migrate(db, { migrationsFolder })
+  // A ficha é a fonte do tempo de preparo; o espelho em `products` é refeito aqui (só linhas diferentes).
+  await reconcilePreparationMirror(db)
 
   // O módulo traz o próprio schema (`meta_whatsapp`) e o próprio journal — o drizzle-kit deste
   // repo não enxerga essas migrations. O migrator é injetado porque o driver é escolha do host.

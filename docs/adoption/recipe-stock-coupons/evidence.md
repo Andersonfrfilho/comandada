@@ -61,3 +61,42 @@ Segunda execução do mesmo arquivo: todos os 7 `INSERT` voltaram `0` linhas; co
 
 1. Linha com mesma dimensão e unidade diferente (ex.: 300 g num insumo em kg): a migration mantém a unidade da linha e o módulo converte (o custo da ficha passa a refletir a conversão). A alternativa, migrar tudo na unidade do insumo, é trocar o `CASE` por `i.unit`.
 2. Combos (`product_components`): a baixa marca as `deductions` por item do pedido (`order:<pedido>:<item>`); a chave por componente depende de como a fase 4 monta o `lineKey`.
+
+---
+
+# Evidência: fase 3 (API passa a usar os módulos de ficha técnica e estoque)
+
+- Data: 2026-11-28
+- Banco: PostgreSQL 16 local descartável (`pgvector/pgvector:pg16`, container `comandada-rsc-test-pg3`, removido ao fim). Nenhum dado de staging ou produção.
+
+## O que foi trocado
+
+| Antes | Agora |
+|---|---|
+| `DeductStockForOrderUseCase` | `DeductOrderStockUseCase`: um `lineKey` por item do pedido (`order_items.id`) sobre `stockModule.useCases.deductOrder`. A chave gravada é exatamente `order:<pedido>:<item>`, igual às marcas migradas. |
+| Combo (`product_components`) | A fonte de fichas do módulo de estoque (`infra/recipes/kitRecipeSource.ts`) devolve, para o combo, uma ficha de rendimento 1 com os insumos dos componentes somados (`kitRecipes.ts`). Um combo é uma linha e uma chave. |
+| `RestoreStockForOrderUseCase` | O módulo de estoque **não tem devolução**. `RestoreOrderStockUseCase` usa as portas de persistência exportadas (`createDrizzleStockPersistence`): devolve ao mesmo lote e ao saldo o que a baixa tirou, grava entrada com chave `order-return:<pedido>`, e apaga as marcas `order:<pedido>:*` de `stock.deductions` (produzir de novo baixa de novo, como antes). Entende também a baixa/devolução migrada (`order:<pedido>:legacy`). |
+| `StockExpiryAlerter` | `scanExpiringBatches({ withinDays })` do módulo, na maior janela configurada; o gancho `onBatchesExpiring` grava o aviso (auditoria) só dentro da janela de cada restaurante (`settings.stock.expiry_alert_days`). A consulta antiga lia a configuração de um restaurante qualquer; agora lê a de cada um. |
+| Espelho do preparo | `hooks.onRecipeSaved/onRecipeRemoved` atualizam `products.preparation_time_minutes` e `preparation_instructions`; `reconcilePreparationMirror` no boot (depois do `migrate`) só atualiza linhas diferentes. `CatalogController` não aceita mais os dois campos. |
+| `GetIngredientsRankingUseCase` | Lê `stock.movements` ⋈ `recipes.ingredients`. Mantém o líquido (saída menos devolução) da consulta antiga. |
+| Custo do estoque do mês (`ExpenseController`) | Lê `stock.movements` ⋈ `stock.batches`. |
+| Rotas `/ingredients*`, `/stock-batches*`, `/stock-movements*` | Mesmo caminho, mesmo formato de resposta, agora adaptadores dos módulos (o painel segue funcionando até a fase 4). |
+
+## Tabelas antigas ainda lidas por código vivo
+
+Nenhuma, exceto a lista de sincronização da loja (`modules/sync/shared/syncTables.constant.ts`), que fica como está até a decisão do §5.5. As demais referências estão nas definições de schema e em testes de migração.
+
+## Testes
+
+- `bun run typecheck` (api e web): limpo.
+- `bun test` sem banco (api): 307 passam, 82 pulados, 0 falham. Web: 126 passam.
+- `TEST_DATABASE_URL=… bun test` (api, todos os arquivos): 371 passam, 0 falham. Novos: `OrderStockSdk.integration.test.ts` (combo, repetição, simultâneo, devolução, paridade do ranking), `LegacyStockRoutes.integration.test.ts` (rotas antigas, espelho, validade), `kitRecipes.test.ts`, `stockExpiry.test.ts`, `DeductOrderStockUseCase.test.ts`. `OrderMoney.integration.test.ts` passou a montar os módulos.
+
+## Diferenças de comportamento (decisão do dono)
+
+1. **Baixa nunca trava o pedido.** Antes, `in_production` recusava a transição se faltasse saldo e o produto não aceitasse negativo (`allow_negative_stock`). O módulo deixa o saldo ficar negativo e mostra o furo.
+2. **Estoque desligado = sem baixa.** Empresa sem lote nem movimento e sem `stock.enabled` não baixa nada (antes baixava e podia travar). A primeira escrita pelas rotas antigas liga o estoque (salvo `stock.enabled = false`).
+3. **Estoque baixo** continua `quantidade <= mínimo` nas rotas antigas (o módulo marca só `<`).
+4. **Perda no custo do estoque** (`ExpenseController`): antes a perda, gravada com sinal negativo, *diminuía* o custo do mês; agora soma, como diz o comentário original.
+5. Entrada de lote: o custo médio do insumo continua sendo atualizado (no adaptador); saldo negativo conta como zero na média.
+6. Motivo é obrigatório em ajuste e perda (já era no formulário).
