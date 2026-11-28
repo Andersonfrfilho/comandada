@@ -107,12 +107,6 @@ function toProductBody(input: CreateProductInput | UpdateProductInput): Record<s
     ...(input.barcode !== undefined && { barcode: input.barcode }),
     ...(input.catalogId !== undefined && { catalogId: input.catalogId }),
     ...(input.sectionId !== undefined && { sectionId: input.sectionId }),
-    ...(input.preparationTimeMinutes !== undefined && {
-      preparationTimeMinutes: input.preparationTimeMinutes,
-    }),
-    ...(input.preparationInstructions !== undefined && {
-      preparationInstructions: input.preparationInstructions,
-    }),
     ...('active' in input && input.active !== undefined && { active: input.active }),
     ...('sortOrder' in input && input.sortOrder !== undefined && { sortOrder: input.sortOrder }),
   }

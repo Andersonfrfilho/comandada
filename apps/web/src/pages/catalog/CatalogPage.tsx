@@ -4,7 +4,7 @@ import { useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
 import { Modal } from '@/components/ui/Modal'
-import { ChevronRight, Pencil, Plus, Trash2, Wand2 } from 'lucide-react'
+import { Boxes, ChevronRight, Pencil, Plus, Trash2, Wand2 } from 'lucide-react'
 import {
   FISCAL_DEFAULTS,
   FISCAL_FIELD_HINTS,
@@ -13,12 +13,13 @@ import {
   FISCAL_APPLY_DEFAULTS_LABEL,
 } from '@/constants/fiscalDefaults'
 import { SectionManager } from './components/SectionManager'
-import { IngredientManager } from './components/IngredientManager'
-import { RecipeManager, RecipeCostBadge } from './components/RecipeManager'
+import { ProductRecipeEditor } from './components/ProductRecipeEditor'
+import { RecipeCostBadge } from './components/RecipeCostBadge'
+import { useRecipeCosts } from '@/hooks/useRecipeCosts'
+import { StockAlertBadges } from '@/components/stock/StockAlertBadges'
 import { BarcodeScanner } from './components/BarcodeScanner'
 import { ProductPhotoManager } from './components/ProductPhotoManager'
 import { productImagePath, productImageUrl } from '@/lib/productImage'
-import { ExpiringBatchBadge } from './components/StockBatchList'
 import {
   ProductForm,
   formatBarcode,
@@ -110,6 +111,8 @@ function CatalogPageContent() {
   const invalidate = () => invalidateCatalogQueries(queryClient)
 
   const { catalogs, products: allProducts, sections } = useCatalogData()
+  // Todos os produtos de uma vez: a chave não muda com o filtro, então navegar entre categorias não refaz a chamada.
+  const { costByProductId, isLoading: isLoadingCosts } = useRecipeCosts(allProducts)
   const selectedCatalog = catalogs.find((catalog) => catalog.id === selectedCatId) ?? null
 
   const [productSearch, setProductSearch] = useState('')
@@ -332,8 +335,6 @@ function CatalogPageContent() {
         unit: duplicateSource.unit,
         catalogId: duplicateSource.catalogId,
         sectionId: duplicateSource.sectionId,
-        preparationTimeMinutes: duplicateSource.preparationTimeMinutes,
-        preparationInstructions: duplicateSource.preparationInstructions,
       }
     : { catalogId: selectedCatId === WITHOUT_CATALOG ? null : selectedCatId }
 
@@ -397,7 +398,13 @@ function CatalogPageContent() {
 
           <div className="px-4">
             <SectionManager />
-            <IngredientManager />
+            <Link
+              to="/stock"
+              className="mt-2 flex min-h-[44px] items-center gap-2 rounded-lg px-3 text-sm font-medium text-gray-600 hover:bg-gray-100"
+            >
+              <Boxes className="h-4 w-4" aria-hidden="true" />
+              Insumos e estoque
+            </Link>
           </div>
         </div>
       </div>
@@ -453,7 +460,7 @@ function CatalogPageContent() {
                 : `${catalogProducts.length} produto${catalogProducts.length !== 1 ? 's' : ''}`}
               {catalogProducts.length > 0 && inactiveCount > 0 && ` · ${inactiveCount} inativo${inactiveCount !== 1 ? 's' : ''}`}
             </p>
-            <ExpiringBatchBadge className="mt-1" />
+            <StockAlertBadges className="mt-1" />
           </div>
           <button
             onClick={openCreateProd}
@@ -564,11 +571,7 @@ function CatalogPageContent() {
                     </div>
                     <div className="sm:text-right flex-shrink-0">
                       <p className="font-bold text-gray-900">{formatBRL(prod.price)}</p>
-                      <RecipeCostBadge
-                        productId={prod.id}
-                        productPrice={prod.price}
-                        costPrice={prod.costPrice}
-                      />
+                      <RecipeCostBadge cost={costByProductId.get(prod.id)} isLoading={isLoadingCosts} />
                       {prod.costPrice && (
                         <p className="text-xs text-gray-300 mt-0.5">
                           Custo cadastrado {formatBRL(prod.costPrice)} · margem{' '}
@@ -745,7 +748,11 @@ function CatalogPageContent() {
                     />
                   )}
                   {prodModal === 'edit' && selectedProd && (
-                    <RecipeManager productId={selectedProd.id} />
+                    <ProductRecipeEditor
+                      productId={selectedProd.id}
+                      productName={selectedProd.name}
+                      price={selectedProd.price}
+                    />
                   )}
                 </>
               )}

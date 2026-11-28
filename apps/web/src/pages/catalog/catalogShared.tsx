@@ -19,8 +19,6 @@ const PRODUCTS_FIELDS = [
   PRODUCT_OPTIONAL_FIELD.UNIT,
   PRODUCT_OPTIONAL_FIELD.BARCODE,
   PRODUCT_OPTIONAL_FIELD.SECTION,
-  PRODUCT_OPTIONAL_FIELD.PREPARATION_TIME,
-  PRODUCT_OPTIONAL_FIELD.PREPARATION_INSTRUCTIONS,
   PRODUCT_OPTIONAL_FIELD.SORT_ORDER,
 ] as const
 
@@ -159,8 +157,6 @@ export function productFormValues(product: Product) {
     barcode: product.barcode,
     catalogId: product.catalogId,
     sectionId: product.sectionId,
-    preparationTimeMinutes: product.preparationTimeMinutes,
-    preparationInstructions: product.preparationInstructions,
     sortOrder: product.sortOrder,
     active: product.active,
   }
@@ -179,8 +175,6 @@ export function productRequestBody(data: ProductFormSubmit) {
     barcode: data.barcode ?? null,
     catalogId: data.catalogId ?? null,
     sectionId: data.sectionId ?? null,
-    preparationTimeMinutes: data.preparationTimeMinutes ?? null,
-    preparationInstructions: data.preparationInstructions ?? null,
     sortOrder: data.sortOrder ?? 0,
     active: data.active ?? true,
   }

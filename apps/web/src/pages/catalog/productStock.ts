@@ -1,10 +1,9 @@
 // Estoque do produto = estoque dos ingredientes da ficha técnica. O produto em si não tem saldo
-// (estoque mora em `stock_batches` por ingrediente), então a página de detalhe mostra quantas
+// (estoque mora por insumo), então a página de detalhe mostra quantas
 // porções o saldo atual dos ingredientes ainda rende.
 //
-// A baixa da API (`DeductStockForOrderUseCase`) tira `quantidade da ficha × itens` do saldo do
-// ingrediente sem converter unidade. A conta daqui segue a mesma regra, para bater com o que vai
-// acontecer de fato, e marca a linha cuja unidade da ficha difere da do ingrediente.
+// O módulo de estoque converte a unidade da ficha para a do insumo antes de baixar; quem chama
+// já entrega `quantityPerPortion` na unidade do insumo.
 
 export interface RecipeStockLine {
   /** Saldo do ingrediente, na unidade do ingrediente. */
@@ -25,9 +24,4 @@ export function portionsFromIngredient(line: RecipeStockLine): number | null {
 export function portionsAvailable(lines: readonly RecipeStockLine[]): number | null {
   const portions = lines.map(portionsFromIngredient).filter((value): value is number => value !== null)
   return portions.length === 0 ? null : Math.min(...portions)
-}
-
-/** Ficha em "g" com ingrediente em "kg": a baixa usaria o número como se fosse kg. */
-export function hasUnitMismatch(line: RecipeStockLine): boolean {
-  return line.stockUnit !== line.recipeUnit
 }

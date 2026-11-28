@@ -6,6 +6,8 @@ import {
   CalendarDays,
   ChefHat,
   ClipboardList,
+  ClipboardCheck,
+  Boxes,
   FileText,
   FolderOpen,
   LayoutDashboard,
@@ -73,6 +75,8 @@ export const NAV_SECTIONS: NavSection[] = [
     label: 'Gestão',
     items: [
       { to: '/catalog', label: 'Cardápio', permission: { resource: 'products', action: 'write' }, icon: BookOpen },
+      { to: '/stock', label: 'Insumos e estoque', permission: { resource: 'products', action: 'write' }, icon: Boxes },
+      { to: '/shopping-list', label: 'Lista de compras', permission: { resource: 'products', action: 'write' }, icon: ClipboardCheck },
       { to: '/finance', label: 'Financeiro', permission: { resource: 'finance', action: 'read' }, icon: Banknote },
       { to: '/fiscal', label: 'Notas Fiscais', permission: { resource: 'fiscal', action: 'read' }, icon: FileText },
       { to: '/reports', label: 'Relatórios', permission: { resource: 'reports', action: 'read' }, icon: BarChart3 },
