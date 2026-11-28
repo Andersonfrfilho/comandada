@@ -9,6 +9,7 @@ import { useAuthStore } from '@/stores/authStore'
 export const SDK_PATH = {
   RECIPES: '/sdk/recipes',
   STOCK: '/sdk/stock',
+  COUPONS: '/sdk/coupons',
 } as const
 
 // Resposta 204 chega como `null`: não há envelope para abrir.
@@ -35,6 +36,11 @@ export function buildQuery(params: Readonly<Record<string, QueryValue>>): string
 
 export async function sdkGet<TData>(path: string): Promise<TData> {
   return unwrap(await api.get<SdkEnvelope<TData>>(path, accessToken()))
+}
+
+/** Listas do `coupon-module` já chegam como `{ data: [...], pagination }`: o corpo inteiro é a página. */
+export function sdkGetPage<TPage>(path: string): Promise<TPage> {
+  return api.get<TPage>(path, accessToken())
 }
 
 export async function sdkPost<TData>(path: string, body: unknown): Promise<TData> {

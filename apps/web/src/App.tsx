@@ -19,6 +19,7 @@ import { CatalogPage } from '@/pages/catalog/CatalogPage'
 import { ProductDetailPage } from '@/pages/catalog/ProductDetailPage'
 import { StockPage } from '@/pages/stock/StockPage'
 import { ShoppingListPage } from '@/pages/shoppingList/ShoppingListPage'
+import { CampaignsPage } from '@/pages/campaigns/CampaignsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { FiscalDocumentsPage } from '@/pages/fiscal/FiscalDocumentsPage'
@@ -273,6 +274,14 @@ export default function App() {
             element={
               <PermissionGate>
                 <ShoppingListPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/campaigns"
+            element={
+              <PermissionGate>
+                <CampaignsPage />
               </PermissionGate>
             }
           />

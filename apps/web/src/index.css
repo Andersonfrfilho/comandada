@@ -28,6 +28,20 @@
     --arc-radius-base: 0.75rem;
     --arc-font-body: system-ui, -apple-system, sans-serif;
   }
+  /* Tokens do @adatechnology/coupons-ui, na mesma paleta. */
+  :root {
+    --acp-accent: rgb(var(--brand-600));
+    --acp-on-accent: #ffffff;
+    --acp-surface: #ffffff;
+    --acp-text: #111827;
+    --acp-muted: #6b7280;
+    --acp-border: #e5e7eb;
+    --acp-danger: #dc2626;
+    --acp-success: #16a34a;
+    --acp-warning: #d97706;
+    --acp-radius-base: 0.75rem;
+    --acp-font-body: system-ui, -apple-system, sans-serif;
+  }
   html {
     font-family: system-ui, -apple-system, sans-serif;
   }

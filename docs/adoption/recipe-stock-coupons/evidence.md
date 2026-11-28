@@ -164,3 +164,41 @@ Origens: encomendas da agenda (`GET /agenda?date=`) de hoje, de amanhã e dos pr
 1. Empresa com estoque desligado não tem como ligá-lo: antes a primeira escrita pelas rotas antigas ligava (`ensureStockEnabledForCompany`), e o painel não as usa mais. Falta uma rota ou configuração para ligar (decisão do dono).
 2. O aviso de validade do painel usa 7 dias fixos; a janela por restaurante (`settings.stock.expiry_alert_days`) não é lida pelo painel.
 3. Combos (`product_components`) não têm ficha própria no `recipe-module`: na lista de compras entram como "sem ficha".
+
+---
+
+# Evidência: fase 4b (cupons: página Campanhas, escopo de serviço, testes do módulo)
+
+- Data: 2026-11-28
+- Ambiente: PostgreSQL 16 e Redis descartáveis (`comandada-rsc-test-pg5`, `comandada-rsc-test-redis5`, removidos ao fim), API local na 3392 com o seed de desenvolvimento, painel no Vite na 4392, Chromium (Playwright) a 1366 e 375 px, `deviceScaleFactor` 2. Nada de staging ou produção. Nenhum desconto é aplicado a pedido: fora de escopo até o dono decidir (nota fiscal, caixa, delivery/mesa, captação).
+
+## O que foi feito
+
+- Página `/campaigns` ("Campanhas", menu Gestão, permissão `settings:write`, a mesma que dá o escopo `coupons:admin`): `CampaignsWorkspace` dentro de `CouponsProvider` (pt-BR, fuso `America/Sao_Paulo`, `renderSelect` com o `Select` do painel via `RecipesSelectField`). Tokens `--acp-*` no `:root`, ligados à marca (`--brand-600`). `LeadCaptureDialog` e `publicApi` **não** foram montados.
+- `lib/couponsSdkApi.ts` (`CouponsAdminApi`) sobre `/sdk/coupons`. Diferença para recipes/stock: as listas do `coupon-module` chegam como `{ data: [...], pagination }` (o corpo todo é a página), por isso `sdkGetPage` em vez do `unwrap`. Exportação por `api.getBlob` (`codes` é o segmento de códigos). Descoberto na verificação visual: o primeiro adaptador desembrulhava a lista e a tela quebrava com `Cannot read properties of undefined (reading 'total')`.
+- Escopos (`moduleScopes.constant.ts`): `orders:write` e `cashier:write` passam a levar `coupons:service`. Esse é o escopo das rotas de serviço do módulo (`/coupons/validate`, `/coupons/quote`, `/coupons/automatic`, `/redemptions`, `/redemptions/release`; aceitam `coupons:service` ou `coupons:admin`). Atendente, garçom, caixa e gerente fecham pedido, então podem cotar; só `settings:write` (admin e gerente) administra campanhas. Cozinha e entregador não recebem nada. Conferido na API: caixa `quote` 200, `GET /campaigns` 403; cozinha `quote` 403.
+- Atenção: `coupons:service` também cobre `POST /redemptions` e `/redemptions/release` (caixa resgatou com 201 no teste). Hoje isso é inofensivo (nenhum pedido chama), mas a rota aceita `orderRef` e itens vindos do cliente: quando o resgate entrar no pedido, o certo é o backend resgatar com o total que ele mesmo calculou e o painel não chamar `/redemptions` direto.
+
+## Testes
+
+- `apps/api`: `bun run typecheck` limpo; `bun test` 310 passam, 91 pulam, 0 falham (sem banco; antes 307/82/0: +3 de escopo, +7 de integração pulados). Com banco (`TEST_DATABASE_URL`, Postgres descartável): `couponModule.integration.test.ts`, 7 de 7 passam: cotação percentual (10% de R$ 100,00 = R$ 10,00, nada gravado); cotação de valor fixo; 10 resgates simultâneos num limite de 3 resultam em 3; liberar devolve o uso; liberar duas vezes não devolve dois; resgatar de novo o mesmo pedido reaproveita a linha (inclusive depois de liberada, sem duplicar); cupom de outra empresa.
+- Cupom de outra empresa: a resposta real **não é 404**. O resgate recusa com 422 `COUPON_NOT_APPLICABLE` e os mesmos `details` de um código que não existe (não revela a campanha); a cotação devolve `valid: false, discountCents: 0` sem lançar. O teste fixa esse comportamento.
+- `apps/web`: `bun run typecheck` limpo; `bun test src` 135 passam (129 + 6 do adaptador); `bun run build` ok.
+
+## Verificação visual (3 campanhas criadas pela API: fixa, lote, agendada)
+
+| Tela | 1366 | 375 |
+|---|---|---|
+| Lista (busca, situação, total, exportar, nova campanha, tabela, itens por página) | `scrollWidth - innerWidth` = 0 | 0 |
+| Campanha aberta: abas Configuração, Códigos, Contatos, Usos, Relatório | 0 | 0 |
+| Editor "Nova campanha" | 0 | 0 |
+| Contatos com filtro de período | 0 | 0 |
+
+- `select`, `input[type=date|time|datetime-local|number]` nativos: 0 em todas as telas. Console e respostas >= 400: nenhum erro nos dois tamanhos.
+- O painel **não tem componente de intervalo de datas da casa** (as telas atuais usam `input type="date"` nativo, ex.: Pedidos). Para não importar controle nativo, o filtro de período usa o padrão do pacote (dois campos com máscara `DD/MM/AAAA`, sem seletor nativo), sem `renderDateRangeInput`. Falta o range da casa (digitável, atalhos, feriados) previsto em `feature-review.md`: vai para o SDK/design system, não para o app.
+- Menu: gerente vê "Campanhas"; caixa não vê e `/campaigns` redireciona para `/cashier`.
+- Prints (2x): `docs/adoption/recipe-stock-coupons/screens/campanhas-1366.png` e `campanhas-375.png`.
+
+## Pendente (decisão do dono)
+
+Resgate/liberação na criação e no cancelamento do pedido, desconto no total, caixa, nota fiscal (NF-e/NFC-e), campo de cupom no painel/cardápio online, cupom no robô do WhatsApp, captação de contatos. Plano de pontos de ligação entregue no relatório da fase.
