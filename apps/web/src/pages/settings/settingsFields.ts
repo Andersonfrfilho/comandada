@@ -29,6 +29,8 @@ export interface SettingSection {
   description: string
 }
 
+export const STOCK_ENABLED_SETTING_KEY = 'stock.enabled'
+
 export const SETTING_SECTIONS: SettingSection[] = [
   { key: 'marca', title: 'Marca', description: 'Como o painel aparece para a equipe e para quem abre o login.' },
   { key: 'estabelecimento', title: 'Dados do restaurante', description: 'Aparecem na saudação do WhatsApp e no cardápio online.' },
@@ -63,6 +65,7 @@ export const SETTING_FIELDS: SettingField[] = [
   { key: 'accept_delivery', label: 'Aceitar entregas', type: 'boolean', section: 'funcionalidades' },
   { key: 'accept_pickup', label: 'Aceitar retirada', type: 'boolean', section: 'funcionalidades' },
   { key: 'accept_table', label: 'Aceitar pedidos na mesa', type: 'boolean', section: 'funcionalidades' },
+  { key: STOCK_ENABLED_SETTING_KEY, label: 'Controlar estoque', type: 'boolean', section: 'funcionalidades', description: 'Desligado, os pedidos não baixam o estoque e as telas de estoque ficam indisponíveis' },
   { key: 'ignore_hours', label: 'Bot atende fora do horário', type: 'boolean', section: 'funcionalidades', description: 'Ligado, o bot atende a qualquer hora (útil para testes)' },
 
   { key: 'currency', label: 'Moeda', type: 'text', section: 'outros', placeholder: 'BRL' },
