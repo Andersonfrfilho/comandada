@@ -1,6 +1,6 @@
 import { competenceBounds } from '@adatechnology/expense-module'
 import { expenseModule } from '@/infra/expenses/expenseModule'
-import { eq, and, gte, lt, lte, sql, desc, inArray } from 'drizzle-orm'
+import { eq, and, gte, lt, lte, sql, desc } from 'drizzle-orm'
 import { localMonthRange, localYearMonth, orderRevenueAmount, revenueOrdersWhere, type DateRange } from '@/modules/reports/shared/revenue'
 import { batches as stockBatches, movements as stockMovements } from '@adatechnology/stock-module'
 import { orderReturnCondition } from '@/modules/products/shared/orderStockMovements'

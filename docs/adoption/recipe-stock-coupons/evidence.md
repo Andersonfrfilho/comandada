@@ -202,3 +202,22 @@ Origens: encomendas da agenda (`GET /agenda?date=`) de hoje, de amanhã e dos pr
 ## Pendente (decisão do dono)
 
 Resgate/liberação na criação e no cancelamento do pedido, desconto no total, caixa, nota fiscal (NF-e/NFC-e), campo de cupom no painel/cardápio online, cupom no robô do WhatsApp, captação de contatos. Plano de pontos de ligação entregue no relatório da fase.
+
+---
+
+# Evidência: fase 5 (resgate só pelo backend, chave de estoque no painel, limpeza)
+
+- Data: 2026-11-28. Nada de staging ou produção.
+
+## O que foi feito
+
+- **Segurança de cupons:** `registerSdkModuleRoutes.ts` filtra a tabela de rotas do `coupon-module` (`selectHttpCouponRoutes`) e não monta `POST /sdk/coupons/redemptions` nem `/redemptions/release`. Quem resgata ou libera é o backend, chamando `couponModule.useCases.redeemCoupon`/release direto, com o total que ele calculou. `/coupons/validate`, `/coupons/quote` e `/coupons/automatic` continuam para a equipe (`coupons:service`). Teste novo (`registerSdkModuleRoutes.test.ts`): as duas rotas não estão na tabela, as três de serviço estão, e com um token de caixa o resgate e a liberação respondem 404 enquanto a cotação passa de autenticação e escopo (não dá 401/403/404).
+- **Chave de estoque:** Configurações → Gerais → "O que o bot aceita" ganhou o interruptor "Controlar estoque" (`stock.enabled`, o mesmo `role="switch"` da página; gravação pelo `PUT /settings`, que exige `settings:write`). Texto: desligado, os pedidos não baixam o estoque e as telas de estoque ficam indisponíveis. Sem valor gravado, o interruptor mostra o estado real (sonda `useStockEnabled`, que reflete o padrão "já usa estoque = ligado"), não "desligado". Ao salvar, a consulta `sdk-stock-enabled` é invalidada. O resolvedor da API já dá prioridade ao valor explícito (`stockEnabled.ts`, coberto por `stockEnabled.test.ts`).
+- **Limpeza:** `ingredientId()` do seed do catálogo (sobrou da fase 3) e `inArray` do `ExpenseController`. Os demais avisos de `noUnusedLocals` nos arquivos da branch já existiam em `main` (container, `authenticate`) e ficaram.
+- **Título duplicado "Insumos":** o `IngredientsWorkspace` só aceita `renderRowActions`; o título vem do locale (`ingredientsTitle`). Sem prop para esconder, **não alterado**.
+- **Dados de cliente:** nenhuma linha adicionada na branch cita nome, telefone, CNPJ/CPF ou e-mail reais; só IDs sintéticos e `example.com`. Já existiam em `main` (não são desta branch) testes de integração com o nome "Yuyaki" e e-mails `@yuyaki.test`, e o script `db:seed:yuyaki`: contrariam `generic-products.md` e merecem limpeza própria. Prints em `screens/` vêm do seed de desenvolvimento (não abertos um a um nesta fase).
+
+## Testes
+
+- `apps/api`: typecheck limpo; `bun test` 313 passam, 91 pulam, 0 falham. `apps/web`: typecheck limpo; `bun test src` 135 passam; `bun run build` ok.
+- Não verificado no navegador: o interruptor novo (só typecheck e build).

@@ -17,10 +17,6 @@ function productId(index: number): string {
   return `00000000-0000-0000-0010-${String(index).padStart(12, '0')}`
 }
 
-function ingredientId(index: number): string {
-  return `00000000-0000-0000-0011-${String(index).padStart(12, '0')}`
-}
-
 const CATALOGS = [
   { name: 'Comidas', slug: 'comidas' },
   { name: 'Bebidas', slug: 'bebidas' },
