@@ -1,16 +1,14 @@
-import { eq, and, sum, gte, sql, desc, inArray } from 'drizzle-orm'
+import { eq, and, sum, gte, sql, desc } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import * as schema from '@/infra/database/schema'
-import { ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT } from '@/modules/products/shared/orderStockConsumption'
+import { ingredients as recipeIngredients } from '@adatechnology/recipe-module'
+import { movements } from '@adatechnology/stock-module'
+import { orderDeductionCondition, orderReturnCondition } from '@/modules/products/shared/orderStockMovements'
 
 type Database = NodePgDatabase<typeof schema>
 
-// Baixa de estoque por pedido, gravada pelo `DeductStockForOrderUseCase`. O
-// ranking media `consumption`, que nenhum ponto do sistema escreve — a lista
-// vinha sempre vazia, e a tela dizia "sem consumo" com o estoque baixando.
-// Cancelado devolve a baixa (`return`), então o consumo é a saída menos o que voltou.
-const CONSUMPTION_MOVEMENT_TYPES = [ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT]
-const netConsumption = sql`CASE WHEN ${schema.stockMovements.movementType} = ${ORDER_RETURN_MOVEMENT} THEN -${schema.stockMovements.quantity} ELSE ${schema.stockMovements.quantity} END`
+// Consumo = saída de pedido (`out`, delta negativo) menos a devolução por cancelamento (entrada ligada a pedido).
+const netConsumption = sql`-${movements.delta}`
 
 interface IngredientsRankingInput {
   establishmentId: string
@@ -58,19 +56,19 @@ export class GetIngredientsRankingUseCase {
 
     const topIngredients = await this.db
       .select({
-        ingredientId: schema.stockMovements.ingredientId,
-        ingredientName: schema.ingredients.name,
+        ingredientId: movements.ingredientId,
+        ingredientName: recipeIngredients.name,
         totalQuantityUsed: sql<string>`ROUND(SUM(${netConsumption})::numeric, 2)`,
-        movementCount: sql<number>`CAST(COUNT(*) FILTER (WHERE ${schema.stockMovements.movementType} = ${ORDER_CONSUMPTION_MOVEMENT}) AS INTEGER)`,
+        movementCount: sql<number>`CAST(COUNT(*) FILTER (WHERE ${orderDeductionCondition}) AS INTEGER)`,
       })
-      .from(schema.stockMovements)
-      .innerJoin(schema.ingredients, eq(schema.stockMovements.ingredientId, schema.ingredients.id))
+      .from(movements)
+      .innerJoin(recipeIngredients, and(eq(movements.ingredientId, recipeIngredients.id), eq(movements.companyId, recipeIngredients.companyId)))
       .where(and(
-        eq(schema.stockMovements.establishmentId, establishmentId),
-        inArray(schema.stockMovements.movementType, CONSUMPTION_MOVEMENT_TYPES),
-        gte(schema.stockMovements.createdAt, from),
+        eq(movements.companyId, establishmentId),
+        sql`(${orderDeductionCondition} OR ${orderReturnCondition})`,
+        gte(movements.createdAt, from),
       ))
-      .groupBy(schema.stockMovements.ingredientId, schema.ingredients.name)
+      .groupBy(movements.ingredientId, recipeIngredients.name)
       .having(sql`SUM(${netConsumption}) > 0`)
       .orderBy(desc(sql`SUM(${netConsumption})`))
       .limit(10)

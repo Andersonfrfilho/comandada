@@ -2,7 +2,8 @@ import { competenceBounds } from '@adatechnology/expense-module'
 import { expenseModule } from '@/infra/expenses/expenseModule'
 import { eq, and, gte, lt, lte, sql, desc, inArray } from 'drizzle-orm'
 import { localMonthRange, localYearMonth, orderRevenueAmount, revenueOrdersWhere, type DateRange } from '@/modules/reports/shared/revenue'
-import { ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT } from '@/modules/products/shared/orderStockConsumption'
+import { batches as stockBatches, movements as stockMovements } from '@adatechnology/stock-module'
+import { orderReturnCondition } from '@/modules/products/shared/orderStockMovements'
 import { z } from 'zod'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
 import type { RouteHandler } from '@/infra/http/router'
@@ -365,18 +366,17 @@ export class ExpenseController {
    * por cancelamento. Entrada de compra não é custo aqui: ela vira custo quando é consumida.
    */
   private async stockCostBetween(establishmentId: string, range: DateRange): Promise<number> {
-    const signedCost = sql`CASE WHEN ${schema.stockMovements.movementType} = ${ORDER_RETURN_MOVEMENT}
-      THEN -(${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit})
-      ELSE ${schema.stockMovements.quantity} * ${schema.stockBatches.costPerUnit} END`
+    // `delta` tem sinal: saída e perda são negativas (custo positivo) e a devolução é positiva (custo negativo).
+    const signedCost = sql`-(${stockMovements.delta} * ${stockBatches.costPerUnit})`
     const [row] = await this.db
       .select({ total: sql<string>`COALESCE(SUM(${signedCost}), 0)` })
-      .from(schema.stockMovements)
-      .innerJoin(schema.stockBatches, eq(schema.stockMovements.batchId, schema.stockBatches.id))
+      .from(stockMovements)
+      .innerJoin(stockBatches, eq(stockMovements.batchId, stockBatches.id))
       .where(and(
-        eq(schema.stockMovements.establishmentId, establishmentId),
-        inArray(schema.stockMovements.movementType, [ORDER_CONSUMPTION_MOVEMENT, ORDER_RETURN_MOVEMENT, 'loss']),
-        gte(schema.stockMovements.createdAt, range.from),
-        lt(schema.stockMovements.createdAt, range.to),
+        eq(stockMovements.companyId, establishmentId),
+        sql`(${stockMovements.kind} IN ('out', 'loss') OR ${orderReturnCondition})`,
+        gte(stockMovements.createdAt, range.from),
+        lt(stockMovements.createdAt, range.to),
       ))
     return Number(row?.total ?? 0)
   }
