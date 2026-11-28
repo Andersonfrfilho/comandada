@@ -47,6 +47,7 @@ import { registerPaymentRoutes } from '@/modules/payments/infra/http/PaymentRout
 import { registerMarketplaceRoutes } from '@/modules/marketplaces/infra/http/MarketplaceRoutes'
 import { STALE_CHARGE_SWEEP_INTERVAL_MS } from '@/modules/payments/shared/payments.constant'
 import { registerOrderIssueRoutes } from '@/modules/issues/infra/http/OrderIssueRoutes'
+import { registerSdkModuleRoutes } from '@/infra/modules/registerSdkModuleRoutes'
 import { registerAgendaRoutes } from '@/modules/agenda/infra/http/AgendaRoutes'
 import { LocalStorageProvider } from '@/shared/providers/LocalStorageProvider'
 import { generateOpenAPISpec } from '@/infra/docs/openapi'
@@ -162,6 +163,7 @@ export async function createServer() {
   registerMarketplaceRoutes(router, container.marketplaceWebhookController, container.marketplacePanelController)
   registerOrderIssueRoutes(router, container.orderIssueController)
   registerAgendaRoutes(router, container.agendaController)
+  registerSdkModuleRoutes(router)
 
   // Serve uploaded files (public)
   const storageProvider = new LocalStorageProvider()

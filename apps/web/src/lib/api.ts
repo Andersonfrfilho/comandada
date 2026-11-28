@@ -2,6 +2,8 @@ import { getApiUrl } from './apiEndpoints'
 
 interface ApiOptions extends RequestInit {
   token?: string
+  /** Arquivo de exportação: devolve o `Blob` em vez de ler JSON. */
+  asBlob?: boolean
 }
 
 interface AuthBridge {
@@ -47,7 +49,7 @@ function buildHeaders(fetchOptions: RequestInit, token?: string): Record<string,
 }
 
 async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
-  const { token, ...fetchOptions } = options
+  const { token, asBlob, ...fetchOptions } = options
 
   let response = await fetch(`${getApiUrl()}${path}`, {
     ...fetchOptions,
@@ -78,26 +80,45 @@ async function request<T>(path: string, options: ApiOptions = {}): Promise<T> {
     }
   }
 
+  if (asBlob && response.ok) return (await response.blob()) as T
+
   const data: unknown = await response.json().catch(() => null)
   const body = typeof data === 'object' && data !== null ? (data as Record<string, unknown>) : {}
 
   if (!response.ok) {
+    // Módulos do SDK respondem `{ error: { code, message } }`; as rotas do painel, `{ error, message }`.
+    const envelope = readErrorEnvelope(body['error'])
+    const serverMessage = envelope?.message ?? body['message']
     // Erro do servidor vem em inglês ("An internal error occurred"); a equipe precisa de uma frase que diga o que fazer.
     const message =
-      response.status >= 500 || typeof body['message'] !== 'string'
+      response.status >= 500 || typeof serverMessage !== 'string'
         ? 'Não deu certo agora. Tente de novo em instantes.'
-        : body['message']
-    throw new ApiError(message, response.status, typeof body['error'] === 'string' ? body['error'] : undefined)
+        : serverMessage
+    const code = envelope?.code ?? (typeof body['error'] === 'string' ? body['error'] : undefined)
+    throw new ApiError(message, response.status, code, data)
   }
 
   return data as T
+}
+
+type ErrorEnvelope = { readonly code?: string; readonly message?: string }
+
+function readErrorEnvelope(value: unknown): ErrorEnvelope | undefined {
+  if (typeof value !== 'object' || value === null) return undefined
+  const { code, message } = value as Record<string, unknown>
+  return {
+    ...(typeof code === 'string' ? { code } : {}),
+    ...(typeof message === 'string' ? { message } : {}),
+  }
 }
 
 export class ApiError extends Error {
   constructor(
     message: string,
     public readonly status: number,
-    public readonly code?: string
+    public readonly code?: string,
+    /** Corpo da resposta: o `readErrorCode` do SDK lê `body.error.code` daqui. */
+    public readonly body?: unknown
   ) {
     super(message)
     this.name = 'ApiError'
@@ -113,4 +134,7 @@ export const api = {
   patch: <T>(path: string, body: unknown, token?: string) =>
     request<T>(path, { method: 'PATCH', body: JSON.stringify(body), token }),
   delete: <T>(path: string, token?: string) => request<T>(path, { method: 'DELETE', token }),
+  getBlob: (path: string, token?: string) => request<Blob>(path, { method: 'GET', token, asBlob: true }),
+  postBlob: (path: string, body: unknown, token?: string) =>
+    request<Blob>(path, { method: 'POST', body: JSON.stringify(body), token, asBlob: true }),
 }

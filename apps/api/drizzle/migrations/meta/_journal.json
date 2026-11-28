@@ -421,6 +421,13 @@
       "when": 1786039200000,
       "tag": "0060_marketplace_disputes",
       "breakpoints": true
+    },
+    {
+      "idx": 60,
+      "version": "7",
+      "when": 1786039800000,
+      "tag": "0061_recipe_stock_sdk",
+      "breakpoints": true
     }
   ]
 }

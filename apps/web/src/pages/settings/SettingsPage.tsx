@@ -6,6 +6,7 @@ import { useBrandingStore } from '@/stores/brandingStore'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/authStore'
 import { api } from '@/lib/api'
+import { STOCK_ENABLED_QUERY_KEY, useStockEnabled } from '@/hooks/useStockEnabled'
 import { Button } from '@/components/ui/Button'
 import { FiscalSettingsPage } from './FiscalSettingsPage'
 import { DeliveryFeeManager } from './components/DeliveryFeeManager'
@@ -13,6 +14,7 @@ import { OnlinePaymentSettings } from './components/OnlinePaymentSettings'
 import {
   SETTING_FIELDS,
   SETTING_SECTIONS,
+  STOCK_ENABLED_SETTING_KEY,
   WEEK_DAYS,
   parseSettingValue,
   parseWorkingDays,
@@ -60,6 +62,7 @@ export function SettingsPage() {
     setSearchParams(next === 'gerais' ? {} : { aba: next }, { replace: true })
   }
 
+  const { isEnabled: isStockEnabledNow } = useStockEnabled()
   const [values, setValues] = useState<Record<string, string>>({})
   const [saving, setSaving] = useState(false)
   const [saved, setSaved] = useState(false)
@@ -93,6 +96,8 @@ export function SettingsPage() {
   })
 
   function savedValue(field: SettingField): string {
+    // Sem valor gravado, o servidor decide pelo uso: mostra o estado real, não "desligado".
+    if (field.key === STOCK_ENABLED_SETTING_KEY && !(field.key in settings)) return String(isStockEnabledNow)
     if (field.key in settings) return settingToString(settings[field.key])
     return field.type === 'boolean' ? 'false' : ''
   }
@@ -126,6 +131,7 @@ export function SettingsPage() {
         )
       )
       await queryClient.invalidateQueries({ queryKey: ['settings'] })
+      await queryClient.invalidateQueries({ queryKey: STOCK_ENABLED_QUERY_KEY })
       if (accessToken) void loadBrandingForEstablishment(accessToken)
       setSaved(true)
       setTimeout(() => setSaved(false), 3000)

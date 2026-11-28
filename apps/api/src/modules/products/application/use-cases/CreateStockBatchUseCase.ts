@@ -1,10 +1,23 @@
-import { eq, and } from 'drizzle-orm'
+import { and, desc, eq } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
+import type { RecipeModule } from '@adatechnology/recipe-module'
+import { batches, type StockModule } from '@adatechnology/stock-module'
+
 import * as schema from '@/infra/database/schema'
 import type { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/CreateAuditLogUseCase'
-import { NotFoundError } from '@/shared/errors/AppError'
+import { toLegacyStockBatch, type LegacyStockBatch } from '../../shared/legacyStockShapes'
 
 type Database = NodePgDatabase<typeof schema>
+
+const DECIMAL_SCALE = 4
+
+export type CreateStockBatchDependencies = {
+  readonly db: Database
+  readonly recipes: RecipeModule
+  readonly stock: StockModule
+  readonly createAuditLogUseCase: CreateAuditLogUseCase
+  readonly ensureStockEnabled: (establishmentId: string) => Promise<void>
+}
 
 export interface CreateStockBatchInput {
   establishmentId: string
@@ -16,108 +29,91 @@ export interface CreateStockBatchInput {
   userId?: string
 }
 
-export interface CreateStockBatchResult {
-  id: string
-  ingredientId: string
-  batchNumber: string
-  quantity: string
-  remainingQuantity: string
-  costPerUnit: string
-  expiresAt: Date
+// Custo médio ponderado sobre o saldo total: o `costPerUnit` do insumo é o que a ficha usa para estimar
+// o custo do produto, então uma entrada mais cara ou mais barata tem de mover esse custo. Saldo negativo conta como zero.
+function weightedAverageCost(params: {
+  readonly currentQuantity: number
+  readonly currentCost: number
+  readonly incomingQuantity: number
+  readonly incomingCost: number
+}): number {
+  const currentQuantity = Math.max(params.currentQuantity, 0)
+  const totalQuantity = currentQuantity + params.incomingQuantity
+  if (totalQuantity === 0) return params.incomingCost
+  return (currentQuantity * params.currentCost + params.incomingQuantity * params.incomingCost) / totalQuantity
 }
 
-// Custo médio ponderado sobre o saldo total: uma entrada mais barata ou mais cara move o custo do
-// ingrediente na direção certa sem descartar o histórico dos lotes anteriores. `costPerUnit` do
-// ingrediente é o que a ficha técnica usa para estimar o custo do produto — errar aqui contamina
-// toda margem exibida no catálogo.
-function weightedAverageCost(
-  currentQuantity: number,
-  currentCost: number,
-  incomingQuantity: number,
-  incomingCost: number
-): number {
-  const totalQuantity = currentQuantity + incomingQuantity
-  if (totalQuantity === 0) return incomingCost
-  return (currentQuantity * currentCost + incomingQuantity * incomingCost) / totalQuantity
-}
-
+/** Entrada de lote pelo painel antigo: o módulo de estoque recebe o lote; o custo médio do insumo segue aqui. */
 export class CreateStockBatchUseCase {
-  constructor(
-    private readonly db: Database,
-    private readonly createAuditLogUseCase: CreateAuditLogUseCase
-  ) {}
+  private readonly db: Database
+  private readonly recipes: RecipeModule
+  private readonly stock: StockModule
+  private readonly createAuditLogUseCase: CreateAuditLogUseCase
+  private readonly ensureStockEnabled: (establishmentId: string) => Promise<void>
 
-  async execute(input: CreateStockBatchInput): Promise<CreateStockBatchResult> {
-    const ingredient = await this.db.query.ingredients.findFirst({
-      where: and(
-        eq(schema.ingredients.id, input.ingredientId),
-        eq(schema.ingredients.establishmentId, input.establishmentId)
-      ),
-    })
-    if (!ingredient) throw new NotFoundError('Ingrediente')
+  constructor(dependencies: CreateStockBatchDependencies) {
+    this.db = dependencies.db
+    this.recipes = dependencies.recipes
+    this.stock = dependencies.stock
+    this.createAuditLogUseCase = dependencies.createAuditLogUseCase
+    this.ensureStockEnabled = dependencies.ensureStockEnabled
+  }
 
-    const currentQuantity = Number(ingredient.stockQuantity)
-    const currentCost = Number(ingredient.costPerUnit)
-    const newCost = weightedAverageCost(currentQuantity, currentCost, input.quantity, input.costPerUnit)
+  async execute(input: CreateStockBatchInput): Promise<LegacyStockBatch> {
+    const { establishmentId, ingredientId } = input
+    const actor = input.userId ? { actorId: input.userId } : {}
 
-    const batch = await this.db.transaction(async (tx) => {
-      const [insertedBatch] = await tx
-        .insert(schema.stockBatches)
-        .values({
-          establishmentId: input.establishmentId,
-          ingredientId: input.ingredientId,
-          batchNumber: input.batchNumber,
-          quantity: String(input.quantity),
-          remainingQuantity: String(input.quantity),
-          costPerUnit: String(input.costPerUnit),
-          expiresAt: input.expiresAt,
-        })
-        .returning()
+    const ingredient = await this.recipes.useCases.getIngredient.execute({ companyId: establishmentId, id: ingredientId })
+    await this.ensureStockEnabled(establishmentId)
+    const levelBefore = await this.stock.useCases.getLevel.execute({ companyId: establishmentId, ingredientId })
 
-      await tx.insert(schema.stockMovements).values({
-        establishmentId: input.establishmentId,
-        ingredientId: input.ingredientId,
-        batchId: insertedBatch!.id,
-        movementType: 'in',
-        quantity: String(input.quantity),
+    await this.stock.useCases.receiveBatch.execute({
+      companyId: establishmentId,
+      ...actor,
+      input: {
+        ingredientId,
+        quantity: input.quantity.toFixed(DECIMAL_SCALE),
+        batchCode: input.batchNumber,
+        costPerUnit: input.costPerUnit.toFixed(DECIMAL_SCALE),
+        expiresAt: input.expiresAt.toISOString(),
         reason: `Entrada de lote ${input.batchNumber}`,
-        ...(input.userId ? { userId: input.userId } : {}),
-      })
-
-      await tx
-        .update(schema.ingredients)
-        .set({
-          stockQuantity: String(currentQuantity + input.quantity),
-          costPerUnit: String(newCost),
-          updatedAt: new Date(),
-        })
-        .where(eq(schema.ingredients.id, input.ingredientId))
-
-      return insertedBatch!
+      },
     })
+
+    const newCost = weightedAverageCost({
+      currentQuantity: Number(levelBefore.quantity),
+      currentCost: Number(ingredient.costPerUnit),
+      incomingQuantity: input.quantity,
+      incomingCost: input.costPerUnit,
+    })
+    await this.recipes.useCases.updateIngredient.execute({
+      companyId: establishmentId,
+      ...actor,
+      id: ingredientId,
+      input: { costPerUnit: newCost.toFixed(DECIMAL_SCALE) },
+    })
+
+    const [batch] = await this.db
+      .select()
+      .from(batches)
+      .where(and(eq(batches.companyId, establishmentId), eq(batches.ingredientId, ingredientId), eq(batches.batchCode, input.batchNumber)))
+      .orderBy(desc(batches.receivedAt))
+      .limit(1)
 
     await this.createAuditLogUseCase.execute({
-      establishmentId: input.establishmentId,
-      ...(input.userId ? { userId: input.userId } : {}),
+      establishmentId,
+      ...actor,
       action: 'stock_batch.created',
       resourceType: 'stock_batch',
-      resourceId: batch.id,
+      resourceId: batch!.id,
       metadata: {
-        ingredientId: input.ingredientId,
+        ingredientId,
         batchNumber: input.batchNumber,
         quantity: input.quantity,
         costPerUnit: input.costPerUnit,
       },
     })
 
-    return {
-      id: batch.id,
-      ingredientId: batch.ingredientId,
-      batchNumber: batch.batchNumber,
-      quantity: batch.quantity,
-      remainingQuantity: batch.remainingQuantity,
-      costPerUnit: batch.costPerUnit,
-      expiresAt: batch.expiresAt,
-    }
+    return toLegacyStockBatch(batch!)
   }
 }

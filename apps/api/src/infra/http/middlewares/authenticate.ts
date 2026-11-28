@@ -24,14 +24,7 @@ function isAuthPayload(payload: JWTPayload): payload is AuthPayload {
   )
 }
 
-export const authenticate: Middleware = async (request, response, next) => {
-  const authHeader = request.headers['authorization']
-  if (!authHeader?.startsWith('Bearer ')) {
-    throw new UnauthorizedError('missing_token')
-  }
-
-  const token = authHeader.slice(7)
-
+export async function verifyAccessToken(token: string): Promise<AuthenticatedUser> {
   let payload: JWTPayload
   try {
     const result = await jwtVerify(token, JWT_SECRET, {
@@ -46,7 +39,7 @@ export const authenticate: Middleware = async (request, response, next) => {
     throw new UnauthorizedError('invalid_token')
   }
 
-  const user: AuthenticatedUser = {
+  return {
     id: payload.sub,
     establishmentId: payload.establishmentId,
     email: payload.email,
@@ -54,6 +47,15 @@ export const authenticate: Middleware = async (request, response, next) => {
     role: payload.role,
     permissions: payload.permissions,
   }
+}
+
+export const authenticate: Middleware = async (request, response, next) => {
+  const authHeader = request.headers['authorization']
+  if (!authHeader?.startsWith('Bearer ')) {
+    throw new UnauthorizedError('missing_token')
+  }
+
+  const user = await verifyAccessToken(authHeader.slice(7))
 
   request.user = user
   request.establishmentId = user.establishmentId

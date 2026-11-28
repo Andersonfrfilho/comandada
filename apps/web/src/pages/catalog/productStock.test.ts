@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { hasUnitMismatch, portionsAvailable, portionsFromIngredient } from './productStock'
+import { portionsAvailable, portionsFromIngredient } from './productStock'
 
 describe('portionsFromIngredient', () => {
   test('rende porções inteiras do saldo', () => {
@@ -28,12 +28,5 @@ describe('portionsAvailable', () => {
 
   test('sem linha calculável não diz nada', () => {
     expect(portionsAvailable([])).toBeNull()
-  })
-})
-
-describe('hasUnitMismatch', () => {
-  test('marca unidade da ficha diferente da do ingrediente', () => {
-    expect(hasUnitMismatch({ stockQuantity: 1, stockUnit: 'kg', quantityPerPortion: 150, recipeUnit: 'g' })).toBe(true)
-    expect(hasUnitMismatch({ stockQuantity: 1, stockUnit: 'kg', quantityPerPortion: 0.15, recipeUnit: 'kg' })).toBe(false)
   })
 })

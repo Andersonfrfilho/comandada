@@ -21,6 +21,12 @@ export interface AgendaScheduledOrder {
   readonly totalAmount: string
   readonly customerName: string | null
   readonly itemsSummary: string
+  readonly items: readonly AgendaScheduledOrderItem[]
+}
+
+export interface AgendaScheduledOrderItem {
+  readonly productId: string
+  readonly quantity: number
 }
 
 export interface AgendaReservation {
@@ -77,6 +83,7 @@ export class GetAgendaDayUseCase {
       totalAmount: order.totalAmount,
       customerName: order.customer?.name ?? order.customerName ?? null,
       itemsSummary: order.items.map((item) => `${item.quantity}× ${item.productName}`).join(', '),
+      items: order.items.flatMap((item) => (item.productId ? [{ productId: item.productId, quantity: item.quantity }] : [])),
     }))
   }
 

@@ -1,9 +1,13 @@
-import { eq, and, gte, sql, isNotNull } from 'drizzle-orm'
+import { eq, and, gte, like, sql, isNotNull } from 'drizzle-orm'
 import { db } from '../connection'
 import * as schema from '../schema'
 import { CreateAuditLogUseCase } from '@/modules/audit/application/use-cases/CreateAuditLogUseCase'
 import { CreateStockBatchUseCase } from '@/modules/products/application/use-cases/CreateStockBatchUseCase'
-import { DeductStockForOrderUseCase } from '@/modules/products/application/use-cases/DeductStockForOrderUseCase'
+import { DeductOrderStockUseCase } from '@/modules/products/application/use-cases/DeductOrderStockUseCase'
+import { recipeModule, stockModule } from '@/infra/recipes/recipeStockModules'
+import { ensureStockEnabledForCompany } from '@/infra/recipes/stockEnabled'
+import { ORDER_DEDUCTION_KEY_PREFIX } from '@/modules/products/shared/orderStockMovements'
+import { movements } from '@adatechnology/stock-module'
 
 /**
  * Baixa de estoque dos pedidos recentes, para o ranking de ingredientes ter o
@@ -26,40 +30,47 @@ type SeedStockConsumptionParams = {
 async function replenishForWindow(establishmentId: string, from: Date): Promise<void> {
   const required = await db
     .select({
-      ingredientId: schema.productIngredients.ingredientId,
-      quantity: sql<string>`SUM(${schema.productIngredients.quantity} * ${schema.orderItems.quantity})`,
+      productId: schema.orderItems.productId,
+      quantity: sql<string>`SUM(${schema.orderItems.quantity})`,
     })
     .from(schema.orders)
     .innerJoin(schema.orderItems, eq(schema.orderItems.orderId, schema.orders.id))
-    .innerJoin(schema.productIngredients, eq(schema.productIngredients.productId, schema.orderItems.productId))
     .where(and(
       eq(schema.orders.establishmentId, establishmentId),
       eq(schema.orders.status, 'completed'),
       gte(schema.orders.receivedAt, from),
     ))
-    .groupBy(schema.productIngredients.ingredientId)
+    .groupBy(schema.orderItems.productId)
 
-  const createStockBatchUseCase = new CreateStockBatchUseCase(db, new CreateAuditLogUseCase(db))
+  const soldByProduct = new Map(required.flatMap((row) => (row.productId ? [[row.productId, Number(row.quantity)] as const] : [])))
+  const { recipes, ingredients } = await recipeModule.useCases.lookupRecipes.execute({ companyId: establishmentId, productIds: [...soldByProduct.keys()] })
+  const quantityByIngredient = new Map<string, number>()
+  for (const recipe of recipes) {
+    for (const line of recipe.lines) {
+      const needed = Number(line.quantity) * (soldByProduct.get(recipe.productId) ?? 0)
+      quantityByIngredient.set(line.ingredientId, (quantityByIngredient.get(line.ingredientId) ?? 0) + needed)
+    }
+  }
 
-  for (const line of required) {
-    const batchNumber = `${REPLENISHMENT_BATCH_PREFIX}-${line.ingredientId.slice(-4)}`
-    const alreadyReplenished = await db.query.stockBatches.findFirst({
-      where: (batches, { eq: equals, and: both }) =>
-        both(equals(batches.establishmentId, establishmentId), equals(batches.batchNumber, batchNumber)),
-      columns: { id: true },
+  const createStockBatchUseCase = new CreateStockBatchUseCase({ db, recipes: recipeModule, stock: stockModule, createAuditLogUseCase: new CreateAuditLogUseCase(db), ensureStockEnabled: ensureStockEnabledForCompany })
+
+  for (const ingredient of ingredients) {
+    const quantity = quantityByIngredient.get(ingredient.id)
+    if (quantity === undefined) continue
+    const batchNumber = `${REPLENISHMENT_BATCH_PREFIX}-${ingredient.id.slice(-4)}`
+    const batches = await stockModule.useCases.listBatches.execute({
+      companyId: establishmentId,
+      query: { ingredientId: ingredient.id, onlyWithRemaining: false, page: 1, pageSize: 100 },
     })
-    if (alreadyReplenished) continue
+    if (batches.data.some((batch) => batch.batchCode === batchNumber)) continue
 
-    const ingredient = await db.query.ingredients.findFirst({
-      where: eq(schema.ingredients.id, line.ingredientId),
-      columns: { minimumStock: true },
-    })
+    const level = await stockModule.useCases.getLevel.execute({ companyId: establishmentId, ingredientId: ingredient.id })
 
     await createStockBatchUseCase.execute({
       establishmentId,
-      ingredientId: line.ingredientId,
+      ingredientId: ingredient.id,
       batchNumber,
-      quantity: Number(line.quantity) * REPLENISHMENT_SAFETY_FACTOR + Number(ingredient?.minimumStock ?? 0),
+      quantity: quantity * REPLENISHMENT_SAFETY_FACTOR + Number(level.minimumQuantity ?? 0),
       costPerUnit: 1,
       expiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
     })
@@ -83,7 +94,7 @@ export async function seedStockConsumption({ establishmentId }: SeedStockConsump
 
   // O use-case é idempotente por pedido, então rodar o seed de novo não duplica
   // baixa nem derruba o saldo uma segunda vez.
-  const deductStock = new DeductStockForOrderUseCase(db)
+  const deductStock = new DeductOrderStockUseCase(db, stockModule.useCases.deductOrder)
   for (const order of recentOrders) {
     await deductStock.execute({ orderId: order.id, establishmentId })
 
@@ -91,9 +102,9 @@ export async function seedStockConsumption({ establishmentId }: SeedStockConsump
     // de um pedido de anteontem aparece como movimento de agora no histórico.
     if (order.productionStartedAt) {
       await db
-        .update(schema.stockMovements)
+        .update(movements)
         .set({ createdAt: order.productionStartedAt })
-        .where(eq(schema.stockMovements.orderId, order.id))
+        .where(and(eq(movements.companyId, establishmentId), like(movements.sourceKey, `${ORDER_DEDUCTION_KEY_PREFIX}${order.id}:%`)))
     }
   }
 }

@@ -14,6 +14,34 @@
     --brand-600: 14 124 102;
     --brand-700: 11 99 82;
   }
+  /* Tokens do @adatechnology/recipes-ui e stock-ui na paleta do painel (a marca do restaurante entra por --brand-*). */
+  :root {
+    --arc-accent: rgb(var(--brand-600));
+    --arc-on-accent: #ffffff;
+    --arc-surface: #ffffff;
+    --arc-text: #111827;
+    --arc-muted: #6b7280;
+    --arc-border: #e5e7eb;
+    --arc-danger: #dc2626;
+    --arc-success: #16a34a;
+    --arc-warning: #d97706;
+    --arc-radius-base: 0.75rem;
+    --arc-font-body: system-ui, -apple-system, sans-serif;
+  }
+  /* Tokens do @adatechnology/coupons-ui, na mesma paleta. */
+  :root {
+    --acp-accent: rgb(var(--brand-600));
+    --acp-on-accent: #ffffff;
+    --acp-surface: #ffffff;
+    --acp-text: #111827;
+    --acp-muted: #6b7280;
+    --acp-border: #e5e7eb;
+    --acp-danger: #dc2626;
+    --acp-success: #16a34a;
+    --acp-warning: #d97706;
+    --acp-radius-base: 0.75rem;
+    --acp-font-body: system-ui, -apple-system, sans-serif;
+  }
   html {
     font-family: system-ui, -apple-system, sans-serif;
   }

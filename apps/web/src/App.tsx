@@ -17,6 +17,9 @@ import { StaffPage } from '@/pages/staff/StaffPage'
 import { RolesPage } from '@/pages/staff/RolesPage'
 import { CatalogPage } from '@/pages/catalog/CatalogPage'
 import { ProductDetailPage } from '@/pages/catalog/ProductDetailPage'
+import { StockPage } from '@/pages/stock/StockPage'
+import { ShoppingListPage } from '@/pages/shoppingList/ShoppingListPage'
+import { CampaignsPage } from '@/pages/campaigns/CampaignsPage'
 import { ReportsPage } from '@/pages/reports/ReportsPage'
 import { SettingsPage } from '@/pages/settings/SettingsPage'
 import { FiscalDocumentsPage } from '@/pages/fiscal/FiscalDocumentsPage'
@@ -38,6 +41,7 @@ import { ConfirmHost } from '@/components/ui/ConfirmHost'
 import { useOperationAlerts } from '@/hooks/useOperationAlerts'
 import { useEffect } from 'react'
 import { AppFooter } from '@/components/brand/AppFooter'
+import { RecipesStockProviders } from '@/components/recipes/RecipesStockProviders'
 import { useAuthStore } from '@/stores/authStore'
 import { useBrandingStore } from '@/stores/brandingStore'
 
@@ -57,7 +61,9 @@ function AppLayout() {
         <div className="flex min-h-full flex-col">
           <div className="flex-1">
             <AccessDeniedBanner />
-            <Outlet />
+            <RecipesStockProviders>
+              <Outlet />
+            </RecipesStockProviders>
           </div>
           <AppFooter />
         </div>
@@ -252,6 +258,30 @@ export default function App() {
             element={
               <PermissionGate>
                 <ProductDetailPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/stock"
+            element={
+              <PermissionGate>
+                <StockPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/shopping-list"
+            element={
+              <PermissionGate>
+                <ShoppingListPage />
+              </PermissionGate>
+            }
+          />
+          <Route
+            path="/campaigns"
+            element={
+              <PermissionGate>
+                <CampaignsPage />
               </PermissionGate>
             }
           />

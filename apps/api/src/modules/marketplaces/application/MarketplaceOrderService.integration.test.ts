@@ -6,6 +6,7 @@ import { eq, sql } from 'drizzle-orm'
 import { Pool } from 'pg'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { CreateOrderUseCase } from '@/modules/orders/application/use-cases/CreateOrderUseCase'
 import { UpdateOrderStatusUseCase } from '@/modules/orders/application/use-cases/UpdateOrderStatusUseCase'
 import {
@@ -142,6 +143,7 @@ describe.skipIf(!DATABASE_URL)('Pedidos de marketplace (Postgres)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../drizzle/migrations') })
   })
 

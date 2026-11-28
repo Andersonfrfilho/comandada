@@ -3,10 +3,13 @@ import { migrate } from 'drizzle-orm/node-postgres/migrator'
 import { sql } from 'drizzle-orm'
 import { runMetaWhatsAppMigrations } from '@adatechnology/meta-whatsapp-module'
 import { runSchedulingMigrations } from '@adatechnology/scheduling-module'
+import { runCouponMigrations } from '@adatechnology/coupon-module'
 import { runExpenseMigrations } from '@adatechnology/expense-module'
 import { Pool } from 'pg'
 import path from 'path'
 import * as schema from './schema'
+import { runRecipeStockMigrations } from './runRecipeStockMigrations'
+import { reconcilePreparationMirror } from '@/infra/recipes/preparationMirror'
 
 const pool = new Pool({
   connectionString: process.env.DATABASE_URL,
@@ -24,13 +27,19 @@ export const db = drizzle(pool, { schema })
 export async function runMigrations(): Promise<void> {
   // dev: cwd = apps/api/   production: WORKDIR /app — both have drizzle/ at root
   const migrationsFolder = process.env.MIGRATIONS_PATH ?? path.join(process.cwd(), 'drizzle/migrations')
+  // Ficha técnica e estoque primeiro: a migration 0061 do Drizzle copia dados para `recipes` e `stock`.
+  await runRecipeStockMigrations({ db })
   await migrate(db, { migrationsFolder })
+  // A ficha é a fonte do tempo de preparo; o espelho em `products` é refeito aqui (só linhas diferentes).
+  await reconcilePreparationMirror(db)
 
   // O módulo traz o próprio schema (`meta_whatsapp`) e o próprio journal — o drizzle-kit deste
   // repo não enxerga essas migrations. O migrator é injetado porque o driver é escolha do host.
   await runMetaWhatsAppMigrations({ db, migrate })
   // Agenda (encomendas e reservas): schema `scheduling`, exige a extensão btree_gist no cluster.
   await runSchedulingMigrations({ db, migrate })
+  // Cupons: schema `coupons` e journal próprio.
+  await runCouponMigrations({ db, migrate })
   // Contas a pagar: schema `expense` e journal `drizzle.expense_migrations`.
   await runExpenseMigrations({ db, migrate })
 
