@@ -6,6 +6,7 @@ import { eq, sql } from 'drizzle-orm'
 import { Pool } from 'pg'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { DrizzleConversationContactNamesReader } from '@/modules/conversations/application/services/ConversationContactNames'
 import { BotCustomerService } from './BotCustomerService'
 
@@ -23,6 +24,7 @@ describe.skipIf(!DATABASE_URL)('BotCustomerService.recordProfileName (Postgres)'
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../../drizzle/migrations') })
     service = new BotCustomerService(db)
   })

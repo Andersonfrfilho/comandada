@@ -7,6 +7,7 @@ import { Pool } from 'pg'
 import { createMercadoPagoPaymentProvider } from '@adatechnology/mercadopago-payment-provider'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { AddCashMovementUseCase } from '@/modules/cashier/application/use-cases/AddCashMovementUseCase'
 import { AppError } from '@/shared/errors/AppError'
 import { netCashAmount } from '@/modules/cashier/shared/cashMovementAmounts'
@@ -33,6 +34,7 @@ describe.skipIf(!DATABASE_URL)('RefundOrderPaymentUseCase (Postgres)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../../drizzle/migrations') })
   })
 

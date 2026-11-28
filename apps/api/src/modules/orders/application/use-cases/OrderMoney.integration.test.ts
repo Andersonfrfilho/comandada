@@ -6,6 +6,7 @@ import { eq, sql } from 'drizzle-orm'
 import { Pool } from 'pg'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { AppError } from '@/shared/errors/AppError'
 import type { CacheProvider } from '@/shared/providers/CacheProvider'
 import { AddCashMovementUseCase } from '@/modules/cashier/application/use-cases/AddCashMovementUseCase'
@@ -47,6 +48,7 @@ describe.skipIf(!DATABASE_URL)('Dinheiro e estoque do pedido (Postgres)', () => 
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../../drizzle/migrations') })
   })
 

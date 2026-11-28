@@ -7,6 +7,7 @@ import { Pool } from 'pg'
 import { createExpenseModule, runExpenseMigrations, type ExpenseModule } from '@adatechnology/expense-module'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { importLegacyMonthlyAccounts, legacyMarker } from './importLegacyMonthlyAccounts'
 
 // As "Contas fixas" antigas passam para o módulo de contas a pagar do SDK uma vez, sem apagar nada.
@@ -22,6 +23,7 @@ describe.skipIf(!DATABASE_URL)('importLegacyMonthlyAccounts (Postgres)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../drizzle/migrations') })
     await runExpenseMigrations({ db, migrate })
     module = createExpenseModule({ db, clock: { today: () => '2026-11-20' } })

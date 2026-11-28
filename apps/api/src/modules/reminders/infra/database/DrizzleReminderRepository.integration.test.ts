@@ -6,6 +6,7 @@ import { sql } from 'drizzle-orm'
 import { Pool } from 'pg'
 
 import * as schema from '@/infra/database/schema'
+import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrations'
 import { DrizzleReminderRepository } from './DrizzleReminderRepository'
 
 // As consultas dos lembretes rodam num Postgres de verdade: foi uma coluna que não existia mais
@@ -26,6 +27,7 @@ describe.skipIf(!DATABASE_URL)('DrizzleReminderRepository (Postgres)', () => {
   beforeAll(async () => {
     pool = new Pool({ connectionString: DATABASE_URL })
     db = drizzle(pool, { schema })
+    await runRecipeStockMigrations({ db })
     await migrate(db, { migrationsFolder: path.join(import.meta.dir, '../../../../../drizzle/migrations') })
     repository = new DrizzleReminderRepository(db)
   })
