@@ -12,6 +12,7 @@ import { runRecipeStockMigrations } from '@/infra/database/runRecipeStockMigrati
 import { createRecipeStockModules, type RecipeStockModules } from '@/infra/recipes/recipeStockModules'
 import { GetIngredientsRankingUseCase } from '@/modules/reports/application/use-cases/GetIngredientsRankingUseCase'
 import { DeductOrderStockUseCase } from './DeductOrderStockUseCase'
+import { createStockEnabledChecks } from '@/infra/recipes/stockEnabled'
 import { RestoreOrderStockUseCase } from './RestoreOrderStockUseCase'
 
 // Baixa e devolução pelos módulos de ficha e estoque, e o relatório de insumos mais usados.
@@ -207,6 +208,63 @@ describe.skipIf(!DATABASE_URL)('Baixa e devolução de estoque pelos módulos (P
       expect(await level(flourId)).toBeCloseTo(10, 4)
       const [batch] = await db.select().from(stockBatches).where(eq(stockBatches.ingredientId, flourId))
       expect(Number(batch!.remainingQuantity)).toBe(10)
+    })
+  })
+
+  describe('baixa e devolução cruzadas', () => {
+    it('sem baixa valendo, a devolução ainda apaga as marcas para o pedido reaberto baixar', async () => {
+      const { orderId, itemIds } = await newOrder([{ productId: cakeId, quantity: 2 }])
+      await db.insert(deductions).values({ companyId: establishmentId, sourceKey: `order:${orderId}:${itemIds[0]}` })
+
+      const result = await restore.execute({ orderId, establishmentId })
+
+      expect(result.movementsCreated).toBe(0)
+      expect(await db.select().from(deductions)).toHaveLength(0)
+      await deduct.execute({ orderId, establishmentId })
+      expect(await level(flourId)).toBeCloseTo(10 - 0.4, 4)
+    })
+
+    it('não baixa pedido cancelado enquanto o chamador ainda via o status antigo', async () => {
+      const { orderId } = await newOrder([{ productId: cakeId, quantity: 2 }])
+      await db.update(schema.orders).set({ status: 'cancelled' }).where(eq(schema.orders.id, orderId))
+
+      const result = await deduct.execute({ orderId, establishmentId, observedStatus: 'received' })
+
+      expect(result).toBeUndefined()
+      expect(await level(flourId)).toBe(10)
+      expect(await db.select().from(deductions)).toHaveLength(0)
+    })
+
+    it('baixa e devolução simultâneas terminam coerentes: saldo e marcas concordam', async () => {
+      for (let round = 0; round < 5; round++) {
+        await resetTables()
+        const [establishment] = await db.insert(schema.establishments).values({ name: 'Demo' }).returning({ id: schema.establishments.id })
+        establishmentId = establishment!.id
+        flourId = await createIngredient({ name: 'Farinha', unit: 'kg', stock: '10' })
+        cakeId = await createProduct('Bolo')
+        await saveRecipe(cakeId, [{ ingredientId: flourId, quantity: '0.2', unit: 'kg' }])
+        const { orderId } = await newOrder([{ productId: cakeId, quantity: 2 }])
+        await deduct.execute({ orderId, establishmentId })
+
+        await Promise.all([restore.execute({ orderId, establishmentId }), deduct.execute({ orderId, establishmentId })])
+
+        const markers = (await db.select().from(deductions)).length
+        // Devolveu e baixou de novo (marca e saldo baixado) ou só devolveu (sem marca e saldo cheio): nunca meio a meio.
+        if (markers === 0) expect(await level(flourId)).toBeCloseTo(10, 4)
+        else expect(await level(flourId)).toBeCloseTo(10 - 0.4, 4)
+      }
+    })
+  })
+
+  describe('estoque ligado por padrão', () => {
+    it('saldo diferente de zero sem lote nem movimento conta como estoque em uso', async () => {
+      await db.delete(movements)
+      await db.delete(stockBatches)
+      const checks = createStockEnabledChecks(db)
+      expect(await checks.isStockEnabledForCompany(establishmentId)).toBe(true)
+
+      await db.update(stockLevels).set({ quantity: '0' })
+      expect(await checks.isStockEnabledForCompany(establishmentId)).toBe(false)
     })
   })
 

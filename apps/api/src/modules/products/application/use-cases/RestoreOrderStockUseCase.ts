@@ -63,7 +63,12 @@ export class RestoreOrderStockUseCase {
           )
         )
       const active = findActiveOrderDeductions(orderMovements)
-      if (active.length === 0) return { movementsCreated: 0 }
+      const deductionKeys = and(eq(deductions.companyId, input.establishmentId), like(deductions.sourceKey, `${ORDER_DEDUCTION_KEY_PREFIX}${input.orderId}:%`))
+      if (active.length === 0) {
+        // Sem baixa valendo, as marcas que sobraram impediriam o pedido reaberto de baixar.
+        await transaction.delete(deductions).where(deductionKeys)
+        return { movementsCreated: 0 }
+      }
 
       const persistence = createDrizzleStockPersistence(transaction as unknown as StockDatabase)
       const now = new Date()
@@ -116,9 +121,7 @@ export class RestoreOrderStockUseCase {
         )
       })
 
-      await transaction
-        .delete(deductions)
-        .where(and(eq(deductions.companyId, input.establishmentId), like(deductions.sourceKey, `${ORDER_DEDUCTION_KEY_PREFIX}${input.orderId}:%`)))
+      await transaction.delete(deductions).where(deductionKeys)
 
       return { movementsCreated: active.length }
     })

@@ -84,6 +84,7 @@ export class UpdateOrderStatusUseCase {
       await this.deductStock.execute({
         orderId: input.orderId,
         establishmentId: input.establishmentId,
+        observedStatus: order.status,
         ...(input.userId ? { userId: input.userId } : {}),
       })
     }

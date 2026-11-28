@@ -221,3 +221,21 @@ Resgate/liberação na criação e no cancelamento do pedido, desconto no total,
 
 - `apps/api`: typecheck limpo; `bun test` 313 passam, 91 pulam, 0 falham. `apps/web`: typecheck limpo; `bun test src` 135 passam; `bun run build` ok.
 - Não verificado no navegador: o interruptor novo (só typecheck e build).
+
+---
+
+# Revisão (correções dos achados)
+
+- Data: 2026-11-28. Banco: PostgreSQL 16 descartável (`comandada-rsc-test-pg6`), nenhum dado de staging ou produção.
+
+1. **Apagar exige `products:delete`.** `products:write` vira `recipes:write`/`stock:write`, e as rotas DELETE dos módulos aceitavam isso. Agora `products:delete` vira os escopos novos `recipes:delete` e `stock:delete`, e `requireDeleteScope` (em `registerSdkModuleRoutes.ts`) troca os `requiredScopes` de toda rota DELETE de ficha e de estoque por esse escopo único. Quem só escreve recebe 403 `FORBIDDEN` no envelope do próprio módulo; é a regra das rotas antigas (quem tem `delete` sem `write` também passa, como antes). Teste em `registerSdkModuleRoutes.test.ts`: cada rota DELETE dá 403 com leitura+escrita e passa da autenticação com leitura+escrita+apagar.
+2. **Guarda da 0061** ganhou: estoque mínimo negativo (`levels_minimum_not_negative`), tempo de preparo negativo (`recipes_preparation_not_negative`) e tipo de movimento desconhecido (o `kind` do módulo tem 10 caracteres e só os cinco tipos conhecidos são mapeados). Conferidas as demais restrições dos módulos: custo, quantidade da linha, rendimento (fixo em 1), lote (quantidade e restante), delta zero (já filtrado), tamanhos de texto (cortados por `left`) e precisão numérica (a origem é `numeric(10,4)`, menor que a do destino). Segue levantando erro, sem reparo automático; testado com um insumo de mínimo negativo. Novo `preflight.sql`: só SELECT, sem coluna de dado pessoal, devolve uma linha por condição bloqueante com a contagem, as contagens do §3.1 e a lista `line_unit, ingredient_unit, total`.
+3. **`hasStockRows`** também considera `stock.levels` com `quantity <> 0` (saldo sem lote nem movimento conta como estoque em uso). Teste de integração: com saldo, ligado; zerado, desligado.
+4. **Baixa x devolução do mesmo pedido.** O módulo de estoque não aceita executor nem transação do chamador, então não dá para pôr a baixa na mesma transação. Escolhido: `DeductOrderStockUseCase` abre uma transação, trava a linha do pedido (`SELECT ... FOR UPDATE`, a mesma que a devolução já travava) e chama o módulo com a trava ainda de pé. O módulo usa outra conexão e não toca em `orders`, então não há deadlock; a devolução espera a baixa terminar (e vice-versa). Dentro da trava, relê o status: se o pedido foi cancelado depois de o chamador lê-lo (`observedStatus`, passado por `UpdateOrderStatusUseCase`), não baixa. Reabrir um pedido que o chamador já via cancelado continua baixando. Testes: unitário (cancelado no meio x reabertura) e de integração (cancelado no meio não baixa; baixa e devolução simultâneas, 5 rodadas, terminam coerentes).
+5. **Devolução sem baixa valendo** agora também apaga as marcas `order:<pedido>:%` de `stock.deductions`, para o pedido reaberto baixar. Teste de integração.
+
+## Testes
+
+- `bun run typecheck` (api): limpo. Web não foi tocado.
+- `bun test` sem banco: 319 passam, 95 puladas (os 4 testes novos de banco), 0 falham (linha de base 313/91/0).
+- `TEST_DATABASE_URL=… bun test` (api inteira): 394 passam, 0 falham (inclui os 4 novos em `OrderStockSdk.integration.test.ts`).

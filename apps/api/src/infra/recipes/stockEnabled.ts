@@ -1,6 +1,6 @@
-import { and, eq } from 'drizzle-orm'
+import { and, eq, ne } from 'drizzle-orm'
 import type { NodePgDatabase } from 'drizzle-orm/node-postgres'
-import { batches as stockBatches, movements as stockMovements } from '@adatechnology/stock-module'
+import { batches as stockBatches, levels as stockLevels, movements as stockMovements } from '@adatechnology/stock-module'
 
 import { db } from '@/infra/database/connection'
 import * as schema from '@/infra/database/schema'
@@ -51,7 +51,13 @@ export function createStockEnabledChecks(database: Database): StockEnabledChecks
     const [batch] = await database.select({ id: stockBatches.id }).from(stockBatches).where(eq(stockBatches.companyId, establishmentId)).limit(1)
     if (batch) return true
     const [movement] = await database.select({ id: stockMovements.id }).from(stockMovements).where(eq(stockMovements.companyId, establishmentId)).limit(1)
-    return movement !== undefined
+    if (movement) return true
+    const [level] = await database
+      .select({ ingredientId: stockLevels.ingredientId })
+      .from(stockLevels)
+      .where(and(eq(stockLevels.companyId, establishmentId), ne(stockLevels.quantity, '0')))
+      .limit(1)
+    return level !== undefined
   }
 
   const isStockEnabledForCompany = createStockEnabledResolver({ readExplicitSetting, hasStockRows })
